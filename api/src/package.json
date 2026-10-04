@@ -1,0 +1,15 @@
+{
+  "name": "@biko-jobs/api",
+  "version": "1.0.0",
+  "description": "",
+  "license": "GPL-3.0",
+  "author": "",
+  "type": "module",
+  "main": "index.ts",
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
+}

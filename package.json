@@ -1,0 +1,21 @@
+{
+  "name": "biko-jobs",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "license": "GPL-3.0",
+  "author": "",
+  "workspaces": [
+    "api/src",
+    "api/test"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.71.0",
+    "typescript": "^7.0.2"
+  }
+}
