@@ -5,9 +5,14 @@
   "license": "GPL-3.0",
   "author": "",
   "type": "module",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "devDependencies": {}
+  "main": "index.ts",
+  "devDependencies": {
+    "@biko-jobs/api": "^1.0.0",
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "@types/supertest": "^7.2.1",
+    "chai": "^6.3.0",
+    "mocha": "^12.0.3",
+    "supertest": "^7.3.1"
+  }
 }
