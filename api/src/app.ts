@@ -6,34 +6,41 @@ type Session = {
   blobs: Map<string, Uint8Array>;
 };
 
+type SessionId = string;
+class Sessions {
+  private sessions: Map<SessionId, Session>;
+
+  constructor() {
+    this.sessions = new Map();
+  }
+
+  session(id: string): Session {
+    const session = this.sessions.get(id);
+    if (session !== undefined) {
+      return session;
+    }
+    const newSession: Session = {
+      events: [],
+      blobs: new Map(),
+    };
+    this.sessions.set(id, newSession);
+    return newSession;
+  }
+}
+
 export function createApp() {
   const app = express();
 
-  const sessions = new Map<string, Session>();
+  const sessions = new Sessions();
 
   app.get("/health", (_, res) => {
     res.status(200);
     res.end();
   });
 
-  app.put("/session/:sessionId", (req, res) => {
-    if (sessions.has(req.params.sessionId)) {
-      res.status(409);
-    } else {
-      sessions.set(req.params.sessionId, { events: [], blobs: new Map() });
-      res.status(201);
-    }
-    res.end();
-  });
-
   const encoder = new Encoder();
   app.get("/session/:sessionId/events", (req, res) => {
-    const session = sessions.get(req.params.sessionId);
-    if (session === undefined) {
-      res.status(404);
-      res.end();
-      return;
-    }
+    const session = sessions.session(req.params.sessionId);
     const response = encoder.encode(session.events);
     res.status(200);
     res.header("Content-Type", "application/vnd.msgpack");
@@ -49,12 +56,7 @@ export function createApp() {
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    const session = sessions.get(req.params.sessionId);
-    if (session === undefined) {
-      res.status(404);
-      res.end();
-      return;
-    }
+    const session = sessions.session(req.params.sessionId);
     session.events.push(req.body);
     res.status(200);
     res.end();
@@ -69,19 +71,14 @@ export function createApp() {
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    const session = sessions.get(req.params.sessionId);
-    if (session === undefined) {
-      res.status(404);
-      res.end();
-      return;
-    }
+    const session = sessions.session(req.params.sessionId);
     session.blobs.set(req.params.blobId, req.body);
     res.status(201);
     res.end();
   });
 
   app.get("/session/:sessionId/blob/:blobId", (req, res) => {
-    const blob = sessions.get(req.params.sessionId)?.blobs.get(req.params.blobId);
+    const blob = sessions.session(req.params.sessionId).blobs.get(req.params.blobId);
     if (blob === undefined) {
       res.status(404);
       res.end();

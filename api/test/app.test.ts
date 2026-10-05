@@ -11,27 +11,9 @@ describe("api", () => {
     await supertest(createApp()).get("/health").expect(200);
   });
 
-  describe("session creation", () => {
-    test("new session", async () => {
-      await supertest(createApp()).put("/session/some-session-id").expect(201);
-    });
-
-    test("duplicate session", async () => {
-      const testApp = supertest(createApp());
-      await testApp.put("/session/some-session-id");
-      await testApp.put("/session/some-session-id").expect(409);
-    });
-  });
-
   describe("session events read and update", () => {
-    test("read uninitialized session", async () => {
-      const testApp = supertest(createApp());
-      await testApp.get("/session/some-id/events").expect(404);
-    });
-
     test("read empty session", async () => {
       const testApp = supertest(createApp());
-      await testApp.put("/session/some-id");
       await testApp
         .get("/session/some-id/events")
         .expect(200)
@@ -44,7 +26,6 @@ describe("api", () => {
 
     test("append to session events", async () => {
       const testApp = supertest(createApp());
-      await testApp.put("/session/some-id");
       await testApp
         .post("/session/some-id/events")
         .set("Content-Type", "application/octet-stream")
@@ -54,13 +35,11 @@ describe("api", () => {
 
     test("empty event", async () => {
       const testApp = supertest(createApp());
-      await testApp.put("/session/some-id");
       await testApp.post("/session/some-id/events").expect(400);
     });
 
     test("attempt to append non-buffer", async () => {
       const testApp = supertest(createApp());
-      await testApp.put("/session/some-id");
       await testApp
         .post("/session/some-id/events")
         .set("Content-Type", "application/json")
@@ -70,7 +49,6 @@ describe("api", () => {
 
     test("read updated session", async () => {
       const testApp = supertest(createApp());
-      await testApp.put("/session/some-id");
       await testApp
         .post("/session/some-id/events")
         .set("Content-Type", "application/octet-stream")
@@ -96,7 +74,6 @@ describe("api", () => {
   describe("session blobs", () => {
     test("upload blob", async () => {
       const testApp = supertest(createApp());
-      await testApp.put("/session/some-id");
       await testApp
         .put("/session/some-id/blob/some-blob-id")
         .set("Content-Type", "application/octet-stream")
@@ -106,7 +83,6 @@ describe("api", () => {
 
     test("get blob", async () => {
       const testApp = supertest(createApp());
-      await testApp.put("/session/some-id");
       await testApp
         .put("/session/some-id/blob/some-blob-id")
         .set("Content-Type", "application/octet-stream")
