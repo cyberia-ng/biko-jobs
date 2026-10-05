@@ -33,7 +33,7 @@ describe("api client", () => {
     expect(events).to.deep.equal([]);
   });
 
-  test("data round trip", async () => {
+  test("event round trip", async () => {
     const client = await ApiClient.newSession(
       `http://localhost:${port}`,
       "some-session",
@@ -42,5 +42,26 @@ describe("api client", () => {
     await client.postEvent({ hello: "world" });
     const events = await client.events();
     expect(events).to.deep.equal([{ hello: "world" }]);
+  });
+
+  test("blob round trip", async () => {
+    const client = await ApiClient.newSession(
+      `http://localhost:${port}`,
+      "some-session",
+      "a password",
+    );
+    await client.putBlob("blob-id", Buffer.from("hello world", "utf8"));
+    const received = await client.getBlob("blob-id");
+    expect(received).to.deep.equal(Buffer.from("hello world", "utf8"));
+  });
+
+  test("non-existent blob", async () => {
+    const client = await ApiClient.newSession(
+      `http://localhost:${port}`,
+      "some-session",
+      "a password",
+    );
+    const received = await client.getBlob("blob-id");
+    expect(received).to.deep.equal(undefined);
   });
 });

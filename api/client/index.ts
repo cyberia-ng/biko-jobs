@@ -16,7 +16,7 @@ export class ApiClient {
 
   private constructor(baseUrl: string, sessionId: string, key: CryptoKey) {
     this.baseUrl = baseUrl;
-    this.sessionId = sessionId;
+    this.sessionId = encodeURIComponent(sessionId);
     this.key = key;
   }
 
@@ -46,8 +46,21 @@ export class ApiClient {
     return new ApiClient(baseUrl, sessionId, key);
   }
 
+  private async encrypt(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+    const iv = crypto.getRandomValues(new Uint8Array(16));
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, this.key, data);
+    return mpEncoder.encode([iv, new Uint8Array(encrypted)]);
+  }
+
+  private async decrypt(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+    const [iv, encrypted] = decode(data) as [Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>];
+    return new Uint8Array(
+      await crypto.subtle.decrypt({ name: "AES-GCM", iv }, this.key, encrypted),
+    );
+  }
+
   async events(): Promise<unknown[]> {
-    const res = await fetch(`${this.baseUrl}/session/${this.sessionId}`);
+    const res = await fetch(`${this.baseUrl}/session/${this.sessionId}/events`);
     if (!res.ok) {
       throw new Error(`HTTP Error: status ${res.status}`);
     }
@@ -70,14 +83,33 @@ export class ApiClient {
 
   async postEvent(event: unknown): Promise<void> {
     const encoded = mpEncoder.encode(event);
-    const iv = crypto.getRandomValues(new Uint8Array(16));
-    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, this.key, encoded);
-    const packed = mpEncoder.encode([iv, new Uint8Array(encrypted)]);
-    const res = await fetch(`${this.baseUrl}/session/${this.sessionId}`, {
+    const encrypted = await this.encrypt(encoded);
+    const res = await fetch(`${this.baseUrl}/session/${this.sessionId}/events`, {
       method: "POST",
-      body: packed,
+      body: encrypted,
       headers: { "Content-Type": "application/octet-stream" },
     });
     raiseForStatus(res);
+  }
+
+  async putBlob(id: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    const encrypted = await this.encrypt(data);
+    const res = await fetch(
+      `${this.baseUrl}/session/${this.sessionId}/blob/${encodeURIComponent(id)}`,
+      { method: "PUT", body: encrypted, headers: { "Content-Type": "application/octet-stream" } },
+    );
+    raiseForStatus(res);
+  }
+
+  async getBlob(id: string): Promise<Uint8Array | undefined> {
+    const res = await fetch(
+      `${this.baseUrl}/session/${this.sessionId}/blob/${encodeURIComponent(id)}`,
+    );
+    if (res.status === 404) {
+      return undefined;
+    }
+    raiseForStatus(res);
+    const encrypted = await res.bytes();
+    return this.decrypt(encrypted);
   }
 }
