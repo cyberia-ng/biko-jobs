@@ -32,8 +32,9 @@ describe("api client", () => {
   test("event round trip", async () => {
     const client = await ApiClient.open(`http://localhost:${port}`, "some-session", "a password");
     await client.postEvent({ hello: "world" });
+    await client.postEvent({ hola: "mundo" });
     const events = await client.events();
-    expect(events).to.deep.equal([{ hello: "world" }]);
+    expect(events).to.deep.equal([{ hello: "world" }, { hola: "mundo" }]);
   });
 
   test("blob round trip", async () => {
