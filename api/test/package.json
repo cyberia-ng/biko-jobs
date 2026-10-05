@@ -8,6 +8,7 @@
   "main": "index.ts",
   "devDependencies": {
     "@biko-jobs/api": "^1.0.0",
+    "@msgpack/msgpack": "^3.1.3",
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
     "@types/supertest": "^7.2.1",

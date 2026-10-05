@@ -1,5 +1,5 @@
-import { app } from "./app.ts";
+import { createApp } from "./app.ts";
 
-app.listen(3000, () => {
+createApp().listen(3000, () => {
   console.log("Server is running on port 3000");
 });
