@@ -25,7 +25,7 @@ function App(props: { store: Store }) {
   );
   const [localState, dispatchLocal] = useReducer(reducer, initialState);
   return (
-    <div className="h-100 d-flex flex-column flex-sm-row bg-body-secondary">
+    <div className="vh-100 d-flex flex-column flex-sm-row">
       <div>
         <Nav
           localState={localState}
@@ -39,12 +39,20 @@ function App(props: { store: Store }) {
           navigate={(screen) => dispatchLocal({ type: "navigate", screen })}
         />
       </div>
-      <div className="flex-grow-1">
-        <div className={"h-100 " + (localState.screen !== "kanban" ? "d-none" : "")}>
+      <div className="flex-grow-1 vh-100 overflow-scroll">
+        <div className={localState.screen !== "kanban" ? "d-none" : "h-100"}>
           <Kanban state={state} />
         </div>
-        <div className={"h-100 " + (localState.screen !== "new job" ? "d-none" : "")}>
-          <NewJob localState={localState} dispatch={dispatchLocal} />
+        <div className={localState.screen !== "new job" ? "d-none" : "h-100"}>
+          <NewJob
+            onSubmit={(job) => {
+              dispatchLocal({ type: "set loading" });
+              props.store
+                .postAction({ type: "new job", ...job })
+                .then(() => dispatchLocal({ type: "done loading" }))
+                .catch(() => dispatchLocal({ type: "done loading" }));
+            }}
+          />
         </div>
       </div>
     </div>

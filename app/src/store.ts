@@ -45,6 +45,10 @@ export class Store {
     };
   }
 
+  async postAction(action: Action) {
+    await this.client.postEvent(action);
+  }
+
   private callSubscribers() {
     for (const subscriber of this.subscribers) {
       subscriber();
