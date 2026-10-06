@@ -1,10 +1,9 @@
 import type { Job, State } from "./state/state.ts";
-// @ts-expect-error
 import "./kanban.css";
 
 export function Kanban(props: { state: State }) {
   return (
-    <div className="row bg-body-secondary vh-100 p-3">
+    <div className="row h-100 p-3">
       <Column title="Triaged" jobs={props.state.filter(({ status }) => status === "triaged")} />
       <Column title="Working" jobs={props.state.filter(({ status }) => status === "working")} />
       <Column title="Complete" jobs={props.state.filter(({ status }) => status === "complete")} />

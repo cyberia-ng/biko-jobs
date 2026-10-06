@@ -1,0 +1,12 @@
+@import "bootstrap/scss/bootstrap";
+
+$bootstrap-icons-font-dir: "bootstrap-icons/font/fonts";
+@import "bootstrap-icons/font/bootstrap-icons";
+
+.nav .nav-item.border-bottom, .nav .nav-item.border-top {
+  border-color: #495057 !important;
+}
+
+.nav .nav-link:not(.active) {
+  color: #6ea8fe !important;
+}
