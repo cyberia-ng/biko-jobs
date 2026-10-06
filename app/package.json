@@ -1,0 +1,20 @@
+{
+  "name": "@biko-jobs/app",
+  "version": "1.0.0",
+  "description": "",
+  "license": "GPL-3.0",
+  "author": "",
+  "type": "module",
+  "main": "index.ts",
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "sass": "^1.105.1",
+    "vite": "^8.3.2"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

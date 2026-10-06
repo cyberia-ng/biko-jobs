@@ -8,7 +8,8 @@
   "workspaces": [
     "api/src",
     "api/test",
-    "api/client"
+    "api/client",
+    "app"
   ],
   "type": "module",
   "main": "index.js",
