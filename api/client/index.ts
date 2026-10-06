@@ -13,11 +13,26 @@ export class ApiClient {
   private baseUrl: string;
   private sessionId: string;
   private key: CryptoKey;
+  private ws: WebSocket;
+  private subscribers: Set<(event: unknown) => void>;
 
-  private constructor(baseUrl: string, sessionId: string, key: CryptoKey) {
+  private constructor(baseUrl: string, sessionId: string, key: CryptoKey, ws: WebSocket) {
     this.baseUrl = baseUrl;
     this.sessionId = sessionId;
     this.key = key;
+    this.ws = ws;
+    this.subscribers = new Set();
+    ws.addEventListener("message", (e) => {
+      (e.data as Blob)
+        .bytes()
+        .then((data) => this.decrypt(data))
+        .then((data) => mpDecoder.decode(data))
+        .then((event) => {
+          for (const cb of this.subscribers) {
+            cb(event);
+          }
+        });
+    });
   }
 
   static async open(baseUrl: string, sessionId: string, pass: string): Promise<ApiClient> {
@@ -56,7 +71,9 @@ export class ApiClient {
       false,
       ["encrypt", "decrypt"],
     );
-    return new ApiClient(baseUrl, encodedSessionId, key);
+    const wsBaseUrl = baseUrl.replace(/^http/, "ws");
+    const ws = new WebSocket(`${wsBaseUrl}/session/${encodedSessionId}/events`);
+    return new ApiClient(baseUrl, encodedSessionId, key, ws);
   }
 
   private async encrypt(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
@@ -117,5 +134,16 @@ export class ApiClient {
     raiseForStatus(res);
     const encrypted = await res.bytes();
     return this.decrypt(encrypted);
+  }
+
+  subscribeEvents(cb: (event: unknown) => void): () => void {
+    this.subscribers.add(cb);
+    return () => {
+      this.subscribers.delete(cb);
+    };
+  }
+
+  closeWebSocket() {
+    this.ws.close();
   }
 }
