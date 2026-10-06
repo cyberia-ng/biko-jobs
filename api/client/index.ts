@@ -79,9 +79,12 @@ export class ApiClient {
     }
     const body = await res.bytes();
     const rawEvents = decode(body) as Uint8Array<ArrayBuffer>[];
-    return (await Promise.all(rawEvents.map((rawEvent) => this.decrypt(rawEvent))))
-      .map((buf) => new Uint8Array(buf))
-      .map((data) => mpDecoder.decode(data));
+    return Promise.all(
+      rawEvents.map(async (rawEvent) => {
+        const decrypted = new Uint8Array(await this.decrypt(rawEvent));
+        return mpDecoder.decode(decrypted);
+      }),
+    );
   }
 
   async postEvent(event: unknown): Promise<void> {
