@@ -1,49 +1,44 @@
+import { readFileSync } from "node:fs";
 import type { NewJob } from "../../src/state/action.ts";
-// @ts-expect-error
-import img1Url from "./img1.jpg";
-// @ts-expect-error
-import img2Url from "./img2.jpg";
-// @ts-expect-error
-import img3Url from "./img3.jpg";
-// @ts-expect-error
-import img4Url from "./img4.jpg";
-// @ts-expect-error
-import img5Url from "./img5.jpg";
-// @ts-expect-error
-import img6Url from "./img6.jpg";
+import { join } from "node:path";
+import { ApiClient } from "@biko-jobs/api-client";
 
-export async function newJob1(): Promise<NewJob> {
-  const img1 = await (await fetch(img1Url)).bytes();
-  const img2 = await (await fetch(img2Url)).bytes();
-  const img3 = await (await fetch(img3Url)).bytes();
-  return {
-    type: "new job",
-    customerName: "Bob Bobson",
-    description: `Brakes
+const img1 = readFileSync(join(import.meta.dirname, "img1.jpg"));
+const img2 = readFileSync(join(import.meta.dirname, "img2.jpg"));
+const img3 = readFileSync(join(import.meta.dirname, "img3.jpg"));
+const img4 = readFileSync(join(import.meta.dirname, "img4.jpg"));
+const img5 = readFileSync(join(import.meta.dirname, "img5.jpg"));
+const newJob1: NewJob = {
+  type: "new job",
+  customerName: "Bob Bobson",
+  description: `Brakes
     Front puncture
     Head gasket
     Wiper fluid
     New bell
     New exhaust
     Bottom text`,
-    images: [
-      { type: "image/jpeg", data: img1 },
-      { type: "image/jpeg", data: img2 },
-      { type: "image/jpeg", data: img3 },
-    ],
-  };
+  images: [
+    { type: "image/jpeg", data: img1 },
+    { type: "image/jpeg", data: img2 },
+    { type: "image/jpeg", data: img3 },
+  ],
+};
+
+const newJob2: NewJob = {
+  type: "new job",
+  customerName: "Jim Jimson",
+  description: `Rear mech issues `,
+  images: [
+    { type: "image/jpeg", data: img4 },
+    { type: "image/jpeg", data: img5 },
+  ],
+};
+
+async function main() {
+  const client = await ApiClient.open("http://localhost:3000", "some-session", "some-password");
+  await client.postEvent(newJob1);
+  await client.postEvent(newJob2);
 }
 
-export async function newJob2(): Promise<NewJob> {
-  const img4 = await (await fetch(img4Url)).bytes();
-  const img5 = await (await fetch(img5Url)).bytes();
-  return {
-    type: "new job",
-    customerName: "Jim Jimson",
-    description: `Rear mech issues `,
-    images: [
-      { type: "image/jpeg", data: img4 },
-      { type: "image/jpeg", data: img5 },
-    ],
-  };
-}
+main().catch(console.error);

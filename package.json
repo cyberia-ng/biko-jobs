@@ -15,7 +15,8 @@
   "main": "index.js",
   "scripts": {
     "test-api": "npx --workspace api/test mocha",
-    "types": "npx tsc"
+    "types": "npx tsc",
+    "serve-api": "node api/src/index.ts"
   },
   "devDependencies": {
     "oxfmt": "^0.71.0",

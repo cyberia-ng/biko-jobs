@@ -1,5 +1,6 @@
 import { Encoder } from "@msgpack/msgpack";
 import express from "express";
+import cors from "cors";
 
 type Session = {
   events: Uint8Array[];
@@ -30,6 +31,7 @@ class Sessions {
 
 export function createApp() {
   const app = express();
+  app.use(cors());
 
   const sessions = new Sessions();
 
@@ -47,20 +49,24 @@ export function createApp() {
     res.end(response);
   });
 
-  app.post("/session/:sessionId/events", express.raw(), (req, res) => {
-    if (req.body === undefined) {
-      res.status(400);
+  app.post(
+    "/session/:sessionId/events",
+    express.raw({ limit: "100MB" /* TODO fix */ }),
+    (req, res) => {
+      if (req.body === undefined) {
+        res.status(400);
+        res.end();
+        return;
+      }
+      if (!(req.body instanceof Buffer)) {
+        throw new Error("unreachable: expected Buffer");
+      }
+      const session = sessions.session(req.params.sessionId);
+      session.events.push(req.body);
+      res.status(200);
       res.end();
-      return;
-    }
-    if (!(req.body instanceof Buffer)) {
-      throw new Error("unreachable: expected Buffer");
-    }
-    const session = sessions.session(req.params.sessionId);
-    session.events.push(req.body);
-    res.status(200);
-    res.end();
-  });
+    },
+  );
 
   app.put("/session/:sessionId/blob/:blobId", express.raw(), (req, res) => {
     if (req.body === undefined) {

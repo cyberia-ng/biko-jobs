@@ -1,20 +1,24 @@
 // @ts-expect-error
 import "bootstrap/dist/css/bootstrap.min.css";
-import { StrictMode } from "react";
+import { StrictMode, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./kanban.tsx";
-import { newJob1, newJob2 } from "../test/data/actions.ts";
-import { reducer } from "./state/reducer.ts";
+import { Store } from "./store.ts";
 
 window.onload = () => {
-  Promise.all([newJob1(), newJob2()]).then(([newJob1, newJob2]) => {
-    let state = reducer([], newJob1);
-    state = reducer(state, newJob2);
+  Store.init("http://localhost:3000", "some-session", "some-password").then((store) => {
     createRoot(document.getElementById("root")!).render(
       <StrictMode>
-        <Kanban state={state} />
+        <App store={store} />
       </StrictMode>,
     );
-    console.log(state);
   });
 };
+
+function App(props: { store: Store }) {
+  const state = useSyncExternalStore(
+    props.store.subscribe.bind(props.store),
+    props.store.getSnapshot.bind(props.store),
+  );
+  return <Kanban state={state} />;
+}
