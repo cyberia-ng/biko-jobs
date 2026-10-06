@@ -25,7 +25,7 @@ function Column(props: { title: string; jobs: Job[] }) {
             key={idx}
             style={{ height: "8rem" }}
           >
-            <div className="col-6 ps-0 h-100">
+            <div className="col-4 ps-0 h-100">
               {job.images.length > 0 && (
                 <img
                   src={`data:${job.images[0]!.type};base64,${job.images[0]!.data.toBase64()}`}

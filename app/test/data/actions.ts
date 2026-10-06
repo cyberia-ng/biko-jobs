@@ -39,6 +39,7 @@ async function main() {
   const client = await ApiClient.open("http://localhost:3000", "some-session", "some-password");
   await client.postEvent(newJob1);
   await client.postEvent(newJob2);
+  client.closeWebSocket();
 }
 
 main().catch(console.error);

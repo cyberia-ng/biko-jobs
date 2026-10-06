@@ -12,6 +12,9 @@ export class Store {
     this.client = client;
     this.state = [];
     this.subscribers = new Set();
+    this.client.subscribeEvents((event) => {
+      this.onAction(event as Action);
+    });
   }
 
   static async init(baseUrl: string, session: string, pass: string) {
@@ -46,5 +49,10 @@ export class Store {
     for (const subscriber of this.subscribers) {
       subscriber();
     }
+  }
+
+  private onAction(action: Action) {
+    this.state = reducer(this.state, action);
+    this.callSubscribers();
   }
 }
