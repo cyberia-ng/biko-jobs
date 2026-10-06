@@ -14,7 +14,7 @@ export function Kanban(props: { state: State }) {
 
 function Column(props: { title: string; jobs: Job[] }) {
   return (
-    <div className="col d-flex flex-column m-2 p-3 bg-body shadow-sm rounded">
+    <div className="col d-flex flex-column m-2 p-3 bg-body shadow-sm rounded h-100">
       <div className="border-bottom mb-3">
         <h4>{props.title}</h4>
       </div>
