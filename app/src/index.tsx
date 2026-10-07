@@ -9,13 +9,15 @@ import { initialState, reducer } from "./local-state.ts";
 import { NewJob } from "./new-job.tsx";
 
 window.onload = () => {
-  Store.init("http://localhost:3000", "some-session", "some-password").then((store) => {
-    createRoot(document.getElementById("root")!).render(
-      <StrictMode>
-        <App store={store} />
-      </StrictMode>,
-    );
-  });
+  Store.init(`http://${window.location.host}/api`, "some-session", "some-password").then(
+    (store) => {
+      createRoot(document.getElementById("root")!).render(
+        <StrictMode>
+          <App store={store} />
+        </StrictMode>,
+      );
+    },
+  );
 };
 
 function App(props: { store: Store }) {
