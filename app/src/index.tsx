@@ -26,17 +26,17 @@ function App(props: { store: Store }) {
     props.store.getSnapshot.bind(props.store),
   );
   const [localState, dispatchLocal] = useReducer(reducer, initialState);
+  function withLoading<Args extends unknown[]>(p: (...args: Args) => Promise<void>) {
+    return (...args: Args) => {
+      dispatchLocal({ type: "set loading" });
+      p(...args).finally(() => dispatchLocal({ type: "done loading" }));
+    };
+  }
   const kanbanScreen = useMemo(() => <Kanban state={state} />, [state]);
   const newJobScreen = useMemo(
     () => (
       <NewJob
-        onSubmit={(job) => {
-          dispatchLocal({ type: "set loading" });
-          props.store
-            .postAction({ type: "new job", ...job })
-            .then(() => dispatchLocal({ type: "done loading" }))
-            .catch(() => dispatchLocal({ type: "done loading" }));
-        }}
+        onSubmit={withLoading((job) => props.store.postAction({ type: "new job", ...job }))}
       />
     ),
     [dispatchLocal, props.store.postAction],
@@ -46,13 +46,7 @@ function App(props: { store: Store }) {
       <div>
         <Nav
           localState={localState}
-          refresh={() => {
-            dispatchLocal({ type: "set loading" });
-            props.store
-              .refreshState()
-              .then(() => dispatchLocal({ type: "done loading" }))
-              .catch(() => dispatchLocal({ type: "done loading" }));
-          }}
+          refresh={withLoading(() => props.store.refreshState())}
           navigate={(screen) => dispatchLocal({ type: "navigate", screen })}
         />
       </div>
