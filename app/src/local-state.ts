@@ -2,13 +2,15 @@ import { produce } from "immer";
 
 export type LocalState = {
   loading: boolean;
-  screen: "kanban" | "new job";
+  screen: "kanban" | "new job" | "job detail";
 };
 
+export type Navigate = { type: "navigate"; screen: "kanban" | "new job" };
 export type Action =
   | { type: "set loading" }
   | { type: "done loading" }
-  | { type: "navigate"; screen: LocalState["screen"] };
+  | Navigate
+  | { type: "view job detail" };
 
 export function reducer(state: LocalState, action: Action): LocalState {
   return produce(state, (state) => {
@@ -25,6 +27,12 @@ export function reducer(state: LocalState, action: Action): LocalState {
         state.screen = action.screen;
         break;
       }
+      case "view job detail": {
+        state.screen = "job detail";
+        break;
+      }
+      default:
+        assertNever(action);
     }
   });
 }
@@ -33,3 +41,7 @@ export const initialState: LocalState = {
   loading: false,
   screen: "kanban",
 };
+
+function assertNever(a: never): never {
+  return a;
+}

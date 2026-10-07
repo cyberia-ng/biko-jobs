@@ -1,11 +1,11 @@
-import { useReducer, useRef, useState } from "react";
+import { useContext, useReducer, useRef, useState } from "react";
 import type { NewJob } from "./state/action.ts";
-import type { WithLoading } from "./index.tsx";
-import type { State } from "./state/state.ts";
-import type { Store } from "./store.ts";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
+import { AppContext } from "./index.tsx";
 
-export function NewJob(props: { state: State; store: Store; withLoading: WithLoading }) {
+export function NewJob() {
+  const { store } = useContext(AppContext);
+
   const [customerName, setCustomerName] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   type Photos = Array<{ blobId: string; uploaded: boolean }>;
@@ -70,7 +70,6 @@ export function NewJob(props: { state: State; store: Store; withLoading: WithLoa
             <div className="row mb-3" key={blobId}>
               {uploaded ? (
                 <BlobLoader
-                  store={props.store}
                   blobId={blobId}
                   notFound=""
                   loaded={(data) => (
@@ -128,7 +127,7 @@ export function NewJob(props: { state: State; store: Store; withLoading: WithLoa
                     e.target.value = "";
                     return data;
                   })
-                  .then((data) => props.store.writeBlob(id, data))
+                  .then((data) => store.writeBlob(id, data))
                   .then(() => reducePhotos({ type: "complete upload", blobId: id }));
               }
             }}
@@ -138,7 +137,7 @@ export function NewJob(props: { state: State; store: Store; withLoading: WithLoa
           <button
             className="btn btn-primary me-3"
             onClick={() =>
-              props.store
+              store
                 .postAction({
                   type: "new job",
                   customerName,

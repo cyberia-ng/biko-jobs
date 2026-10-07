@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 import type { Store } from "./store.ts";
+import { AppContext } from "./index.tsx";
 
 export function Spinner() {
   return (
@@ -10,22 +11,22 @@ export function Spinner() {
 }
 
 export function BlobLoader(props: {
-  store: Store;
   blobId: string;
   loading: ReactNode;
   notFound: ReactNode;
   onError?: (e: unknown) => void;
   loaded: (data: Uint8Array<ArrayBuffer>) => ReactNode;
 }) {
+  const { store } = useContext(AppContext);
   const [state, setState] = useState<"loading" | "error" | "not found" | Uint8Array<ArrayBuffer>>(
     "loading",
   );
   useEffect(() => {
-    props.store
+    store
       .getBlob(props.blobId)
       .then((data) => setState(data ?? "not found"))
       .catch((err) => props.onError?.(err));
-  }, [props.store, props.blobId]);
+  }, [store, props.blobId]);
   switch (state) {
     case "loading":
       return props.loading;
