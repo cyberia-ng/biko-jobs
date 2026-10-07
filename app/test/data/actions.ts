@@ -19,9 +19,9 @@ const newJob1: NewJob = {
     New exhaust
     Bottom text`,
   images: [
-    { type: "image/jpeg", data: img1 },
-    { type: "image/jpeg", data: img2 },
-    { type: "image/jpeg", data: img3 },
+    { type: "image/jpeg", blobId: "img1" },
+    { type: "image/jpeg", blobId: "img2" },
+    { type: "image/jpeg", blobId: "img3" },
   ],
 };
 
@@ -30,13 +30,18 @@ const newJob2: NewJob = {
   customerName: "Jim Jimson",
   description: `Rear mech issues `,
   images: [
-    { type: "image/jpeg", data: img4 },
-    { type: "image/jpeg", data: img5 },
+    { type: "image/jpeg", blobId: "img4" },
+    { type: "image/jpeg", blobId: "img5" },
   ],
 };
 
 async function main() {
   const client = await ApiClient.open("http://localhost:3000", "some-session", "some-password");
+  await client.putBlob("img1", img1);
+  await client.putBlob("img2", img2);
+  await client.putBlob("img3", img3);
+  await client.putBlob("img4", img4);
+  await client.putBlob("img5", img5);
   await client.postEvent(newJob1);
   await client.postEvent(newJob2);
   client.closeWebSocket();

@@ -21,27 +21,23 @@ export function addRoutes(
     res.end(response);
   });
 
-  app.post(
-    "/session/:sessionId/events",
-    express.raw({ limit: "100MB" /* TODO fix */ }),
-    (req, res) => {
-      if (req.body === undefined) {
-        res.status(400);
-        res.end();
-        return;
-      }
-      if (!(req.body instanceof Buffer)) {
-        throw new Error("unreachable: expected Buffer");
-      }
-      const session = sessions.session(req.params.sessionId);
-      session.events.push(req.body);
-      onEvent(req.params.sessionId, req.body);
-      res.status(200);
+  app.post("/session/:sessionId/events", express.raw(), (req, res) => {
+    if (req.body === undefined) {
+      res.status(400);
       res.end();
-    },
-  );
+      return;
+    }
+    if (!(req.body instanceof Buffer)) {
+      throw new Error("unreachable: expected Buffer");
+    }
+    const session = sessions.session(req.params.sessionId);
+    session.events.push(req.body);
+    onEvent(req.params.sessionId, req.body);
+    res.status(200);
+    res.end();
+  });
 
-  app.put("/session/:sessionId/blob/:blobId", express.raw(), (req, res) => {
+  app.put("/session/:sessionId/blob/:blobId", express.raw({ limit: "10MB" }), (req, res) => {
     if (req.body === undefined) {
       res.status(400);
       res.end();

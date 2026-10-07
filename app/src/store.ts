@@ -49,6 +49,14 @@ export class Store {
     await this.client.postEvent(action);
   }
 
+  async writeBlob(id: string, data: Uint8Array<ArrayBuffer>) {
+    await this.client.putBlob(id, data);
+  }
+
+  async getBlob(id: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
+    return this.client.getBlob(id);
+  }
+
   private callSubscribers() {
     for (const subscriber of this.subscribers) {
       subscriber();

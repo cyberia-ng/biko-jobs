@@ -1,11 +1,43 @@
-import { useState } from "react";
-import uniqueId from "lodash/uniqueId.js";
+import { useReducer, useRef, useState } from "react";
 import type { NewJob } from "./state/action.ts";
+import type { WithLoading } from "./index.tsx";
+import type { State } from "./state/state.ts";
+import type { Store } from "./store.ts";
+import { BlobLoader, Spinner } from "./blob-loader.tsx";
 
-export function NewJob(props: { onSubmit: (job: Omit<NewJob, "type">) => void }) {
+export function NewJob(props: { state: State; store: Store; withLoading: WithLoading }) {
   const [customerName, setCustomerName] = useState<string>("");
   const [description, setDescription] = useState<string>("");
-  const [photos, setPhotos] = useState<Array<{ id: string; data: Uint8Array<ArrayBuffer> }>>([]);
+  type Photos = Array<{ blobId: string; uploaded: boolean }>;
+  type PhotosAction =
+    | { type: "start upload"; blobId: string }
+    | { type: "complete upload"; blobId: string }
+    | { type: "delete"; blobId: string }
+    | { type: "reset" };
+  const [photos, reducePhotos] = useReducer<Photos, [PhotosAction]>((photos, action) => {
+    switch (action.type) {
+      case "start upload":
+        return [...photos, { blobId: action.blobId, uploaded: false }];
+      case "complete upload":
+        return photos.map((photo) =>
+          photo.blobId !== action.blobId ? photo : { ...photo, uploaded: true },
+        );
+      case "delete":
+        return photos.filter((photo) => photo.blobId !== action.blobId);
+      case "reset":
+        return [];
+    }
+  }, []);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  function reset() {
+    setCustomerName("");
+    setDescription("");
+    reducePhotos({ type: "reset" });
+    if (photoInputRef.current !== null) {
+      photoInputRef.current.value = "";
+    }
+  }
+
   return (
     <div className="bg-white m-2 p-2 rounded">
       <form onSubmit={(e) => e.preventDefault()}>
@@ -34,16 +66,38 @@ export function NewJob(props: { onSubmit: (job: Omit<NewJob, "type">) => void })
           />
         </div>
         <div className="row mb-3">
-          {photos.map(({ id, data }) => (
-            <div className="row mb-3" key={id}>
-              <img
-                src={`data:image/jpeg;base64,${data.toBase64()}`}
-                className="object-fit-cover col-8"
-              />
+          {photos.map(({ blobId, uploaded }) => (
+            <div className="row mb-3" key={blobId}>
+              {uploaded ? (
+                <BlobLoader
+                  store={props.store}
+                  blobId={blobId}
+                  notFound=""
+                  loaded={(data) => (
+                    <img
+                      src={`data:image/jpeg;base64,${data.toBase64()}`}
+                      className="object-fit-cover col-8"
+                    />
+                  )}
+                  loading={
+                    <div className="col-8 position-relative">
+                      <div className="position-absolute top-50 start-50 translate-middle">
+                        <Spinner />
+                      </div>
+                    </div>
+                  }
+                />
+              ) : (
+                <div className="col-8 position-relative">
+                  <div className="position-absolute top-50 start-50 translate-middle">
+                    <Spinner />
+                  </div>
+                </div>
+              )}
               <div className="col-4 d-flex">
                 <button
                   className="btn btn-danger align-self-center"
-                  onClick={() => setPhotos(photos.filter(({ id: photoId }) => photoId !== id))}
+                  onClick={() => reducePhotos({ type: "delete", blobId })}
                 >
                   <i className="bi bi-trash" />
                 </button>
@@ -53,7 +107,7 @@ export function NewJob(props: { onSubmit: (job: Omit<NewJob, "type">) => void })
         </div>
         <div className="mb-3">
           <label htmlFor="photos" className="form-label">
-            Photos
+            Attach photo
           </label>
           <input
             id="photos"
@@ -62,10 +116,20 @@ export function NewJob(props: { onSubmit: (job: Omit<NewJob, "type">) => void })
             accept="image/jpeg"
             capture="environment"
             className="form-control"
+            ref={photoInputRef}
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file !== undefined) {
-                file.bytes().then((data) => setPhotos([...photos, { id: uniqueId(), data }]));
+                const id = crypto.randomUUID();
+                reducePhotos({ type: "start upload", blobId: id });
+                file
+                  .bytes()
+                  .then((data) => {
+                    e.target.value = "";
+                    return data;
+                  })
+                  .then((data) => props.store.writeBlob(id, data))
+                  .then(() => reducePhotos({ type: "complete upload", blobId: id }));
               }
             }}
           />
@@ -73,24 +137,20 @@ export function NewJob(props: { onSubmit: (job: Omit<NewJob, "type">) => void })
         <div className="mb-3">
           <button
             className="btn btn-primary me-3"
-            onClick={() => {
-              props.onSubmit({
-                customerName,
-                description,
-                images: photos.map(({ data }) => ({ type: "image/jpeg", data })),
-              });
-            }}
+            onClick={() =>
+              props.store
+                .postAction({
+                  type: "new job",
+                  customerName,
+                  description,
+                  images: photos.map(({ blobId }) => ({ type: "image/jpeg", blobId })),
+                })
+                .then(reset)
+            }
           >
             Submit
           </button>
-          <button
-            className="btn btn-danger"
-            onClick={() => {
-              setCustomerName("");
-              setDescription("");
-              setPhotos([]);
-            }}
-          >
+          <button className="btn btn-danger" onClick={reset}>
             Reset
           </button>
         </div>

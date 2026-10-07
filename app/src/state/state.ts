@@ -7,5 +7,5 @@ export type Job = {
 };
 export type Image = {
   type: string;
-  data: Uint8Array<ArrayBuffer>;
+  blobId: string,
 };

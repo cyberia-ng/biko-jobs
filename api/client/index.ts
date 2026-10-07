@@ -124,7 +124,7 @@ export class ApiClient {
     raiseForStatus(res);
   }
 
-  async getBlob(id: string): Promise<Uint8Array | undefined> {
+  async getBlob(id: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
     const res = await fetch(
       `${this.baseUrl}/session/${this.sessionId}/blob/${encodeURIComponent(id)}`,
     );

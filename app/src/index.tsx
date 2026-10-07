@@ -20,26 +20,31 @@ window.onload = () => {
   );
 };
 
+export type WithLoading = <Args extends unknown[]>(
+  p: (...args: Args) => Promise<void>,
+) => (...args: Args) => void;
 function App(props: { store: Store }) {
   const state = useSyncExternalStore(
     props.store.subscribe.bind(props.store),
     props.store.getSnapshot.bind(props.store),
   );
   const [localState, dispatchLocal] = useReducer(reducer, initialState);
-  function withLoading<Args extends unknown[]>(p: (...args: Args) => Promise<void>) {
-    return (...args: Args) => {
-      dispatchLocal({ type: "set loading" });
-      p(...args).finally(() => dispatchLocal({ type: "done loading" }));
-    };
-  }
-  const kanbanScreen = useMemo(() => <Kanban state={state} />, [state]);
+  const withLoading: WithLoading = useMemo(
+    () =>
+      (p) =>
+        (...args) => {
+          dispatchLocal({ type: "set loading" });
+          p(...args).finally(() => dispatchLocal({ type: "done loading" }));
+        },
+    [dispatchLocal],
+  );
+  const kanbanScreen = useMemo(
+    () => <Kanban state={state} store={props.store} withLoading={withLoading} />,
+    [state, props.store, withLoading],
+  );
   const newJobScreen = useMemo(
-    () => (
-      <NewJob
-        onSubmit={withLoading((job) => props.store.postAction({ type: "new job", ...job }))}
-      />
-    ),
-    [dispatchLocal, props.store.postAction],
+    () => <NewJob state={state} store={props.store} withLoading={withLoading} />,
+    [state, props.store, withLoading],
   );
   return (
     <div className="vh-100 d-flex flex-column flex-sm-row">
