@@ -26,7 +26,7 @@ export function NewJob(props: { onSubmit: (job: Omit<NewJob, "type">) => void })
             Job description
           </label>
           <textarea
-            name="description"
+            id="description"
             className="form-control"
             rows={5}
             value={description}
@@ -56,7 +56,7 @@ export function NewJob(props: { onSubmit: (job: Omit<NewJob, "type">) => void })
             Photos
           </label>
           <input
-            name="photos"
+            id="photos"
             multiple
             type="file"
             accept="image/jpeg"
