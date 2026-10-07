@@ -1,6 +1,6 @@
 // import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.scss";
-import { StrictMode, useReducer, useSyncExternalStore } from "react";
+import { StrictMode, useMemo, useReducer, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./kanban.tsx";
 import { Store } from "./store.ts";
@@ -24,6 +24,21 @@ function App(props: { store: Store }) {
     props.store.getSnapshot.bind(props.store),
   );
   const [localState, dispatchLocal] = useReducer(reducer, initialState);
+  const kanbanScreen = useMemo(() => <Kanban state={state} />, [state]);
+  const newJobScreen = useMemo(
+    () => (
+      <NewJob
+        onSubmit={(job) => {
+          dispatchLocal({ type: "set loading" });
+          props.store
+            .postAction({ type: "new job", ...job })
+            .then(() => dispatchLocal({ type: "done loading" }))
+            .catch(() => dispatchLocal({ type: "done loading" }));
+        }}
+      />
+    ),
+    [dispatchLocal, props.store.postAction],
+  );
   return (
     <div className="vh-100 d-flex flex-column flex-sm-row">
       <div>
@@ -40,20 +55,8 @@ function App(props: { store: Store }) {
         />
       </div>
       <div className="flex-grow-1 vh-100 overflow-scroll">
-        <div className={localState.screen !== "kanban" ? "d-none" : "h-100"}>
-          <Kanban state={state} />
-        </div>
-        <div className={localState.screen !== "new job" ? "d-none" : "h-100"}>
-          <NewJob
-            onSubmit={(job) => {
-              dispatchLocal({ type: "set loading" });
-              props.store
-                .postAction({ type: "new job", ...job })
-                .then(() => dispatchLocal({ type: "done loading" }))
-                .catch(() => dispatchLocal({ type: "done loading" }));
-            }}
-          />
-        </div>
+        <div className={localState.screen !== "kanban" ? "d-none" : "h-100"}>{kanbanScreen}</div>
+        <div className={localState.screen !== "new job" ? "d-none" : "h-100"}>{newJobScreen}</div>
       </div>
     </div>
   );

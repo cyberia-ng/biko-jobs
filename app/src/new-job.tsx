@@ -1,8 +1,8 @@
 import { useState } from "react";
 import uniqueId from "lodash/uniqueId.js";
-import type { Job } from "./state/state.ts";
+import type { NewJob } from "./state/action.ts";
 
-export function NewJob(props: { onSubmit: (job: Omit<Job, "status">) => void }) {
+export function NewJob(props: { onSubmit: (job: Omit<NewJob, "type">) => void }) {
   const [customerName, setCustomerName] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [photos, setPhotos] = useState<Array<{ id: string; data: Uint8Array<ArrayBuffer> }>>([]);
@@ -23,7 +23,7 @@ export function NewJob(props: { onSubmit: (job: Omit<Job, "status">) => void }) 
         </div>
         <div className="mb-3">
           <label htmlFor="description" className="form-label">
-            Description
+            Job description
           </label>
           <textarea
             name="description"
