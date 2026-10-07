@@ -44,5 +44,6 @@ export function reducer(state: LocalState, action: Action): LocalState {
 
 export const initialState: LocalState = {
   loading: false,
-  screen: { type: "kanban" },
+  // screen: { type: "kanban" },
+  screen: { type: "job detail", jobNumber: 1 },
 };
