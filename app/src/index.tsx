@@ -1,7 +1,6 @@
 // import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.scss";
 import {
-  createContext,
   StrictMode,
   useContext,
   useMemo,
@@ -13,10 +12,10 @@ import { createRoot } from "react-dom/client";
 import { Kanban } from "./kanban.tsx";
 import { Store } from "./store.ts";
 import { Nav } from "./nav.tsx";
-import { initialState, reducer, type Action, type LocalState } from "./local-state.ts";
+import { initialState, reducer } from "./local-state.ts";
 import { NewJob } from "./new-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
-import type { State } from "./state/state.ts";
+import { AppContext, type AppContextT } from "./context.ts";
 
 window.onload = () => {
   Store.init(`http://${window.location.host}/api`, "some-session", "some-password").then(
@@ -31,18 +30,6 @@ window.onload = () => {
     },
   );
 };
-
-export type WithLoading = <Args extends unknown[]>(
-  p: (...args: Args) => Promise<void>,
-) => (...args: Args) => void;
-type AppContextT = {
-  state: State;
-  store: Store;
-  localState: LocalState;
-  dispatchLocal: (action: Action) => void;
-  withLoading: WithLoading;
-};
-export const AppContext = createContext<AppContextT>(null as any);
 
 function App(props: { store: Store; children?: ReactNode | ReactNode[] }) {
   const state = useSyncExternalStore(
@@ -78,13 +65,13 @@ function Main() {
         <Nav />
       </div>
       <div className="flex-grow-1 vh-100 overflow-scroll">
-        <div className={ctx.localState.screen !== "kanban" ? "d-none" : "h-100"}>
+        <div className={ctx.localState.screen.type !== "kanban" ? "d-none" : "h-100"}>
           {kanbanScreen}
         </div>
-        <div className={ctx.localState.screen !== "new job" ? "d-none" : "h-100"}>
+        <div className={ctx.localState.screen.type !== "new job" ? "d-none" : "h-100"}>
           {newJobScreen}
         </div>
-        <div className={ctx.localState.screen !== "job detail" ? "d-none" : "h-100"}>
+        <div className={ctx.localState.screen.type !== "job detail" ? "d-none" : "h-100"}>
           <JobDetail />
         </div>
       </div>

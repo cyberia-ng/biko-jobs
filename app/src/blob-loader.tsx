@@ -1,6 +1,5 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
-import type { Store } from "./store.ts";
-import { AppContext } from "./index.tsx";
+import { AppContext } from "./context.ts";
 
 export function Spinner() {
   return (

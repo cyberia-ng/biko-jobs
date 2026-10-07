@@ -15,7 +15,7 @@ export default {
       },
     },
   },
-  publicDir: 'public',
+  publicDir: "public",
   // Silence Sass deprecation warnings. (https://github.com/twbs/bootstrap/issues/40962)
   css: {
     preprocessorOptions: {

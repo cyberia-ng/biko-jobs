@@ -1,6 +1,6 @@
 import { ApiClient } from "@biko-jobs/api-client";
 import { reducer } from "./state/reducer.ts";
-import type { State } from "./state/state.ts";
+import { initialState, type State } from "./state/state.ts";
 import type { Action } from "./state/action.ts";
 
 export class Store {
@@ -10,7 +10,7 @@ export class Store {
 
   private constructor(client: ApiClient) {
     this.client = client;
-    this.state = [];
+    this.state = initialState;
     this.subscribers = new Set();
     this.client.subscribeEvents((event) => {
       this.onAction(event as Action);
@@ -26,7 +26,7 @@ export class Store {
 
   async refreshState() {
     const actions = (await this.client.events()) as Action[];
-    let state: State = [];
+    let state: State = initialState;
     for (const action of actions) {
       state = reducer(state, action);
     }

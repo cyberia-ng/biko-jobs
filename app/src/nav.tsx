@@ -1,6 +1,6 @@
 import { useContext, type ReactNode } from "react";
 import type { Navigate } from "./local-state.ts";
-import { AppContext } from "./index.tsx";
+import { AppContext } from "./context.ts";
 
 export function Nav() {
   const { localState, dispatchLocal, withLoading, store } = useContext(AppContext);
@@ -11,10 +11,10 @@ export function Nav() {
   return (
     <div className="h-100">
       <div className="shadow h-100 bg-dark nav nav-pills d-flex flex-row flex-sm-column">
-        <NavItem active={localState.screen === "kanban"} onClick={() => navigate("kanban")}>
+        <NavItem active={localState.screen.type === "kanban"} onClick={() => navigate("kanban")}>
           <i className="bi bi-layout-three-columns fs-1" />
         </NavItem>
-        <NavItem active={localState.screen === "new job"} onClick={() => navigate("new job")}>
+        <NavItem active={localState.screen.type === "new job"} onClick={() => navigate("new job")}>
           <i className="bi bi-plus-circle fs-1" />
         </NavItem>
         <div className="flex-grow-1"></div>

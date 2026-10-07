@@ -12,12 +12,12 @@ const newJob1: NewJob = {
   type: "new job",
   customerName: "Bob Bobson",
   description: `Brakes
-    Front puncture
-    Head gasket
-    Wiper fluid
-    New bell
-    New exhaust
-    Bottom text`,
+Front puncture
+Head gasket
+Wiper fluid
+New bell
+New exhaust
+Bottom text`,
   images: [
     { type: "image/jpeg", blobId: "img1" },
     { type: "image/jpeg", blobId: "img2" },

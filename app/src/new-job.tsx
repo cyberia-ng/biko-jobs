@@ -1,7 +1,7 @@
 import { useContext, useReducer, useRef, useState } from "react";
 import type { NewJob } from "./state/action.ts";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
-import { AppContext } from "./index.tsx";
+import { AppContext } from "./context.ts";
 
 export function NewJob() {
   const { store } = useContext(AppContext);

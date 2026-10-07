@@ -1,8 +1,13 @@
 import { produce } from "immer";
+import { assertNever } from "./assertNever.ts";
 
 export type LocalState = {
   loading: boolean;
-  screen: "kanban" | "new job" | "job detail";
+  screen:
+  | {
+    type: "kanban" | "new job";
+  }
+  | { type: "job detail"; jobNumber: number };
 };
 
 export type Navigate = { type: "navigate"; screen: "kanban" | "new job" };
@@ -10,7 +15,7 @@ export type Action =
   | { type: "set loading" }
   | { type: "done loading" }
   | Navigate
-  | { type: "view job detail" };
+  | { type: "view job detail"; jobNumber: number };
 
 export function reducer(state: LocalState, action: Action): LocalState {
   return produce(state, (state) => {
@@ -24,11 +29,11 @@ export function reducer(state: LocalState, action: Action): LocalState {
         break;
       }
       case "navigate": {
-        state.screen = action.screen;
+        state.screen = { type: action.screen };
         break;
       }
       case "view job detail": {
-        state.screen = "job detail";
+        state.screen = { type: "job detail", jobNumber: action.jobNumber };
         break;
       }
       default:
@@ -39,9 +44,5 @@ export function reducer(state: LocalState, action: Action): LocalState {
 
 export const initialState: LocalState = {
   loading: false,
-  screen: "kanban",
+  screen: { type: "kanban" },
 };
-
-function assertNever(a: never): never {
-  return a;
-}
