@@ -4,9 +4,9 @@ import { Sessions } from "./sessions.ts";
 import { addRoutes } from "./routes.ts";
 import { WrappedWebSocketServer } from "./websockets.ts";
 
-export function createApp() {
+export function createApp(sqlitePath?: string) {
   const app = express();
-  const sessions = new Sessions();
+  const sessions = new Sessions(sqlitePath ?? ":memory:");
   const server = createServer(app);
   const wss = new WrappedWebSocketServer(server);
   addRoutes(app, sessions, wss.notifyClientsForSession.bind(wss));

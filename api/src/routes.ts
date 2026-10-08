@@ -5,7 +5,7 @@ import express from "express";
 export function addRoutes(
   app: ReturnType<typeof express>,
   sessions: Sessions,
-  onEvent: (sessionId: string, event: Uint8Array<ArrayBuffer>) => void,
+  onEvent: (session: string, event: Uint8Array<ArrayBuffer>) => void,
 ) {
   app.get("/health", (_, res) => {
     res.status(200);
@@ -13,14 +13,14 @@ export function addRoutes(
   });
 
   const encoder = new Encoder();
-  app.get("/session/:sessionId/events", (req, res) => {
-    const response = encoder.encode(sessions.events(req.params.sessionId));
+  app.get("/session/:session/events", (req, res) => {
+    const response = encoder.encode(sessions.events(req.params.session));
     res.status(200);
     res.header("Content-Type", "application/vnd.msgpack");
     res.end(response);
   });
 
-  app.post("/session/:sessionId/events", express.raw(), (req, res) => {
+  app.post("/session/:session/events", express.raw(), (req, res) => {
     if (req.body === undefined) {
       res.status(400);
       res.end();
@@ -29,13 +29,13 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    sessions.addEvent(req.params.sessionId, req.body);
-    onEvent(req.params.sessionId, req.body);
+    sessions.addEvent(req.params.session, req.body);
+    onEvent(req.params.session, req.body);
     res.status(200);
     res.end();
   });
 
-  app.put("/session/:sessionId/blob/:blobId", express.raw({ limit: "10MB" }), (req, res) => {
+  app.put("/session/:session/blob/:blob", express.raw({ limit: "10MB" }), (req, res) => {
     if (req.body === undefined) {
       res.status(400);
       res.end();
@@ -44,13 +44,13 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    sessions.addBlob(req.params.sessionId, req.params.blobId, req.body);
+    sessions.addBlob(req.params.session, req.params.blob, req.body);
     res.status(201);
     res.end();
   });
 
-  app.get("/session/:sessionId/blob/:blobId", (req, res) => {
-    const blob = sessions.blob(req.params.sessionId, req.params.blobId);
+  app.get("/session/:session/blob/:blob", (req, res) => {
+    const blob = sessions.blob(req.params.session, req.params.blob);
     if (blob === undefined) {
       res.status(404);
       res.end();
@@ -63,6 +63,6 @@ export function addRoutes(
 
   app.get("/session", (req, res) => {
     res.status(200);
-    res.json(sessions.sessionIds());
+    res.json(sessions.sessionNames());
   });
 }

@@ -3,6 +3,9 @@ import { createApp } from "@biko-jobs/api/app.ts";
 import supertest from "supertest";
 import { decode } from "@msgpack/msgpack";
 import { expect } from "chai";
+import { mkdtempDisposableSync } from "node:fs";
+import { Sessions } from "@biko-jobs/api/sessions.ts";
+import { join } from "node:path";
 
 const test = it;
 
@@ -181,5 +184,11 @@ describe("api", () => {
         expect(res.body).to.deep.equal(["some id"]);
       });
     });
+  });
+
+  describe("re-using a database works", () => {
+    using tempDir = mkdtempDisposableSync("biko-jobs-db-test");
+    new Sessions(join(tempDir.path, "test.db"));
+    new Sessions(join(tempDir.path, "test.db"));
   });
 });

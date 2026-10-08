@@ -11,14 +11,14 @@ const mpDecoder = new Decoder();
 
 export class ApiClient {
   private baseUrl: string;
-  private sessionId: string;
+  private session: string;
   private key: CryptoKey;
   private ws: WebSocket;
   private subscribers: Set<(event: unknown) => void>;
 
-  private constructor(baseUrl: string, sessionId: string, key: CryptoKey, ws: WebSocket) {
+  private constructor(baseUrl: string, session: string, key: CryptoKey, ws: WebSocket) {
     this.baseUrl = baseUrl;
-    this.sessionId = sessionId;
+    this.session = session;
     this.key = key;
     this.ws = ws;
     this.subscribers = new Set();
@@ -40,8 +40,8 @@ export class ApiClient {
     return res.json();
   }
 
-  static async open(baseUrl: string, sessionId: string, pass: string): Promise<ApiClient> {
-    const encodedSessionId = encodeURIComponent(sessionId);
+  static async open(baseUrl: string, session: string, pass: string): Promise<ApiClient> {
+    const encodedSessionId = encodeURIComponent(session);
     const saltGetRes = await fetch(`${baseUrl}/session/${encodedSessionId}/blob/salt`);
     let salt: Uint8Array<ArrayBuffer>;
     if (saltGetRes.status === 404) {
@@ -95,7 +95,7 @@ export class ApiClient {
   }
 
   async events(): Promise<unknown[]> {
-    const res = await fetch(`${this.baseUrl}/session/${this.sessionId}/events`);
+    const res = await fetch(`${this.baseUrl}/session/${this.session}/events`);
     if (!res.ok) {
       throw new Error(`HTTP Error: status ${res.status}`);
     }
@@ -112,7 +112,7 @@ export class ApiClient {
   async postEvent(event: unknown): Promise<void> {
     const encoded = mpEncoder.encode(event);
     const encrypted = await this.encrypt(encoded);
-    const res = await fetch(`${this.baseUrl}/session/${this.sessionId}/events`, {
+    const res = await fetch(`${this.baseUrl}/session/${this.session}/events`, {
       method: "POST",
       body: encrypted,
       headers: { "Content-Type": "application/octet-stream" },
@@ -123,7 +123,7 @@ export class ApiClient {
   async putBlob(id: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const encrypted = await this.encrypt(data);
     const res = await fetch(
-      `${this.baseUrl}/session/${this.sessionId}/blob/${encodeURIComponent(id)}`,
+      `${this.baseUrl}/session/${this.session}/blob/${encodeURIComponent(id)}`,
       { method: "PUT", body: encrypted, headers: { "Content-Type": "application/octet-stream" } },
     );
     raiseForStatus(res);
@@ -131,7 +131,7 @@ export class ApiClient {
 
   async getBlob(id: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
     const res = await fetch(
-      `${this.baseUrl}/session/${this.sessionId}/blob/${encodeURIComponent(id)}`,
+      `${this.baseUrl}/session/${this.session}/blob/${encodeURIComponent(id)}`,
     );
     if (res.status === 404) {
       return undefined;
