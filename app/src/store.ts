@@ -16,6 +16,9 @@ export class Store {
   }
 
   async connect(session: string, pass: string) {
+    if (this.client !== undefined) {
+      this.client.closeWebSocket();
+    }
     this.client = await ApiClient.open(this.baseUrl, session, pass);
     this.client.subscribeEvents((event) => {
       this.dispatch(event as Action);
