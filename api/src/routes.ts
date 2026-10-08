@@ -14,8 +14,7 @@ export function addRoutes(
 
   const encoder = new Encoder();
   app.get("/session/:sessionId/events", (req, res) => {
-    const session = sessions.session(req.params.sessionId);
-    const response = encoder.encode(session.events);
+    const response = encoder.encode(sessions.events(req.params.sessionId));
     res.status(200);
     res.header("Content-Type", "application/vnd.msgpack");
     res.end(response);
@@ -30,8 +29,7 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    const session = sessions.session(req.params.sessionId);
-    session.events.push(req.body);
+    sessions.addEvent(req.params.sessionId, req.body);
     onEvent(req.params.sessionId, req.body);
     res.status(200);
     res.end();
@@ -46,14 +44,13 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    const session = sessions.session(req.params.sessionId);
-    session.blobs.set(req.params.blobId, req.body);
+    sessions.addBlob(req.params.sessionId, req.params.blobId, req.body);
     res.status(201);
     res.end();
   });
 
   app.get("/session/:sessionId/blob/:blobId", (req, res) => {
-    const blob = sessions.session(req.params.sessionId).blobs.get(req.params.blobId);
+    const blob = sessions.blob(req.params.sessionId, req.params.blobId);
     if (blob === undefined) {
       res.status(404);
       res.end();
