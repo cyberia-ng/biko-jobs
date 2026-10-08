@@ -22,7 +22,7 @@ export function BlobLoader(props: {
   );
   useEffect(() => {
     store
-      .getBlob(props.blobId)
+      ?.getBlob(props.blobId)
       .then((data) => setState(data ?? "not found"))
       .catch((err) => props.onError?.(err));
   }, [store, props.blobId]);

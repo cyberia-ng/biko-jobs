@@ -4,11 +4,11 @@ import type { State } from "./state/state.ts";
 import type { Store } from "./store.ts";
 
 export type WithLoading = <Args extends unknown[]>(
-  p: (...args: Args) => Promise<void>,
+  p: (...args: Args) => Promise<void> | undefined,
 ) => (...args: Args) => void;
 export type AppContextT = {
-  state: State;
-  store: Store;
+  state: State | undefined;
+  store: Store | undefined;
   localState: LocalState;
   dispatchLocal: (action: Action) => void;
   withLoading: WithLoading;

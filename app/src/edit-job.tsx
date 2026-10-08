@@ -8,7 +8,7 @@ export function EditJob(props: { new_?: boolean }) {
   const { store, state, localState, withLoading, dispatchLocal } = useContext(AppContext);
   let job: Job | undefined = undefined;
   if (!isNew) {
-    job = state.jobs.find(
+    job = state?.jobs.find(
       (job) => localState.screen.type === "edit job" && job.number === localState.screen.jobNumber,
     );
     if (job === undefined) {
@@ -53,7 +53,7 @@ export function EditJob(props: { new_?: boolean }) {
   async function submit() {
     const images = photos.map(({ blobId }) => ({ type: "image/jpeg", blobId }));
     if (isNew) {
-      await store.postAction({
+      await store?.postAction({
         type: "new job",
         customerName,
         description,
@@ -61,7 +61,7 @@ export function EditJob(props: { new_?: boolean }) {
       });
       reset();
     } else if (job !== undefined) {
-      await store.postAction({
+      await store?.postAction({
         type: "edit job",
         jobNumber: job.number,
         customerName,
@@ -161,7 +161,7 @@ export function EditJob(props: { new_?: boolean }) {
                     e.target.value = "";
                     return data;
                   })
-                  .then((data) => store.writeBlob(id, data))
+                  .then((data) => store?.writeBlob(id, data))
                   .then(() => reducePhotos({ type: "complete upload", blobId: id }));
               }
             }}

@@ -7,7 +7,6 @@ export function Nav() {
   function navigate(screen: Navigate["screen"]) {
     dispatchLocal({ type: "navigate", screen });
   }
-  function refresh() { }
   return (
     <div className="h-100">
       <div className="shadow h-100 bg-dark nav nav-pills d-flex flex-row flex-sm-column">
@@ -25,7 +24,7 @@ export function Nav() {
             </div>
           </NavItem>
         )}
-        <NavItem end onClick={withLoading(() => store.refreshState())}>
+        <NavItem end onClick={withLoading(() => store?.refreshState())}>
           <i className="bi bi-arrow-clockwise fs-1" />
         </NavItem>
       </div>

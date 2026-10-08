@@ -1,10 +1,10 @@
-// import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.scss";
 import {
   StrictMode,
-  useContext,
+  useEffect,
   useMemo,
   useReducer,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -12,54 +12,43 @@ import { createRoot } from "react-dom/client";
 import { Kanban } from "./kanban.tsx";
 import { Store } from "./store.ts";
 import { Nav } from "./nav.tsx";
-import { initialState, reducer } from "./local-state.ts";
+import { initialLocalState, reducer } from "./local-state.ts";
 import { EditJob } from "./edit-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
-import { AppContext, type AppContextT } from "./context.ts";
+import { AppContext, type WithLoading } from "./context.ts";
 
 window.onload = () => {
-  Store.init(`http://${window.location.host}/api`, "some-session", "some-password").then(
-    (store) => {
-      createRoot(document.getElementById("root")!).render(
-        <StrictMode>
-          <App store={store}>
-            <Main />
-          </App>
-        </StrictMode>,
-      );
-    },
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
   );
 };
 
-function App(props: { store: Store; children?: ReactNode | ReactNode[] }) {
-  const state = useSyncExternalStore(
-    props.store.subscribe.bind(props.store),
-    props.store.getSnapshot.bind(props.store),
-  );
-  const [localState, dispatchLocal] = useReducer(reducer, initialState);
-  const context = useMemo<AppContextT>(
-    () => ({
-      state,
-      store: props.store,
-      localState,
-      dispatchLocal,
-      withLoading:
-        (p) =>
-          (...args) => {
-            dispatchLocal({ type: "set loading" });
-            p(...args).finally(() => dispatchLocal({ type: "done loading" }));
-          },
+function App() {
+  const [localState, dispatchLocal] = useReducer(reducer, initialLocalState);
+  const withLoading: WithLoading =
+    (p) =>
+      (...args) => {
+        dispatchLocal({ type: "set loading" });
+        // TODO error surfacing
+        p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
+      };
+  const [store, setStore] = useState<Store | undefined>(undefined);
+  useEffect(
+    withLoading(async () => {
+      const store = await Store.init("/api", "some-session", "some-password");
+      setStore(store);
     }),
-    [state, props.store, localState, dispatchLocal],
+    [/*localState store name and pw*/],
   );
-  return <AppContext value={context}>{props.children}</AppContext>;
-}
-
-function Main() {
-  const ctx = useContext(AppContext);
-  const kanbanScreen = useMemo(() => <Kanban />, [ctx.state, ctx.dispatchLocal]);
+  const state = useSyncExternalStore(
+    store?.subscribe.bind(store) ?? ((_cb) => () => { }),
+    store?.getSnapshot.bind(store) ?? (() => undefined),
+  );
+  const kanbanScreen = useMemo(() => <Kanban />, [state, dispatchLocal]);
   let screen: ReactNode;
-  switch (ctx.localState.screen.type) {
+  switch (localState.screen.type) {
     case "kanban":
       screen = kanbanScreen;
       break;
@@ -74,11 +63,21 @@ function Main() {
       break;
   }
   return (
-    <div className="vh-100 d-flex flex-column flex-sm-row">
-      <div>
-        <Nav />
+    <AppContext
+      value={{
+        state,
+        store,
+        localState,
+        dispatchLocal,
+        withLoading,
+      }}
+    >
+      <div className="vh-100 d-flex flex-column flex-sm-row">
+        <div>
+          <Nav />
+        </div>
+        <div className="flex-grow-1 vh-100 overflow-scroll">{screen}</div>
       </div>
-      <div className="flex-grow-1 vh-100 overflow-scroll">{screen}</div>
-    </div>
+    </AppContext>
   );
 }

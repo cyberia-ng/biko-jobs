@@ -13,7 +13,7 @@ export function JobDetail() {
     return <></>;
   }
   const jobNumber = localState.screen.jobNumber;
-  const job = state.jobs.find((job) => job.number === jobNumber);
+  const job = state?.jobs.find((job) => job.number === jobNumber);
   if (job === undefined) {
     return <></>;
   }
@@ -24,7 +24,7 @@ export function JobDetail() {
           onDismiss={() => setModalState(null)}
           onConfirm={withLoading(async () => {
             setModalState(null);
-            await store.postAction({ type: "delete job", jobNumber });
+            await store?.postAction({ type: "delete job", jobNumber });
             dispatchLocal({ type: "navigate", screen: "kanban" });
           })}
           title="Confirm deletion"
@@ -108,7 +108,7 @@ function Status(props: { job: Job }) {
           return;
         }
         withLoading((newStatus: Job["status"]) =>
-          store.postAction({
+          store?.postAction({
             type: "change job status",
             jobNumber: props.job.number,
             status: newStatus,
