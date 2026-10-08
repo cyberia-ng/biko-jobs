@@ -3,7 +3,7 @@ import type { Navigate } from "./local-state.ts";
 import { AppContext } from "./context.ts";
 
 export function Nav() {
-  const { state, localState, dispatchLocal, withLoading, store } = useContext(AppContext);
+  const { state, localState, dispatchLocal, refresh } = useContext(AppContext);
   function navigate(screen: Navigate["screen"]) {
     dispatchLocal({ type: "navigate", screen });
   }
@@ -11,14 +11,14 @@ export function Nav() {
     <div className="h-100">
       <div className="shadow h-100 bg-dark nav nav-pills d-flex flex-row flex-sm-column">
         <NavItem
-          disabled={state === undefined}
+          disabled={state?.session === undefined}
           active={localState.screen.type === "kanban"}
           onClick={() => navigate("kanban")}
         >
           <i className="bi bi-layout-three-columns fs-1" />
         </NavItem>
         <NavItem
-          disabled={state === undefined}
+          disabled={state?.session === undefined}
           active={localState.screen.type === "new job"}
           onClick={() => navigate("new job")}
         >
@@ -39,7 +39,7 @@ export function Nav() {
         >
           <i className="bi bi-journal-text fs-1" />
         </NavItem>
-        <NavItem end onClick={withLoading(() => store?.refreshState())}>
+        <NavItem end onClick={() => refresh()}>
           <i className="bi bi-arrow-clockwise fs-1" />
         </NavItem>
       </div>

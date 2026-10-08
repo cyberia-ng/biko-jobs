@@ -7,11 +7,11 @@ export type WithLoading = <Args extends unknown[]>(
   p: (...args: Args) => Promise<void> | undefined,
 ) => (...args: Args) => void;
 export type AppContextT = {
-  state: State | undefined;
-  store: Store | undefined;
+  state: State;
+  store: Store;
   localState: LocalState;
   dispatchLocal: (action: Action) => void;
   withLoading: WithLoading;
-  setStore: (store: Store) => void;
+  refresh: () => void;
 };
 export const AppContext = createContext<AppContextT>(null as any);

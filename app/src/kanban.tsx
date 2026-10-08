@@ -16,7 +16,7 @@ export function Kanban() {
 
 function Column(props: { title: string; status: Job["status"] }) {
   const { state, dispatchLocal } = useContext(AppContext);
-  const jobs = state?.jobs.filter((job) => job.status === props.status) ?? [];
+  const jobs = state?.session?.jobs.filter((job) => job.status === props.status) ?? [];
   function viewDetail(jobNumber: number) {
     dispatchLocal({ type: "view job detail", jobNumber });
   }

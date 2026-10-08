@@ -13,7 +13,7 @@ export function JobDetail() {
     return <></>;
   }
   const jobNumber = localState.screen.jobNumber;
-  const job = state?.jobs.find((job) => job.number === jobNumber);
+  const job = state?.session?.jobs.find((job) => job.number === jobNumber);
   if (job === undefined) {
     return <></>;
   }

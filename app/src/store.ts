@@ -4,33 +4,34 @@ import { initialState, type State } from "./state/state.ts";
 import type { Action } from "./state/action.ts";
 
 export class Store {
-  private client: ApiClient;
+  private client?: ApiClient;
   private state: State;
   private subscribers: Set<() => void>;
+  private baseUrl: string;
 
-  private constructor(client: ApiClient) {
-    this.client = client;
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
     this.state = initialState;
     this.subscribers = new Set();
+  }
+
+  async connect(session: string, pass: string) {
+    this.client = await ApiClient.open(this.baseUrl, session, pass);
     this.client.subscribeEvents((event) => {
       this.onAction(event as Action);
     });
   }
 
-  static async init(baseUrl: string, session: string, pass: string) {
-    const client = await ApiClient.open(baseUrl, session, pass);
-    const store = new Store(client);
-    await store.refreshState();
-    return store;
-  }
-
   async refreshState() {
-    const actions = (await this.client.events()) as Action[];
-    let state: State = initialState;
-    for (const action of actions) {
-      state = reducer(state, action);
+    const sessionsList = await ApiClient.listSessions(this.baseUrl);
+    this.state = reducer(this.state, { type: "update sessions list", sessions: sessionsList });
+    if (this.client !== undefined) {
+      const actions = (await this.client.events()) as Action[];
+      this.state = reducer(this.state, { type: "reset session" });
+      for (const action of actions) {
+        this.state = reducer(this.state, action);
+      }
     }
-    this.state = state;
     this.callSubscribers();
   }
 
@@ -46,15 +47,15 @@ export class Store {
   }
 
   async postAction(action: Action) {
-    await this.client.postEvent(action);
+    await this.client?.postEvent(action);
   }
 
   async writeBlob(id: string, data: Uint8Array<ArrayBuffer>) {
-    await this.client.putBlob(id, data);
+    await this.client?.putBlob(id, data);
   }
 
   async getBlob(id: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
-    return this.client.getBlob(id);
+    return this.client?.getBlob(id);
   }
 
   private callSubscribers() {

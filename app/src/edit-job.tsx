@@ -8,7 +8,7 @@ export function EditJob(props: { new_?: boolean }) {
   const { store, state, localState, withLoading, dispatchLocal } = useContext(AppContext);
   let job: Job | undefined = undefined;
   if (!isNew) {
-    job = state?.jobs.find(
+    job = state?.session?.jobs.find(
       (job) => localState.screen.type === "edit job" && job.number === localState.screen.jobNumber,
     );
     if (job === undefined) {

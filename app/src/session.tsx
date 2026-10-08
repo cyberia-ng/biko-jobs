@@ -1,9 +1,9 @@
-import { useContext, useState } from "react";
+import { Fragment, useContext, useState } from "react";
 import { AppContext } from "./context.ts";
 import { Store } from "./store.ts";
 
 export function SessionManager() {
-  const { setStore, withLoading, dispatchLocal } = useContext(AppContext);
+  const { store, withLoading, dispatchLocal } = useContext(AppContext);
   const [sessionId, setSessionId] = useState("");
   const [password, setPassword] = useState("");
   const [passwordReveal, setPasswordReveal] = useState(false);
@@ -25,14 +25,16 @@ export function SessionManager() {
     setPassword(pw);
   }
   async function connect() {
-    const store = await Store.init("/api", sessionId, password);
-    setStore(store);
+    await store.connect(sessionId, password);
+    await store.refreshState();
     dispatchLocal({ type: "navigate", screen: "kanban" });
   }
   return (
     <div className="bg-white m-2 p-2 rounded shadow-sm fs-4">
       <div className="row">
-        <div className="col-6 border-end">sessions</div>
+        <div className="col-6 border-end">
+          <SessionList />
+        </div>
         <div className="col-6">
           <div className="mb-2">
             <label className="form-label" htmlFor="sessionId">
@@ -84,6 +86,17 @@ export function SessionManager() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+export function SessionList() {
+  const { state } = useContext(AppContext);
+  return (
+    <div>
+      {state.sessions.map((session) => (
+        <div key={session}>{session}</div>
+      ))}
     </div>
   );
 }

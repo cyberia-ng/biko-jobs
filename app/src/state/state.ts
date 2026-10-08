@@ -1,4 +1,4 @@
-export type State = { jobs: Job[]; nextJobNumber: number };
+export type State = { sessions: string[]; session?: { jobs: Job[]; nextJobNumber: number } };
 export type Job = {
   number: number;
   customerName: string;
@@ -11,5 +11,5 @@ export type Image = {
   blobId: string;
 };
 
-export const initialState: State = { jobs: [], nextJobNumber: 1 };
+export const initialState: State = { sessions: [] };
 export const allStatuses = ["triaged", "working", "complete"] as const;

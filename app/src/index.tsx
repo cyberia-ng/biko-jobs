@@ -17,16 +17,18 @@ import { EditJob } from "./edit-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
 import { AppContext, type WithLoading } from "./context.ts";
 import { SessionManager } from "./session.tsx";
+import { ApiClient } from "@biko-jobs/api-client";
 
 window.onload = () => {
+  const store = new Store("/api");
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App />
+      <App store={store} />
     </StrictMode>,
   );
 };
 
-function App() {
+function App({ store }: { store: Store }) {
   const [localState, dispatchLocal] = useReducer(reducer, initialLocalState);
   const withLoading: WithLoading =
     (p) =>
@@ -35,12 +37,10 @@ function App() {
         // TODO error surfacing
         p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
       };
-  const [store, setStore] = useState<Store | undefined>(undefined);
-  const state = useSyncExternalStore(
-    store?.subscribe.bind(store) ?? ((_cb) => () => { }),
-    store?.getSnapshot.bind(store) ?? (() => undefined),
-  );
+  const state = useSyncExternalStore(store.subscribe.bind(store), store.getSnapshot.bind(store));
   const kanbanScreen = useMemo(() => <Kanban />, [state, dispatchLocal]);
+  const refresh = withLoading(() => store?.refreshState());
+  useEffect(() => refresh(), []);
   let screen: ReactNode;
   switch (localState.screen.type) {
     case "session manager":
@@ -67,7 +67,7 @@ function App() {
         localState,
         dispatchLocal,
         withLoading,
-        setStore,
+        refresh,
       }}
     >
       <div className="vh-100 d-flex flex-column flex-sm-row">
