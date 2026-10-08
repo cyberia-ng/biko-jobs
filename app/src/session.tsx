@@ -1,11 +1,16 @@
-import { Fragment, useContext, useState } from "react";
+import { useContext, useState } from "react";
 import { AppContext } from "./context.ts";
-import { Store } from "./store.ts";
 
 export function SessionManager() {
-  const { store, withLoading, dispatchLocal } = useContext(AppContext);
-  const [sessionId, setSessionId] = useState("");
-  const [password, setPassword] = useState("");
+  const { state, store, withLoading } = useContext(AppContext);
+  const [sessionId, setSessionId] = useState(state.currentSession ?? "");
+  const [password, setPassword] = useState(
+    window.localStorage.getItem(`session passwords/${sessionId}`) ?? "",
+  );
+  function loadSession(sessionId: string) {
+    setSessionId(sessionId);
+    setPassword(window.localStorage.getItem(`session passwords/${sessionId}`) ?? "");
+  }
   const [passwordReveal, setPasswordReveal] = useState(false);
   function autogenerate() {
     setSessionId(new Date().toISOString());
@@ -25,17 +30,19 @@ export function SessionManager() {
     setPassword(pw);
   }
   async function connect() {
+    window.localStorage.setItem(`session passwords/${sessionId}`, password);
     await store.connect(sessionId, password);
     await store.refreshState();
-    dispatchLocal({ type: "navigate", screen: "kanban" });
   }
   return (
     <div className="bg-white m-2 p-2 rounded shadow-sm fs-4">
-      <div className="row">
-        <div className="col-6 border-end">
-          <SessionList />
+      <div className="row m-0">
+        <div className="col-12 col-md-6 border-end p-2 pe-0">
+          <h3>Sessions</h3>
+          <hr className="me-2" />
+          <SessionList selectedSession={sessionId} loadSession={loadSession} />
         </div>
-        <div className="col-6">
+        <div className="col-12 col-md-6 border-md-top">
           <div className="mb-2">
             <label className="form-label" htmlFor="sessionId">
               Session name
@@ -90,12 +97,43 @@ export function SessionManager() {
   );
 }
 
-export function SessionList() {
+export function SessionList(props: {
+  selectedSession: string;
+  loadSession: (sessionId: string) => void;
+}) {
   const { state } = useContext(AppContext);
   return (
-    <div>
-      {state.sessions.map((session) => (
-        <div key={session}>{session}</div>
+    <div className="border-start border-top">
+      <div
+        className={
+          "border-bottom p-2 d-flex" + (props.selectedSession === "" ? " bg-primary-subtle" : "")
+        }
+        onClick={() => props.loadSession("")}
+      >
+        <div className="flex-grow-1">New session</div>
+        <div>
+          <i className="bi bi-chevron-right" />
+        </div>
+      </div>
+      {state.sessions.toReversed().map((session) => (
+        <div
+          className={
+            "border-bottom p-2 d-flex" +
+            (props.selectedSession === session ? " bg-primary-subtle" : "")
+          }
+          key={session}
+          onClick={() => props.loadSession(session)}
+        >
+          {state.currentSession === session && (
+            <div>
+              <i className="bi bi-link-45deg text-primary me-2" />
+            </div>
+          )}
+          <div className="flex-grow-1">{session}</div>
+          <div>
+            <i className="bi bi-chevron-right" />
+          </div>
+        </div>
       ))}
     </div>
   );

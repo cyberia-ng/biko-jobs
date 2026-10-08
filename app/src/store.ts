@@ -18,13 +18,14 @@ export class Store {
   async connect(session: string, pass: string) {
     this.client = await ApiClient.open(this.baseUrl, session, pass);
     this.client.subscribeEvents((event) => {
-      this.onAction(event as Action);
+      this.dispatch(event as Action);
     });
+    this.dispatch({ type: "set current session", sessionId: session });
   }
 
   async refreshState() {
     const sessionsList = await ApiClient.listSessions(this.baseUrl);
-    this.state = reducer(this.state, { type: "update sessions list", sessions: sessionsList });
+    this.dispatch({ type: "update sessions list", sessions: sessionsList });
     if (this.client !== undefined) {
       const actions = (await this.client.events()) as Action[];
       this.state = reducer(this.state, { type: "reset session" });
@@ -64,7 +65,7 @@ export class Store {
     }
   }
 
-  private onAction(action: Action) {
+  private dispatch(action: Action) {
     this.state = reducer(this.state, action);
     this.callSubscribers();
   }

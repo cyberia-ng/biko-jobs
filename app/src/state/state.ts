@@ -1,4 +1,8 @@
-export type State = { sessions: string[]; session?: { jobs: Job[]; nextJobNumber: number } };
+export type State = {
+  sessions: string[];
+  currentSession?: string;
+  session?: { jobs: Job[]; nextJobNumber: number };
+};
 export type Job = {
   number: number;
   customerName: string;
