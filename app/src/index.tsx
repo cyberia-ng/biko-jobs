@@ -16,6 +16,7 @@ import { initialLocalState, reducer } from "./local-state.ts";
 import { EditJob } from "./edit-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
 import { AppContext, type WithLoading } from "./context.ts";
+import { SessionManager } from "./session.tsx";
 
 window.onload = () => {
   createRoot(document.getElementById("root")!).render(
@@ -35,13 +36,6 @@ function App() {
         p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
       };
   const [store, setStore] = useState<Store | undefined>(undefined);
-  useEffect(
-    withLoading(async () => {
-      const store = await Store.init("/api", "some-session", "some-password");
-      setStore(store);
-    }),
-    [/*localState store name and pw*/],
-  );
   const state = useSyncExternalStore(
     store?.subscribe.bind(store) ?? ((_cb) => () => { }),
     store?.getSnapshot.bind(store) ?? (() => undefined),
@@ -49,6 +43,9 @@ function App() {
   const kanbanScreen = useMemo(() => <Kanban />, [state, dispatchLocal]);
   let screen: ReactNode;
   switch (localState.screen.type) {
+    case "session manager":
+      screen = <SessionManager />;
+      break;
     case "kanban":
       screen = kanbanScreen;
       break;
@@ -70,6 +67,7 @@ function App() {
         localState,
         dispatchLocal,
         withLoading,
+        setStore,
       }}
     >
       <div className="vh-100 d-flex flex-column flex-sm-row">

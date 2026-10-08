@@ -5,13 +5,13 @@ export type LocalState = {
   loading: boolean;
   screen:
   | {
-    type: "kanban" | "new job";
+    type: "session manager" | "kanban" | "new job";
   }
   | { type: "job detail"; jobNumber: number }
   | { type: "edit job"; jobNumber: number };
 };
 
-export type Navigate = { type: "navigate"; screen: "kanban" | "new job" };
+export type Navigate = { type: "navigate"; screen: "kanban" | "new job" | "session manager" };
 export type Action =
   | { type: "set loading" }
   | { type: "done loading" }
@@ -50,5 +50,5 @@ export function reducer(state: LocalState, action: Action): LocalState {
 
 export const initialLocalState: LocalState = {
   loading: false,
-  screen: { type: "kanban" },
+  screen: { type: "session manager" },
 };

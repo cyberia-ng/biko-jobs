@@ -3,12 +3,17 @@
 $bootstrap-icons-font-dir: "bootstrap-icons/font/fonts";
 @import "bootstrap-icons/font/bootstrap-icons";
 
-.nav .nav-item.border-bottom, .nav .nav-item.border-top {
+.nav .nav-item.border-bottom,
+.nav .nav-item.border-top {
   border-color: #495057 !important;
 }
 
-.nav .nav-link:not(.active) {
+.nav .nav-link:not(.active):not(.disabled) {
   color: #6ea8fe !important;
+}
+
+.nav .nav-link.disabled {
+  color: rgba(255, 255, 255, 0.3) !important;
 }
 
 .plain-link {

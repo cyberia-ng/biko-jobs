@@ -73,7 +73,7 @@ export function EditJob(props: { new_?: boolean }) {
   }
 
   return (
-    <div className="bg-white m-2 p-2 rounded">
+    <div className="bg-white m-2 p-2 rounded shadow-sm">
       <form onSubmit={(e) => e.preventDefault()}>
         <div className="mb-3">
           <label htmlFor="customerName" className="form-label">

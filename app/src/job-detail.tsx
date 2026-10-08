@@ -35,7 +35,7 @@ export function JobDetail() {
         />
       )}
       <div className="m-2 row">
-        <div className="col-12 col-md-6 bg-white rounded p-2 fs-5">
+        <div className="col-12 col-md-6 bg-white rounded shadow-sm p-2 fs-5">
           <div className="mb-4">
             <div className="d-flex">
               <div className="flex-grow-1">
@@ -77,7 +77,7 @@ export function JobDetail() {
         </div>
         <div className="col-12 col-md-6 border-start">
           {job.images.map((image) => (
-            <div key={image.blobId} className="mb-2 bg-white p-2 rounded">
+            <div key={image.blobId} className="mb-2 bg-white p-2 rounded shadow-sm">
               <BlobLoader
                 blobId={image.blobId}
                 loading={<Spinner />}

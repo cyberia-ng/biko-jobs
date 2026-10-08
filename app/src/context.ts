@@ -12,5 +12,6 @@ export type AppContextT = {
   localState: LocalState;
   dispatchLocal: (action: Action) => void;
   withLoading: WithLoading;
+  setStore: (store: Store) => void;
 };
 export const AppContext = createContext<AppContextT>(null as any);
