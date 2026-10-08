@@ -96,4 +96,41 @@ describe("api", () => {
         });
     });
   });
+
+  describe("list sessions", () => {
+    test("when no sessions", async () => {
+      const testApp = supertest(createApp());
+      await testApp
+        .get("/session")
+        .expect(200)
+        .expect("Content-Type", /json/)
+        .expect((res) => {
+          expect(res.body).to.deep.equal([]);
+        });
+    });
+
+    test("with only blobs", async () => {
+      const testApp = supertest(createApp());
+      await testApp
+        .put("/session/some-id/blob/some-blob-id")
+        .set("Content-Type", "application/octet-stream")
+        .send(Buffer.from("hello world", "utf8"));
+      await testApp.get("/session").expect((res) => {
+        expect(res.body).to.deep.equal(["some-id"]);
+      });
+    });
+
+    test("with events in sessions", async () => {
+      const testApp = supertest(createApp());
+      await testApp
+        .post("/session/some-id/events")
+        .set("Content-Type", "application/octet-stream")
+        .send(Buffer.from("hello world", "utf8"));
+      await testApp.get("/session").expect((res) => {
+        expect(res.body).to.deep.equal(["some-id"]);
+      });
+    });
+
+    test("order is order of creation");
+  });
 });

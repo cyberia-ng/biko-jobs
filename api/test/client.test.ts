@@ -87,4 +87,19 @@ describe("api client", () => {
       });
     });
   });
+
+  describe("list sessions", () => {
+    test("works", async () => {
+      await client.putBlob("some-id", Buffer.from("hello world", "utf8"));
+      const clientB = await ApiClient.open(
+        `http://localhost:${port}`,
+        "some-other-session",
+        "a password",
+      );
+      await clientB.postEvent("hello");
+      clientB.closeWebSocket();
+      const receivedSessions = await ApiClient.listSessions(`http://localhost:${port}`);
+      expect(receivedSessions).to.deep.equal(["some-session", "some-other-session"]);
+    });
+  });
 });

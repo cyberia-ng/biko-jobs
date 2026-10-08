@@ -63,4 +63,9 @@ export function addRoutes(
     res.header("Content-Type", "application/octet-stream");
     res.end(blob);
   });
+
+  app.get("/session", (req, res) => {
+    res.status(200);
+    res.json(sessions.sessionIds());
+  });
 }

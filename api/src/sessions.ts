@@ -23,4 +23,8 @@ export class Sessions {
     this.sessions.set(id, newSession);
     return newSession;
   }
+
+  sessionIds(): SessionId[] {
+    return Array.from(this.sessions.keys());
+  }
 }

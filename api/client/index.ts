@@ -35,6 +35,11 @@ export class ApiClient {
     });
   }
 
+  static async listSessions(baseUrl: string): Promise<string[]> {
+    const res = await fetch(`${baseUrl}/session`);
+    return res.json();
+  }
+
   static async open(baseUrl: string, sessionId: string, pass: string): Promise<ApiClient> {
     const encodedSessionId = encodeURIComponent(sessionId);
     const saltGetRes = await fetch(`${baseUrl}/session/${encodedSessionId}/blob/salt`);
