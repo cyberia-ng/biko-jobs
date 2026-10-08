@@ -69,6 +69,29 @@ describe("api", () => {
           ]);
         });
     });
+
+    test("spaces in url", async () => {
+      const testApp = supertest(createApp());
+      await testApp
+        .post("/session/some id/events")
+        .set("Content-Type", "application/octet-stream")
+        .send(Buffer.from("hello world", "utf8"));
+      await testApp
+        .post("/session/some id/events")
+        .set("Content-Type", "application/octet-stream")
+        .send(Buffer.from("hola mundo", "utf8"));
+      await testApp
+        .get("/session/some id/events")
+        .expect(200)
+        .expect("Content-Type", "application/vnd.msgpack")
+        .responseType("blob")
+        .expect((res) => {
+          expect(decode(res.body)).to.deep.equal([
+            Buffer.from("hello world", "utf8"),
+            Buffer.from("hola mundo", "utf8"),
+          ]);
+        });
+    });
   });
 
   describe("session blobs", () => {
@@ -89,6 +112,21 @@ describe("api", () => {
         .send(Buffer.from("hello world", "utf8"));
       await testApp
         .get("/session/some-id/blob/some-blob-id")
+        .expect(200)
+        .expect("Content-Type", "application/octet-stream")
+        .expect((res) => {
+          expect(res.body).to.deep.equal(Buffer.from("hello world", "utf8"));
+        });
+    });
+
+    test("spaces in url", async () => {
+      const testApp = supertest(createApp());
+      await testApp
+        .put("/session/some id/blob/some blob id")
+        .set("Content-Type", "application/octet-stream")
+        .send(Buffer.from("hello world", "utf8"));
+      await testApp
+        .get("/session/some id/blob/some blob id")
         .expect(200)
         .expect("Content-Type", "application/octet-stream")
         .expect((res) => {
@@ -132,5 +170,16 @@ describe("api", () => {
     });
 
     test("order is order of creation");
+
+    test("spaces in url", async () => {
+      const testApp = supertest(createApp());
+      await testApp
+        .post("/session/some id/events")
+        .set("Content-Type", "application/octet-stream")
+        .send(Buffer.from("hello world", "utf8"));
+      await testApp.get("/session").expect((res) => {
+        expect(res.body).to.deep.equal(["some id"]);
+      });
+    });
   });
 });

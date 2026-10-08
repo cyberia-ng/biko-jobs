@@ -21,6 +21,7 @@ if (!Map.prototype.hasOwnProperty("getOrInsert")) {
   });
 }
 
+
 export class WrappedWebSocketServer {
   private connections: Map<SessionId, Set<WebSocket>>;
   constructor(server: Server) {
@@ -36,7 +37,7 @@ export class WrappedWebSocketServer {
         ws.close(1002, "Unsupported path");
         return;
       }
-      const sessionId = urlMatch[1]!;
+      const sessionId = decodeURIComponent(urlMatch[1]!);
       const sessionConnections = this.connections.getOrInsert(sessionId, new Set());
       sessionConnections.add(ws);
       ws.on("close", () => {

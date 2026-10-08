@@ -15,7 +15,7 @@ describe("api client", () => {
     const app = createApp();
     port = Math.round(Math.random() * (65535 - 1024) + 1024);
     listener = app.listen(port, () => {
-      ApiClient.open(`http://localhost:${port}`, "some-session", "a password").then((theClient) => {
+      ApiClient.open(`http://localhost:${port}`, "some session", "a password").then((theClient) => {
         client = theClient;
         done();
       });
@@ -93,13 +93,13 @@ describe("api client", () => {
       await client.putBlob("some-id", Buffer.from("hello world", "utf8"));
       const clientB = await ApiClient.open(
         `http://localhost:${port}`,
-        "some-other-session",
+        "some other session",
         "a password",
       );
       await clientB.postEvent("hello");
       clientB.closeWebSocket();
       const receivedSessions = await ApiClient.listSessions(`http://localhost:${port}`);
-      expect(receivedSessions).to.deep.equal(["some-session", "some-other-session"]);
+      expect(receivedSessions).to.deep.equal(["some session", "some other session"]);
     });
   });
 });
