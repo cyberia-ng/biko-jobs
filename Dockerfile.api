@@ -1,0 +1,8 @@
+FROM docker.io/node
+
+WORKDIR /service
+ADD . .
+RUN npm clean-install --omit dev
+
+EXPOSE 3000
+CMD ["node", "api/src/index.ts"]

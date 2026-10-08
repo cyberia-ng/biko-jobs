@@ -1,0 +1,7 @@
+:8080 {
+  handle_path /api/* {
+    reverse_proxy biko-jobs-api:3000
+  }
+  root * /public
+  file_server
+}

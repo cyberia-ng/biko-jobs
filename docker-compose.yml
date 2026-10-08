@@ -1,0 +1,25 @@
+services:
+  app:
+    build:
+      dockerfile: ./Dockerfile.app
+    networks:
+      - biko-jobs
+    ports:
+      - 8080:8080/tcp
+
+  api:
+    build:
+      dockerfile: ./Dockerfile.api
+    container_name: biko-jobs-api
+    networks:
+      - biko-jobs
+    volumes:
+      - biko-jobs-data:/data
+    environment:
+      SQLITE_PATH: /data/db.sqlite3
+
+
+networks:
+  biko-jobs:
+volumes:
+  biko-jobs-data:
