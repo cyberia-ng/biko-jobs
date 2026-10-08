@@ -7,7 +7,8 @@ export type LocalState = {
   | {
     type: "kanban" | "new job";
   }
-  | { type: "job detail"; jobNumber: number };
+  | { type: "job detail"; jobNumber: number }
+  | { type: "edit job"; jobNumber: number };
 };
 
 export type Navigate = { type: "navigate"; screen: "kanban" | "new job" };
@@ -15,7 +16,8 @@ export type Action =
   | { type: "set loading" }
   | { type: "done loading" }
   | Navigate
-  | { type: "view job detail"; jobNumber: number };
+  | { type: "view job detail"; jobNumber: number }
+  | { type: "edit job"; jobNumber: number };
 
 export function reducer(state: LocalState, action: Action): LocalState {
   return produce(state, (state) => {
@@ -36,6 +38,10 @@ export function reducer(state: LocalState, action: Action): LocalState {
         state.screen = { type: "job detail", jobNumber: action.jobNumber };
         break;
       }
+      case "edit job": {
+        state.screen = { type: "edit job", jobNumber: action.jobNumber };
+        break;
+      }
       default:
         assertNever(action);
     }
@@ -45,5 +51,5 @@ export function reducer(state: LocalState, action: Action): LocalState {
 export const initialState: LocalState = {
   loading: false,
   // screen: { type: "kanban" },
-  screen: { type: "job detail", jobNumber: 1 },
+  screen: { type: "edit job", jobNumber: 1 },
 };

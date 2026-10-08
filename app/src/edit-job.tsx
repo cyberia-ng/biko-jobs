@@ -1,33 +1,46 @@
 import { useContext, useReducer, useRef, useState } from "react";
-import type { NewJob } from "./state/action.ts";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { AppContext } from "./context.ts";
+import type { Job } from "./state/state.ts";
 
-export function NewJob() {
-  const { store } = useContext(AppContext);
+export function EditJob(props: { new_?: boolean }) {
+  const isNew = props.new_ ?? false;
+  const { store, state, localState, withLoading, dispatchLocal } = useContext(AppContext);
+  let job: Job | undefined = undefined;
+  if (!isNew) {
+    job = state.jobs.find(
+      (job) => localState.screen.type === "edit job" && job.number === localState.screen.jobNumber,
+    );
+    if (job === undefined) {
+      console.error("Editing non-existent job");
+    }
+  }
 
-  const [customerName, setCustomerName] = useState<string>("");
-  const [description, setDescription] = useState<string>("");
+  const [customerName, setCustomerName] = useState<string>(job?.customerName ?? "");
+  const [description, setDescription] = useState<string>(job?.description ?? "");
   type Photos = Array<{ blobId: string; uploaded: boolean }>;
   type PhotosAction =
     | { type: "start upload"; blobId: string }
     | { type: "complete upload"; blobId: string }
     | { type: "delete"; blobId: string }
     | { type: "reset" };
-  const [photos, reducePhotos] = useReducer<Photos, [PhotosAction]>((photos, action) => {
-    switch (action.type) {
-      case "start upload":
-        return [...photos, { blobId: action.blobId, uploaded: false }];
-      case "complete upload":
-        return photos.map((photo) =>
-          photo.blobId !== action.blobId ? photo : { ...photo, uploaded: true },
-        );
-      case "delete":
-        return photos.filter((photo) => photo.blobId !== action.blobId);
-      case "reset":
-        return [];
-    }
-  }, []);
+  const [photos, reducePhotos] = useReducer<Photos, [PhotosAction]>(
+    (photos, action) => {
+      switch (action.type) {
+        case "start upload":
+          return [...photos, { blobId: action.blobId, uploaded: false }];
+        case "complete upload":
+          return photos.map((photo) =>
+            photo.blobId !== action.blobId ? photo : { ...photo, uploaded: true },
+          );
+        case "delete":
+          return photos.filter((photo) => photo.blobId !== action.blobId);
+        case "reset":
+          return [];
+      }
+    },
+    job?.images.map((image) => ({ blobId: image.blobId, uploaded: true })) ?? [],
+  );
   const photoInputRef = useRef<HTMLInputElement>(null);
   function reset() {
     setCustomerName("");
@@ -35,6 +48,27 @@ export function NewJob() {
     reducePhotos({ type: "reset" });
     if (photoInputRef.current !== null) {
       photoInputRef.current.value = "";
+    }
+  }
+  async function submit() {
+    const images = photos.map(({ blobId }) => ({ type: "image/jpeg", blobId }));
+    if (isNew) {
+      await store.postAction({
+        type: "new job",
+        customerName,
+        description,
+        images,
+      });
+      reset();
+    } else if (job !== undefined) {
+      await store.postAction({
+        type: "edit job",
+        jobNumber: job.number,
+        customerName,
+        description,
+        images,
+      });
+      dispatchLocal({ type: "view job detail", jobNumber: job.number });
     }
   }
 
@@ -134,24 +168,14 @@ export function NewJob() {
           />
         </div>
         <div className="mb-3">
-          <button
-            className="btn btn-primary me-3"
-            onClick={() =>
-              store
-                .postAction({
-                  type: "new job",
-                  customerName,
-                  description,
-                  images: photos.map(({ blobId }) => ({ type: "image/jpeg", blobId })),
-                })
-                .then(reset)
-            }
-          >
-            Submit
+          <button className="btn btn-primary me-3" onClick={withLoading(() => submit())}>
+            {isNew ? "Submit" : "Save"}
           </button>
-          <button className="btn btn-danger" onClick={reset}>
-            Reset
-          </button>
+          {isNew && (
+            <button className="btn btn-danger" onClick={reset}>
+              Reset
+            </button>
+          )}
         </div>
       </form>
     </div>

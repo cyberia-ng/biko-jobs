@@ -13,7 +13,7 @@ import { Kanban } from "./kanban.tsx";
 import { Store } from "./store.ts";
 import { Nav } from "./nav.tsx";
 import { initialState, reducer } from "./local-state.ts";
-import { NewJob } from "./new-job.tsx";
+import { EditJob } from "./edit-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
 
@@ -57,24 +57,28 @@ function App(props: { store: Store; children?: ReactNode | ReactNode[] }) {
 
 function Main() {
   const ctx = useContext(AppContext);
-  const kanbanScreen = useMemo(() => <Kanban />, [ctx]);
-  const newJobScreen = useMemo(() => <NewJob />, [ctx]);
+  const kanbanScreen = useMemo(() => <Kanban />, [ctx.state, ctx.dispatchLocal]);
+  let screen: ReactNode;
+  switch (ctx.localState.screen.type) {
+    case "kanban":
+      screen = kanbanScreen;
+      break;
+    case "new job":
+      screen = <EditJob new_ />;
+      break;
+    case "job detail":
+      screen = <JobDetail />;
+      break;
+    case "edit job":
+      screen = <EditJob />;
+      break;
+  }
   return (
     <div className="vh-100 d-flex flex-column flex-sm-row">
       <div>
         <Nav />
       </div>
-      <div className="flex-grow-1 vh-100 overflow-scroll">
-        <div className={ctx.localState.screen.type !== "kanban" ? "d-none" : "h-100"}>
-          {kanbanScreen}
-        </div>
-        <div className={ctx.localState.screen.type !== "new job" ? "d-none" : "h-100"}>
-          {newJobScreen}
-        </div>
-        <div className={ctx.localState.screen.type !== "job detail" ? "d-none" : "h-100"}>
-          <JobDetail />
-        </div>
-      </div>
+      <div className="flex-grow-1 vh-100 overflow-scroll">{screen}</div>
     </div>
   );
 }

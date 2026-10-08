@@ -47,12 +47,17 @@ export function JobDetail() {
                   Back
                 </button>
               </div>
-              <div>
-                <button className="btn btn-danger" onClick={() => setModalState("delete job")}>
-                  <i className="bi bi-trash me-1" />
-                  Delete job
-                </button>
-              </div>
+              <button
+                className="btn btn-secondary me-2"
+                onClick={() => dispatchLocal({ type: "edit job", jobNumber })}
+              >
+                <i className="bi bi-pencil me-2" />
+                Edit job
+              </button>
+              <button className="btn btn-danger" onClick={() => setModalState("delete job")}>
+                <i className="bi bi-trash me-1" />
+                Delete job
+              </button>
             </div>
           </div>
           <div className="d-flex">

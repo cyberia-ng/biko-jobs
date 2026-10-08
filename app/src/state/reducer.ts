@@ -24,6 +24,15 @@ export function reducer(state: State, action: Action): State {
       case "delete job":
         state.jobs = state.jobs.filter((job) => job.number !== action.jobNumber);
         break;
+      case "edit job": {
+        const job = state.jobs.find((job) => job.number === action.jobNumber);
+        if (job !== undefined) {
+          job.customerName = action.customerName;
+          job.description = action.description;
+          job.images = action.images;
+        }
+        break;
+      }
       default:
         assertNever(action);
     }

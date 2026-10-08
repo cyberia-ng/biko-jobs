@@ -1,6 +1,6 @@
 import type { Image, Job } from "./state.ts";
 
-export type Action = NewJob | ChangeJobStatus | DeleteJob;
+export type Action = NewJob | ChangeJobStatus | DeleteJob | EditJob;
 
 export type NewJob = {
   type: "new job";
@@ -18,4 +18,12 @@ export type ChangeJobStatus = {
 export type DeleteJob = {
   type: "delete job";
   jobNumber: number;
+};
+
+export type EditJob = {
+  type: "edit job";
+  jobNumber: number;
+  customerName: string;
+  description: string;
+  images: Image[];
 };
