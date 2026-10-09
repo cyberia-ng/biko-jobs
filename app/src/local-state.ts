@@ -4,11 +4,11 @@ import { assertNever } from "./assertNever.ts";
 export type LocalState = {
   loading: boolean;
   screen:
-  | {
-    type: "session manager" | "kanban" | "new job";
-  }
-  | { type: "job detail"; jobNumber: number }
-  | { type: "edit job"; jobNumber: number };
+    | {
+        type: "session manager" | "kanban" | "new job";
+      }
+    | { type: "job detail"; jobNumber: number }
+    | { type: "edit job"; jobNumber: number };
 };
 
 export type Navigate = { type: "navigate"; screen: "kanban" | "new job" | "session manager" };

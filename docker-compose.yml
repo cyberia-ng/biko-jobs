@@ -18,7 +18,6 @@ services:
     environment:
       SQLITE_PATH: /data/db.sqlite3
 
-
 networks:
   biko-jobs:
 volumes:

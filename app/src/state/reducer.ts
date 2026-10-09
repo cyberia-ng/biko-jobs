@@ -15,7 +15,7 @@ export function reducer(state: State, action: Action): State {
         state.sessions = action.sessions;
         break;
       }
-      case 'set current session' : {
+      case "set current session": {
         state.currentSession = action.sessionId;
         break;
       }

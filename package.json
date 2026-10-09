@@ -15,10 +15,11 @@
   "main": "index.js",
   "scripts": {
     "test-api": "npx --workspace api/test mocha",
-    "types": "npx tsc",
     "serve-api": "nodemon --watch api --exec node api/src/index.ts",
     "serve-app": "cd app && npx vite",
-    "dev": "npx concurrently -n 'api,app' 'npm run serve-api' 'npm run serve-app'"
+    "dev": "npx concurrently -n 'api,app' 'npm run serve-api' 'npm run serve-app'",
+    "types": "npx tsc",
+    "format": "npx oxfmt"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

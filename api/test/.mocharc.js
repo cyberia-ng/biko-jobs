@@ -1,3 +1,3 @@
 export default {
-   spec: "**/*.test.ts",
+  spec: "**/*.test.ts",
 };

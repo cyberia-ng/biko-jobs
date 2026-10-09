@@ -32,11 +32,11 @@ function App({ store }: { store: Store }) {
   const [localState, dispatchLocal] = useReducer(reducer, initialLocalState);
   const withLoading: WithLoading =
     (p) =>
-      (...args) => {
-        dispatchLocal({ type: "set loading" });
-        // TODO error surfacing
-        p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
-      };
+    (...args) => {
+      dispatchLocal({ type: "set loading" });
+      // TODO error surfacing
+      p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
+    };
   const state = useSyncExternalStore(store.subscribe.bind(store), store.getSnapshot.bind(store));
   const kanbanScreen = useMemo(() => <Kanban />, [state, dispatchLocal]);
   const refresh = withLoading(() => store?.refreshState());
