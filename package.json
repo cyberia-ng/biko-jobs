@@ -14,6 +14,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "prepare": "husky",
     "test-api": "npx --workspace api/test mocha",
     "serve-api": "node --watch-path api api/src/index.ts",
     "serve-app": "cd app && npx vite",
@@ -24,6 +25,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "oxfmt": "^0.71.0",
     "oxlint": "^1.87.0",
     "typescript": "^7.0.2"
