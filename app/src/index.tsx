@@ -4,7 +4,6 @@ import {
   useEffect,
   useMemo,
   useReducer,
-  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -17,7 +16,6 @@ import { EditJob } from "./edit-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
 import { AppContext, type WithLoading } from "./context.ts";
 import { SessionManager } from "./session.tsx";
-import { ApiClient } from "@biko-jobs/api-client";
 
 window.onload = () => {
   const store = new Store("/api");

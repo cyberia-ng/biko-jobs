@@ -6,11 +6,10 @@ import type { Server } from "node:http";
 if (!Map.prototype.hasOwnProperty("getOrInsert")) {
   Object.defineProperty(Map.prototype, "getOrInsert", {
     value: function (key: string, default_: unknown) {
-      const that: Map<unknown, unknown> = this;
-      if (that.has(key)) {
-        return that.get(key);
+      if (this.has(key)) {
+        return this.get(key);
       } else {
-        that.set(key, default_);
+        this.set(key, default_);
         return default_;
       }
     },
@@ -30,7 +29,7 @@ export class WrappedWebSocketServer {
         throw new Error("unreachable?");
       }
       const url = new URL(req.url, "http://localhost");
-      const urlMatch = url.pathname.match(/\/session\/([^\/]+)\/events/);
+      const urlMatch = url.pathname.match(/\/session\/([^/]+)\/events/);
       if (urlMatch === null) {
         ws.close(1002, "Unsupported path");
         return;

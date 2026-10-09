@@ -19,12 +19,14 @@
     "serve-app": "cd app && npx vite",
     "dev": "npx concurrently -n 'api,app' 'npm run serve-api' 'npm run serve-app'",
     "types": "npx tsc",
-    "format": "npx oxfmt"
+    "format": "npx oxfmt",
+    "lint": "npx oxlint --fix"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
     "nodemon": "^1.14.10",
     "oxfmt": "^0.71.0",
+    "oxlint": "^1.87.0",
     "typescript": "^7.0.2"
   }
 }
