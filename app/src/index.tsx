@@ -20,7 +20,7 @@ window.onload = () => {
 };
 
 function App({ store }: { store: Store }) {
-  const [localState, dispatchLocal] = useReducer(reducer, initialLocalState);
+  const [localState, dispatchLocal] = useReducer(reducer, initialLocalState(window.location.hash));
   const withLoading: WithLoading =
     (p) =>
     (...args) => {
@@ -29,8 +29,23 @@ function App({ store }: { store: Store }) {
       p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
     };
   const state = useSyncExternalStore(store.subscribe.bind(store), store.getSnapshot.bind(store));
-  const refresh = withLoading(() => store?.refreshState());
+  const refresh = withLoading(() => store.refreshState());
   useEffect(() => refresh(), []); // oxlint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    withLoading(async () => {
+      const currentSession = localState.currentSession;
+      if (currentSession !== undefined) {
+        if (window.localStorage.getItem(`session passwords/${currentSession.session}`) === null) {
+          window.localStorage.setItem(
+            `session passwords/${currentSession.session}`,
+            currentSession.password,
+          );
+        }
+        await store.connect(currentSession.session, currentSession.password);
+        await store.refreshState();
+      }
+    })();
+  }, [localState.currentSession, store]);
   let screen: ReactNode;
   switch (localState.screen.type) {
     case "session manager":

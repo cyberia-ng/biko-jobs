@@ -1,11 +1,15 @@
 import { useContext, useState } from "react";
 import { AppContext } from "./context.ts";
+import { QRCodeSVG } from "qrcode.react";
+import pick from "lodash/pick.js";
 
 export function SessionManager() {
-  const { state, store, withLoading } = useContext(AppContext);
-  const [sessionId, setSessionId] = useState(state.currentSession ?? "");
+  const { localState, dispatchLocal } = useContext(AppContext);
+  const [sessionId, setSessionId] = useState(localState.currentSession?.session ?? "");
   const [password, setPassword] = useState(
-    window.localStorage.getItem(`session passwords/${sessionId}`) ?? "",
+    localState.currentSession?.password ??
+      window.localStorage.getItem(`session passwords/${sessionId}`) ??
+      "",
   );
   function loadSession(sessionId: string) {
     setSessionId(sessionId);
@@ -31,8 +35,7 @@ export function SessionManager() {
   }
   async function connect() {
     window.localStorage.setItem(`session passwords/${sessionId}`, password);
-    await store.connect(sessionId, password);
-    await store.refreshState();
+    dispatchLocal({ type: "set current session", session: { session: sessionId, password } });
   }
   return (
     <div className="bg-white m-2 p-2 rounded shadow-sm fs-4">
@@ -79,34 +82,63 @@ export function SessionManager() {
               </button>
             </div>
           </div>
-          <div className="mb-2">
-            <button className="btn btn-success me-3 fs-4" onClick={() => autogenerate()}>
-              Autogenerate
-            </button>
-            <button
-              className="btn btn-primary fs-4"
-              disabled={sessionId.length === 0 || password.length === 0}
-              onClick={withLoading(() => connect())}
-            >
-              Connect
-            </button>
+          <div className="mb-2 d-flex">
+            <div className="flex-grow-1">
+              <button className="btn btn-success me-2 fs-4" onClick={() => autogenerate()}>
+                Autogenerate
+              </button>
+            </div>
+            {localState.currentSession?.session === sessionId ? (
+              <button className="btn btn-primary fs-4" disabled>
+                Connected
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary fs-4"
+                disabled={
+                  localState.currentSession?.session === sessionId ||
+                  sessionId.length === 0 ||
+                  password.length === 0
+                }
+                onClick={() => connect()}
+              >
+                Connect
+              </button>
+            )}
           </div>
+          {localState.currentSession?.session === sessionId && (
+            <div className="text-center">
+              Scan to connect another device
+              <div className="d-flex">
+                <div className="mx-auto p-2 border rounded">
+                  <SessionQRCode session={sessionId} password={password} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
+export function SessionQRCode(props: { session: string; password: string }) {
+  const location = new URL(window.location.href);
+  location.hash = btoa(JSON.stringify(pick(props, ["session", "password"])));
+  return <QRCodeSVG value={location.toString()} height="256" width="256" />;
+}
+
 export function SessionList(props: {
   selectedSession: string;
   loadSession: (sessionId: string) => void;
 }) {
-  const { state } = useContext(AppContext);
+  const { localState, state } = useContext(AppContext);
   return (
     <div className="border-start border-top">
       <div
         className={
-          "border-bottom p-2 d-flex" + (props.selectedSession === "" ? " bg-primary-subtle" : "")
+          "border-bottom p-2 d-flex" +
+          (state.sessions.includes(props.selectedSession) ? "" : " bg-primary-subtle")
         }
         onClick={() => props.loadSession("")}
       >
@@ -124,7 +156,7 @@ export function SessionList(props: {
           key={session}
           onClick={() => props.loadSession(session)}
         >
-          {state.currentSession === session && (
+          {localState.currentSession?.session === session && (
             <div>
               <i className="bi bi-link-45deg text-primary me-2" />
             </div>

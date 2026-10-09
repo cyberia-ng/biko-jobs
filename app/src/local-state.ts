@@ -3,6 +3,7 @@ import { assertNever } from "./assertNever.ts";
 
 export type LocalState = {
   loading: boolean;
+  currentSession: { session: string; password: string } | undefined;
   screen:
     | {
         type: "session manager" | "kanban" | "new job";
@@ -17,7 +18,8 @@ export type Action =
   | { type: "done loading" }
   | Navigate
   | { type: "view job detail"; jobNumber: number }
-  | { type: "edit job"; jobNumber: number };
+  | { type: "edit job"; jobNumber: number }
+  | { type: "set current session"; session: { session: string; password: string } | undefined };
 
 export function reducer(state: LocalState, action: Action): LocalState {
   return produce(state, (state) => {
@@ -42,13 +44,32 @@ export function reducer(state: LocalState, action: Action): LocalState {
         state.screen = { type: "edit job", jobNumber: action.jobNumber };
         break;
       }
+      case "set current session": {
+        state.currentSession = action.session;
+        break;
+      }
       default:
         assertNever(action);
     }
   });
 }
 
-export const initialLocalState: LocalState = {
-  loading: false,
-  screen: { type: "session manager" },
-};
+export function initialLocalState(hashFragment: string): LocalState {
+  let hashData = hashFragment;
+  if (hashData[0] === "#") {
+    hashData = hashData.slice(1);
+  }
+  let currentSession: { session: string; password: string } | undefined;
+  try {
+    const parsed = JSON.parse(atob(hashData));
+    currentSession = { session: parsed.session, password: parsed.password };
+    // oxlint-disable-next-line no-unused-vars
+  } catch (e) {
+    currentSession = undefined;
+  }
+  return {
+    loading: false,
+    currentSession,
+    screen: { type: "session manager" },
+  };
+}

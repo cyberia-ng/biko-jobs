@@ -1,5 +1,6 @@
-- QR code sessions
 - Wrong password notif
 - Timestamps on kanban cards
 - Job number on kanban cards
 - Job assignment
+- Fix session list highlight when naming new session
+- Error surfacing

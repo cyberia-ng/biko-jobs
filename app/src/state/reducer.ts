@@ -15,10 +15,6 @@ export function reducer(state: State, action: Action): State {
         state.sessions = action.sessions;
         break;
       }
-      case "set current session": {
-        state.currentSession = action.sessionId;
-        break;
-      }
       case "new job":
         state.session?.jobs.push({
           number: state.session.nextJobNumber,

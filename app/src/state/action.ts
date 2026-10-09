@@ -6,8 +6,7 @@ export type Action =
   | DeleteJob
   | EditJob
   | UpdateSessionsList
-  | ResetSession
-  | SetCurrentSession;
+  | ResetSession;
 
 export type NewJob = {
   type: "new job";
@@ -42,8 +41,4 @@ export type UpdateSessionsList = {
 
 export type ResetSession = {
   type: "reset session";
-};
-export type SetCurrentSession = {
-  type: "set current session";
-  sessionId: string;
 };
