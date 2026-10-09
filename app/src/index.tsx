@@ -30,7 +30,7 @@ function App({ store }: { store: Store }) {
     };
   const state = useSyncExternalStore(store.subscribe.bind(store), store.getSnapshot.bind(store));
   const refresh = withLoading(() => store?.refreshState());
-  useEffect(() => refresh());
+  useEffect(() => refresh(), []); // oxlint-disable-line react-hooks/exhaustive-deps
   let screen: ReactNode;
   switch (localState.screen.type) {
     case "session manager":
