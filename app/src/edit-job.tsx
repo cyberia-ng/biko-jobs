@@ -168,7 +168,12 @@ export function EditJob(props: { new_?: boolean }) {
           />
         </div>
         <div className="mb-3">
-          <button className="btn btn-primary me-3" onClick={withLoading(() => submit())}>
+          <button
+            className="btn btn-primary me-3"
+            onClick={withLoading(
+              () => submit(), // oxlint-disable-line react/refs
+            )}
+          >
             {isNew ? "Submit" : "Save"}
           </button>
           {isNew && (

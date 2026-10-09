@@ -1,12 +1,5 @@
 import "./styles.scss";
-import {
-  StrictMode,
-  useEffect,
-  useMemo,
-  useReducer,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { StrictMode, useEffect, useReducer, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./kanban.tsx";
 import { Store } from "./store.ts";
@@ -36,16 +29,15 @@ function App({ store }: { store: Store }) {
       p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
     };
   const state = useSyncExternalStore(store.subscribe.bind(store), store.getSnapshot.bind(store));
-  const kanbanScreen = useMemo(() => <Kanban />, [state, dispatchLocal]);
   const refresh = withLoading(() => store?.refreshState());
-  useEffect(() => refresh(), []);
+  useEffect(() => refresh());
   let screen: ReactNode;
   switch (localState.screen.type) {
     case "session manager":
       screen = <SessionManager />;
       break;
     case "kanban":
-      screen = kanbanScreen;
+      screen = <Kanban />;
       break;
     case "new job":
       screen = <EditJob new_ />;

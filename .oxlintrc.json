@@ -1,10 +1,13 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc"],
+  "plugins": ["typescript", "unicorn", "oxc", "react", "import"],
   "categories": {
     "correctness": "error"
   },
-  "rules": {},
+  "rules": {
+    "import/no-cycle": "error",
+    "import/no-duplicates": "error"
+  },
   "env": {
     "builtin": true
   }

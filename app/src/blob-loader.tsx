@@ -25,7 +25,7 @@ export function BlobLoader(props: {
       ?.getBlob(props.blobId)
       .then((data) => setState(data ?? "not found"))
       .catch((err) => props.onError?.(err));
-  }, [store, props.blobId]);
+  }, [store, props]);
   switch (state) {
     case "loading":
       return props.loading;
