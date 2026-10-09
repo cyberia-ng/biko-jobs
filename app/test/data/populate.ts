@@ -36,7 +36,7 @@ const newJob2: NewJob = {
 };
 
 async function main() {
-  const client = await ApiClient.open("http://localhost:3000", "some-session", "some-password");
+  const client = await ApiClient.open("http://localhost:3000", "some session", "some password");
   await client.putBlob("img1", img1);
   await client.putBlob("img2", img2);
   await client.putBlob("img3", img3);
