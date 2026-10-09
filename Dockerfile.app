@@ -2,7 +2,7 @@ FROM docker.io/node AS build
 
 WORKDIR /build
 ADD . .
-RUN npm clean-install
+RUN npm clean-install --ignore-scripts
 
 WORKDIR /build/app
 RUN npx vite build
