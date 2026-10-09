@@ -15,7 +15,7 @@
   "main": "index.js",
   "scripts": {
     "test-api": "npx --workspace api/test mocha",
-    "serve-api": "nodemon --watch api --exec node api/src/index.ts",
+    "serve-api": "node --watch-path api api/src/index.ts",
     "serve-app": "cd app && npx vite",
     "dev": "npx concurrently -n 'api,app' 'npm run serve-api' 'npm run serve-app'",
     "types": "npx tsc",
@@ -24,7 +24,6 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "nodemon": "^1.14.10",
     "oxfmt": "^0.71.0",
     "oxlint": "^1.87.0",
     "typescript": "^7.0.2"
