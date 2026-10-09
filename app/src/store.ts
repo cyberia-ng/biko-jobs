@@ -5,6 +5,7 @@ import type { Action } from "./state/action.ts";
 
 export class Store {
   private client?: ApiClient;
+  private unsubscribe?: () => void;
   private state: State;
   private subscribers: Set<() => void>;
   private baseUrl: string;
@@ -16,14 +17,12 @@ export class Store {
   }
 
   async connect(session: string, pass: string) {
-    if (this.client !== undefined) {
-      this.client.closeWebSocket();
-    }
+    this.client?.closeWebSocket();
     this.client = await ApiClient.open(this.baseUrl, session, pass);
-    this.client.subscribeEvents((event) => {
+    this.unsubscribe?.();
+    this.unsubscribe = this.client.subscribeEvents((event) => {
       this.dispatch(event as Action);
     });
-    this.dispatch({ type: "set current session", sessionId: session });
   }
 
   async refreshState() {

@@ -42,18 +42,25 @@ export class ApiClient {
 
   static async open(baseUrl: string, session: string, pass: string): Promise<ApiClient> {
     const encodedSessionId = encodeURIComponent(session);
-    const saltGetRes = await fetch(`${baseUrl}/session/${encodedSessionId}/blob/salt`);
-    let salt: Uint8Array<ArrayBuffer>;
-    if (saltGetRes.status === 404) {
-      salt = crypto.getRandomValues(new Uint8Array(16));
-      const saltPutRes = await fetch(`${baseUrl}/session/${encodedSessionId}/blob/salt`, {
-        method: "PUT",
-        body: salt,
-        headers: { "Content-Type": "application/octet-stream" },
-      });
-      raiseForStatus(saltPutRes);
-    } else {
-      salt = await saltGetRes.bytes();
+    let salt: Uint8Array<ArrayBuffer> | undefined;
+    while (salt === undefined) {
+      const saltGetRes = await fetch(`${baseUrl}/session/${encodedSessionId}/blob/salt`);
+      if (saltGetRes.status === 404) {
+        salt = crypto.getRandomValues(new Uint8Array(16));
+        const saltPutRes = await fetch(`${baseUrl}/session/${encodedSessionId}/blob/salt`, {
+          method: "PUT",
+          body: salt,
+          headers: { "Content-Type": "application/octet-stream" },
+        });
+        if (saltPutRes.status === 409) {
+          // Salt was uploaded by another client between our GET and our PUT
+          salt = undefined;
+          continue;
+        }
+        raiseForStatus(saltPutRes);
+      } else {
+        salt = await saltGetRes.bytes();
+      }
     }
 
     const textEncoder = new TextEncoder();

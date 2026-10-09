@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
+import { inspect } from "node:util";
 
 export class Sessions {
   private db: DatabaseSync;
@@ -43,9 +44,17 @@ export class Sessions {
     return rows.map((row) => row.data as Uint8Array);
   }
 
-  addBlob(session: string, blob: string, data: Uint8Array) {
+  addBlob(session: string, blob: string, data: Uint8Array): boolean {
     const id = this.statements.getOrInsertSession.get(session)!.id as number;
-    this.statements.addBlob.run(id, blob, data);
+    try {
+      this.statements.addBlob.run(id, blob, data);
+      return true;
+    } catch (e) {
+      if ((e as any).errstr === "constraint failed") {
+        return false;
+      }
+      throw e;
+    }
   }
 
   blob(session: string, blob: string): Uint8Array | undefined {
@@ -59,9 +68,29 @@ export class Sessions {
 
 function migrateDb(db: DatabaseSync) {
   const migrationsDir = join(import.meta.dirname, "..", "db-migrations");
-  const migrationsFilenames = readdirSync(migrationsDir).toSorted();
-  for (const fileName of migrationsFilenames) {
-    const migration = readFileSync(join(migrationsDir, fileName), "utf8");
-    db.exec(migration);
+  const migrationsFilenames = readdirSync(migrationsDir);
+  const migrations = migrationsFilenames
+    .map((filename) => {
+      const match = filename.match(/^(\d+)(-.*)?\.sql$/);
+      if (match === null) {
+        throw new Error("migration had unexpected filename");
+      }
+      const num = parseInt(match[1]!, 10);
+      return { migration: readFileSync(join(migrationsDir, filename), "utf8"), filename, num };
+    })
+    .toSorted(({ num: numA }, { num: numB }) => numA - numB);
+  const getPragmaStmt = db.prepare("PRAGMA user_version;");
+  const version = getPragmaStmt.get()![0] as number;
+  for (const migration of migrations) {
+    if (migration.num <= version) continue;
+    db.exec("BEGIN TRANSACTION;");
+    try {
+      db.exec(migration.migration);
+      db.exec(`PRAGMA user_version = ${migration.num};`);
+      db.exec("COMMIT;");
+    } catch (e) {
+      db.exec("ROLLBACK;");
+      throw new Error(`migration failed: ${migration.filename}; ${inspect(e)}`);
+    }
   }
 }

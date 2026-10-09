@@ -1,5 +1,12 @@
 import "./styles.scss";
-import { StrictMode, useEffect, useReducer, useSyncExternalStore, type ReactNode } from "react";
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useReducer,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./kanban.tsx";
 import { Store } from "./store.ts";
@@ -28,7 +35,10 @@ function App({ store }: { store: Store }) {
       // TODO error surfacing
       p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
     };
-  const state = useSyncExternalStore(store.subscribe.bind(store), store.getSnapshot.bind(store));
+  const state = useSyncExternalStore(
+    useCallback((cb) => store.subscribe(cb), [store]),
+    store.getSnapshot.bind(store),
+  );
   const refresh = withLoading(() => store.refreshState());
   useEffect(() => refresh(), []); // oxlint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

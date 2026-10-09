@@ -44,8 +44,11 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    sessions.addBlob(req.params.session, req.params.blob, req.body);
-    res.status(201);
+    if (sessions.addBlob(req.params.session, req.params.blob, req.body)) {
+      res.status(201);
+    } else {
+      res.status(409);
+    }
     res.end();
   });
 

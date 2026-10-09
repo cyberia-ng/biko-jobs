@@ -136,6 +136,19 @@ describe("api", () => {
           expect(res.body).to.deep.equal(Buffer.from("hello world", "utf8"));
         });
     });
+
+    test("blobs are immutable", async () => {
+      const testApp = supertest(createApp());
+      await testApp
+        .put("/session/some-id/blob/some-blob-id")
+        .set("Content-Type", "application/octet-stream")
+        .send(Buffer.from("hello world", "utf8"));
+      await testApp
+        .put("/session/some-id/blob/some-blob-id")
+        .set("Content-Type", "application/octet-stream")
+        .send(Buffer.from("hello world", "utf8"))
+        .expect(409);
+    });
   });
 
   describe("list sessions", () => {

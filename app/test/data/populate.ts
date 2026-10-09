@@ -37,11 +37,19 @@ const newJob2: NewJob = {
 
 async function main() {
   const client = await ApiClient.open("http://localhost:3000", "some session", "some password");
-  await client.putBlob("img1", img1);
-  await client.putBlob("img2", img2);
-  await client.putBlob("img3", img3);
-  await client.putBlob("img4", img4);
-  await client.putBlob("img5", img5);
+  try {
+    await Promise.all([
+      client.putBlob("img1", img1),
+      client.putBlob("img2", img2),
+      client.putBlob("img3", img3),
+      client.putBlob("img4", img4),
+      client.putBlob("img5", img5),
+    ]);
+  } catch (e) {
+    if (!/409/.test((e as Error).message)) {
+      throw e;
+    }
+  }
   await client.postEvent(newJob1);
   await client.postEvent(newJob2);
   client.closeWebSocket();
