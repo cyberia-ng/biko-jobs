@@ -14,4 +14,4 @@ The development server runs with an in-memory database, so when the API service 
 
 `node app/test/data/populate.ts`
 
-This populates some data in the session `some-session` with password `some-password`.
+This populates some data in the session `some session` with password `some password`.
