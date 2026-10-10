@@ -64,6 +64,7 @@ describe("api", () => {
         .get("/session/some-id/events")
         .expect(200)
         .expect("Content-Type", "application/vnd.msgpack")
+        .expect("ETag", new RegExp(""))
         .responseType("blob")
         .expect((res) => {
           expect(decode(res.body)).to.deep.equal([
@@ -117,6 +118,7 @@ describe("api", () => {
         .get("/session/some-id/blob/some-blob-id")
         .expect(200)
         .expect("Content-Type", "application/octet-stream")
+        .expect("ETag", new RegExp(""))
         .expect((res) => {
           expect(res.body).to.deep.equal(Buffer.from("hello world", "utf8"));
         });

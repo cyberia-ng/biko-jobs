@@ -8,8 +8,7 @@ export function addRoutes(
   onEvent: (session: string, event: Uint8Array<ArrayBuffer>) => void,
 ) {
   app.get("/health", (_, res) => {
-    res.status(200);
-    res.end();
+    res.status(200).send();
   });
 
   const encoder = new Encoder();
@@ -17,13 +16,12 @@ export function addRoutes(
     const response = encoder.encode(sessions.events(req.params.session));
     res.status(200);
     res.header("Content-Type", "application/vnd.msgpack");
-    res.end(response);
+    res.send(response);
   });
 
   app.post("/session/:session/events", express.raw(), (req, res) => {
     if (req.body === undefined) {
-      res.status(400);
-      res.end();
+      res.status(400).send();
       return;
     }
     if (!(req.body instanceof Buffer)) {
@@ -31,14 +29,12 @@ export function addRoutes(
     }
     sessions.addEvent(req.params.session, req.body);
     onEvent(req.params.session, req.body);
-    res.status(200);
-    res.end();
+    res.status(200).send();
   });
 
   app.put("/session/:session/blob/:blob", express.raw({ limit: "10MB" }), (req, res) => {
     if (req.body === undefined) {
-      res.status(400);
-      res.end();
+      res.status(400).send();
       return;
     }
     if (!(req.body instanceof Buffer)) {
@@ -49,22 +45,21 @@ export function addRoutes(
     } else {
       res.status(409);
     }
-    res.end();
+    res.send();
   });
 
   app.get("/session/:session/blob/:blob", (req, res) => {
     const blob = sessions.blob(req.params.session, req.params.blob);
     if (blob === undefined) {
-      res.status(404);
-      res.end();
+      res.status(404).send();
       return;
     }
     res.status(200);
     res.header("Content-Type", "application/octet-stream");
-    res.end(blob);
+    res.send(blob);
   });
 
-  app.get("/session", (req, res) => {
+  app.get("/session", (_req, res) => {
     res.status(200);
     res.json(sessions.sessionNames());
   });
