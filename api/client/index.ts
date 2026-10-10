@@ -58,8 +58,10 @@ export class ApiClient {
           continue;
         }
         raiseForStatus(saltPutRes);
-      } else {
+      } else if (saltGetRes.status === 200) {
         salt = await saltGetRes.bytes();
+      } else {
+        raiseForStatus(saltGetRes);
       }
     }
 
