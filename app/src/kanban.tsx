@@ -6,10 +6,12 @@ import { AppContext } from "./context.ts";
 
 export function Kanban() {
   return (
-    <div className="row g-0 m-1 h-100">
-      <Column title="Triaged" status="triaged" />
-      <Column title="Working" status="working" />
-      <Column title="Complete" status="complete" />
+    <div className="m-2">
+      <div className="row g-2 h-100">
+        <Column title="Triaged" status="triaged" />
+        <Column title="Working" status="working" />
+        <Column title="Complete" status="complete" />
+      </div>
     </div>
   );
 }
@@ -22,7 +24,7 @@ function Column(props: { title: string; status: Job["status"] }) {
   }
   return (
     <div className="col-12 col-sm-4">
-      <div className="m-1 p-3 bg-body shadow-sm rounded">
+      <div className="bg-body p-3 shadow-sm rounded">
         <div className="border-bottom mb-3">
           <h4>{props.title}</h4>
         </div>
