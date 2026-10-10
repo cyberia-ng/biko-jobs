@@ -1,7 +1,7 @@
 import { ApiClient } from "@biko-jobs/api-client";
 import { reducer } from "./state/reducer.ts";
 import { initialState, type State } from "./state/state.ts";
-import type { Action } from "./state/action.ts";
+import type { Action, Event } from "./state/action.ts";
 
 export class Store {
   private client?: ApiClient;
@@ -49,8 +49,8 @@ export class Store {
     };
   }
 
-  async postAction(action: Action) {
-    await this.client?.postEvent(action);
+  async postEvent(event: Event) {
+    await this.client?.postEvent(event);
   }
 
   async writeBlob(id: string, data: Uint8Array<ArrayBuffer>) {

@@ -3,6 +3,7 @@ import { AppContext } from "./context.ts";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { allStatuses, type Job } from "./state/state.ts";
 import { Modal } from "./modal.tsx";
+import { changeJobStatus, deleteJob } from "./state/action.ts";
 
 type ModalState = null | "delete job";
 
@@ -32,7 +33,7 @@ export function JobDetail() {
             setModalState(null);
             withLoading2(
               store
-                ?.postAction({ type: "delete job", jobNumber })
+                ?.postEvent(deleteJob({ jobNumber }))
                 .then(() => dispatchLocal({ type: "navigate", screen: "kanban" })),
             );
           }}
@@ -117,11 +118,12 @@ function Status(props: { job: Job }) {
           return;
         }
         withLoading2(
-          store?.postAction({
-            type: "change job status",
-            jobNumber: props.job.number,
-            status: e.target.value as Job["status"],
-          }),
+          store?.postEvent(
+            changeJobStatus({
+              jobNumber: props.job.number,
+              status: e.target.value as Job["status"],
+            }),
+          ),
         );
       }}
     >

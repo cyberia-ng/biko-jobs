@@ -2,6 +2,7 @@ import { useContext, useReducer, useRef, useState } from "react";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { AppContext } from "./context.ts";
 import type { Job } from "./state/state.ts";
+import { editJob, newJob } from "./state/action.ts";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
@@ -59,21 +60,23 @@ export function EditJob(props: { new_?: boolean }) {
   async function submit() {
     const images = photos.map(({ blobId }) => ({ type: "image/jpeg", blobId }));
     if (isNew) {
-      await store?.postAction({
-        type: "new job",
-        customerName,
-        description,
-        images,
-      });
+      await store?.postEvent(
+        newJob({
+          customerName,
+          description,
+          images,
+        }),
+      );
       reset();
     } else if (job !== undefined) {
-      await store?.postAction({
-        type: "edit job",
-        jobNumber: job.number,
-        customerName,
-        description,
-        images,
-      });
+      await store?.postEvent(
+        editJob({
+          jobNumber: job.number,
+          customerName,
+          description,
+          images,
+        }),
+      );
       dispatchLocal({ type: "view job detail", jobNumber: job.number });
     }
   }
