@@ -7,4 +7,3 @@
 - Better session name autogen
 - Session export
 - Session delete
-- Kanban mobile view
