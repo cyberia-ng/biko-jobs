@@ -14,7 +14,7 @@ import { Nav } from "./nav.tsx";
 import { initialLocalState, reducer } from "./local-state.ts";
 import { EditJob } from "./edit-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
-import { AppContext, type WithLoading } from "./context.ts";
+import { AppContext } from "./context.ts";
 import { SessionManager } from "./session.tsx";
 
 window.onload = () => {
@@ -28,34 +28,36 @@ window.onload = () => {
 
 function App({ store }: { store: Store }) {
   const [localState, dispatchLocal] = useReducer(reducer, initialLocalState(window.location.hash));
-  const withLoading: WithLoading =
-    (p) =>
-    (...args) => {
+  const withLoading = useCallback(
+    (p: Promise<void>) => {
       dispatchLocal({ type: "set loading" });
-      // TODO error surfacing
-      p(...args)?.finally(() => dispatchLocal({ type: "done loading" }));
-    };
+      p.finally(() => dispatchLocal({ type: "done loading" })); // TODO error surfacing
+    },
+    [dispatchLocal],
+  );
   const state = useSyncExternalStore(
     useCallback((cb) => store.subscribe(cb), [store]),
     store.getSnapshot.bind(store),
   );
-  const refresh = withLoading(() => store.refreshState());
-  useEffect(() => refresh(), []); // oxlint-disable-line react-hooks/exhaustive-deps
+  const refresh = useCallback(() => withLoading(store.refreshState()), [store, withLoading]);
+  useEffect(() => refresh(), [refresh]);
   useEffect(() => {
-    withLoading(async () => {
-      const currentSession = localState.currentSession;
-      if (currentSession !== undefined) {
-        if (window.localStorage.getItem(`session passwords/${currentSession.session}`) === null) {
-          window.localStorage.setItem(
-            `session passwords/${currentSession.session}`,
-            currentSession.password,
-          );
-        }
-        await store.connect(currentSession.session, currentSession.password);
-        await store.refreshState();
+    const currentSession = localState.currentSession;
+    if (currentSession !== undefined) {
+      if (window.localStorage.getItem(`session passwords/${currentSession.session}`) === null) {
+        window.localStorage.setItem(
+          `session passwords/${currentSession.session}`,
+          currentSession.password,
+        );
       }
-    })();
-  }, [localState.currentSession, store]);
+      withLoading(
+        (async () => {
+          await store.connect(currentSession.session, currentSession.password);
+          await store.refreshState();
+        })(),
+      );
+    }
+  }, [localState.currentSession, store, withLoading]);
   let screen: ReactNode;
   switch (localState.screen.type) {
     case "session manager":
@@ -81,7 +83,7 @@ function App({ store }: { store: Store }) {
         store,
         localState,
         dispatchLocal,
-        withLoading,
+        withLoading: withLoading,
         refresh,
       }}
     >

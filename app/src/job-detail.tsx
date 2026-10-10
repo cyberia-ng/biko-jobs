@@ -7,7 +7,13 @@ import { Modal } from "./modal.tsx";
 type ModalState = null | "delete job";
 
 export function JobDetail() {
-  const { state, localState, dispatchLocal, store, withLoading } = useContext(AppContext);
+  const {
+    state,
+    localState,
+    dispatchLocal,
+    store,
+    withLoading: withLoading2,
+  } = useContext(AppContext);
   const [modalState, setModalState] = useState<ModalState>(null);
   if (localState.screen.type !== "job detail") {
     return <></>;
@@ -22,11 +28,14 @@ export function JobDetail() {
       {modalState === "delete job" && (
         <Modal
           onDismiss={() => setModalState(null)}
-          onConfirm={withLoading(async () => {
+          onConfirm={() => {
             setModalState(null);
-            await store?.postAction({ type: "delete job", jobNumber });
-            dispatchLocal({ type: "navigate", screen: "kanban" });
-          })}
+            withLoading2(
+              store
+                ?.postAction({ type: "delete job", jobNumber })
+                .then(() => dispatchLocal({ type: "navigate", screen: "kanban" })),
+            );
+          }}
           title="Confirm deletion"
           body="Really delete this job?"
           confirmText="Delete"
@@ -98,7 +107,7 @@ export function JobDetail() {
 }
 
 function Status(props: { job: Job }) {
-  const { store, withLoading } = useContext(AppContext);
+  const { store, withLoading: withLoading2 } = useContext(AppContext);
   return (
     <select
       value={props.job.status}
@@ -107,13 +116,13 @@ function Status(props: { job: Job }) {
         if (e.target.value === props.job.status) {
           return;
         }
-        withLoading((newStatus: Job["status"]) =>
+        withLoading2(
           store?.postAction({
             type: "change job status",
             jobNumber: props.job.number,
-            status: newStatus,
+            status: e.target.value as Job["status"],
           }),
-        )(e.target.value as Job["status"]);
+        );
       }}
     >
       {allStatuses.map((status) => (

@@ -5,7 +5,13 @@ import type { Job } from "./state/state.ts";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
-  const { store, state, localState, withLoading, dispatchLocal } = useContext(AppContext);
+  const {
+    store,
+    state,
+    localState,
+    withLoading: withLoading2,
+    dispatchLocal,
+  } = useContext(AppContext);
   let job: Job | undefined = undefined;
   if (!isNew) {
     job = state?.session?.jobs.find(
@@ -168,12 +174,7 @@ export function EditJob(props: { new_?: boolean }) {
           />
         </div>
         <div className="mb-3">
-          <button
-            className="btn btn-primary me-3"
-            onClick={withLoading(
-              () => submit(), // oxlint-disable-line react/refs
-            )}
-          >
+          <button className="btn btn-primary me-3" onClick={() => withLoading2(submit())}>
             {isNew ? "Submit" : "Save"}
           </button>
           {isNew && (
