@@ -1,14 +1,10 @@
-import { decode, Decoder, Encoder } from "@msgpack/msgpack";
+import { mpEncoder, mpDecoder } from "./messagepack.ts";
 
 function raiseForStatus(res: Response) {
   if (!res.ok) {
     throw new Error(`HTTP Error: status ${res.status}`);
   }
 }
-
-const mpEncoder = new Encoder();
-const mpDecoder = new Decoder();
-
 export class ApiClient {
   private baseUrl: string;
   private session: string;
@@ -97,7 +93,10 @@ export class ApiClient {
   }
 
   private async decrypt(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
-    const [iv, encrypted] = decode(data) as [Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>];
+    const [iv, encrypted] = mpDecoder.decode(data) as [
+      Uint8Array<ArrayBuffer>,
+      Uint8Array<ArrayBuffer>,
+    ];
     return new Uint8Array(
       await crypto.subtle.decrypt({ name: "AES-GCM", iv }, this.key, encrypted),
     );
@@ -109,7 +108,7 @@ export class ApiClient {
       throw new Error(`HTTP Error: status ${res.status}`);
     }
     const body = await res.bytes();
-    const rawEvents = decode(body) as Uint8Array<ArrayBuffer>[];
+    const rawEvents = mpDecoder.decode(body) as Uint8Array<ArrayBuffer>[];
     return Promise.all(
       rawEvents.map(async (rawEvent) => {
         const decrypted = new Uint8Array(await this.decrypt(rawEvent));
