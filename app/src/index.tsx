@@ -1,4 +1,5 @@
 import "./styles.scss";
+import "temporal-polyfill/global";
 import {
   StrictMode,
   useCallback,

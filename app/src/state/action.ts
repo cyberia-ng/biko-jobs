@@ -4,12 +4,12 @@ export type Action = Event | UpdateSessionsList | ResetSession;
 
 export type Event = {
   type: "event";
-  timestamp: Date; // TODO Temporal
+  timestamp: Temporal.Instant;
   event: NewJob | ChangeJobStatus | DeleteJob | EditJob;
 };
 const event = (event: Event["event"]): Event => ({
   type: "event",
-  timestamp: new Date(),
+  timestamp: Temporal.Now.instant(),
   event,
 });
 

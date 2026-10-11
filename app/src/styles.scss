@@ -20,3 +20,7 @@ $bootstrap-icons-font-dir: "bootstrap-icons/font/fonts";
   color: inherit;
   text-decoration: inherit;
 }
+
+.kanban-timestamp {
+  font-size: calc(var(--bs-body-font-size) * 0.8);
+}

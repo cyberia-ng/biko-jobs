@@ -1,8 +1,9 @@
 import type { Job } from "./state/state.ts";
-import "./kanban.css";
+// import "./kanban.css";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { useContext } from "react";
 import { AppContext } from "./context.ts";
+import { TimeAgo } from "./time-ago.tsx";
 
 export function Kanban() {
   return (
@@ -38,10 +39,7 @@ function Column(props: { title: string; status: Job["status"] }) {
               viewDetail(job.number);
             }}
           >
-            <div
-              className="row gx-2 mx-1 mb-2 border rounded overflow-hidden"
-              style={{ height: "8rem" }}
-            >
+            <div className="row gx-2 mx-1 mb-2 border rounded overflow-hidden">
               <div className="col-4 ps-0">
                 {job.images.length > 0 && (
                   <BlobLoader
@@ -63,11 +61,23 @@ function Column(props: { title: string; status: Job["status"] }) {
                   />
                 )}
               </div>
-              <div className="col">
-                <div className="">
-                  <h5 className="mb-1 mt-1">{job.customerName}</h5>
+              <div className="col d-flex flex-column">
+                <div className="my-1 d-flex">
+                  <div className="flex-grow-1">
+                    <h5>{job.customerName}</h5>
+                  </div>
+                  <div>
+                    <h5>#{job.number}</h5>
+                  </div>
                 </div>
-                <div className="job-description">{job.description.replace(/\n/g, " | ")}</div>
+                <div className="flex-grow-1">
+                  <div className="h-100 job-description">
+                    {job.description.replace(/\n/g, " | ")}
+                  </div>
+                </div>
+                <div className="text-secondary text-end mt-1 kanban-timestamp">
+                  <TimeAgo time={job.creation} />
+                </div>
               </div>
             </div>
           </a>

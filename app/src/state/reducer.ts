@@ -22,6 +22,7 @@ export function reducer(state: State, action: Action): State {
             state.session?.jobs.push({
               number: state.session.nextJobNumber,
               status: "triaged",
+              creation: action.timestamp,
               ...pick(event, ["customerName", "description", "images"]),
             });
             if (state.session !== undefined) state.session.nextJobNumber++;

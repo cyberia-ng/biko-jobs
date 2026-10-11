@@ -8,6 +8,7 @@ export type Job = {
   description: string;
   status: (typeof allStatuses)[number];
   images: Image[];
+  creation: Temporal.Instant;
 };
 export type Image = {
   type: string;

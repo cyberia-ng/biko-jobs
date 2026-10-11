@@ -4,6 +4,7 @@ import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { allStatuses, type Job } from "./state/state.ts";
 import { Modal } from "./modal.tsx";
 import { changeJobStatus, deleteJob } from "./state/action.ts";
+import { TimeAgo } from "./time-ago.tsx";
 
 type ModalState = null | "delete job";
 
@@ -77,6 +78,9 @@ export function JobDetail() {
             <div>
               <h3>#{jobNumber}</h3>
             </div>
+          </div>
+          <div className="text-secondary">
+            {job.creation.toLocaleString()} (<TimeAgo time={job.creation} />)
           </div>
           <hr />
           <div>

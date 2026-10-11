@@ -1,3 +1,4 @@
+import "temporal-polyfill/global";
 import { readFileSync } from "node:fs";
 import { newJob } from "../../src/state/action.ts";
 import { join } from "node:path";
@@ -48,6 +49,7 @@ async function main() {
       throw e;
     }
   }
+  newJob2.timestamp = Temporal.Now.instant().subtract({ hours: 2 });
   await client.postEvent(newJob1);
   await client.postEvent(newJob2);
   client.closeWebSocket();
