@@ -1,6 +1,4 @@
 - Wrong password notif
-- Timestamps on kanban cards
-- Job number on kanban cards
 - Job assignment
 - Error surfacing
 - History nav
