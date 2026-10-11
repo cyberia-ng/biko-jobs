@@ -2,6 +2,5 @@
 - Job assignment
 - Error surfacing
 - History nav
-- Better session name autogen
 - Session export
 - Session delete

@@ -4,7 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import pick from "lodash/pick.js";
 
 export function SessionManager() {
-  const { localState, dispatchLocal } = useContext(AppContext);
+  const { state, localState, dispatchLocal } = useContext(AppContext);
   const [sessionId, setSessionId] = useState(localState.currentSession?.session ?? "");
   const [password, setPassword] = useState(
     localState.currentSession?.password ??
@@ -17,8 +17,22 @@ export function SessionManager() {
   }
   const [passwordReveal, setPasswordReveal] = useState(false);
   function autogenerate() {
-    setSessionId(new Date().toISOString());
-    const pwLen = 16;
+    const baseSessionId = Temporal.Now.plainDateISO()
+      .toLocaleString("en-GB", {
+        weekday: "long",
+        year: "2-digit",
+        month: "numeric",
+        day: "numeric",
+      })
+      .replace(/,/g, "");
+    let newSessionId = baseSessionId;
+    let suffixNumber = 0;
+    while (state.sessions.includes(newSessionId)) {
+      suffixNumber++;
+      newSessionId = `${baseSessionId} (${suffixNumber})`;
+    }
+    setSessionId(newSessionId);
+    const pwLen = 20;
     const pwCharset = "abcdefghijklmnopqrstuvwxyz0123456789";
     const limit = 256 - (256 % pwCharset.length);
     let pw: string = "";
