@@ -6,13 +6,7 @@ import { editJob, newJob } from "./state/action.ts";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
-  const {
-    store,
-    state,
-    localState,
-    withLoading: withLoading2,
-    dispatchLocal,
-  } = useContext(AppContext);
+  const { store, state, localState, withLoading, dispatchLocal } = useContext(AppContext);
   let job: Job | undefined = undefined;
   if (!isNew) {
     if (localState.screen.type !== "edit job") {
@@ -179,7 +173,7 @@ export function EditJob(props: { new_?: boolean }) {
           />
         </div>
         <div className="mb-3">
-          <button className="btn btn-primary me-3" onClick={() => withLoading2(submit())}>
+          <button className="btn btn-primary me-3" onClick={() => withLoading(submit())}>
             {isNew ? "Submit" : "Save"}
           </button>
           {isNew && (

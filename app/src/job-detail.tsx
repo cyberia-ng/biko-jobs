@@ -9,13 +9,7 @@ import { TimeAgo } from "./time-ago.tsx";
 type ModalState = null | "delete job";
 
 export function JobDetail() {
-  const {
-    state,
-    localState,
-    dispatchLocal,
-    store,
-    withLoading: withLoading2,
-  } = useContext(AppContext);
+  const { state, localState, dispatchLocal, store, withLoading } = useContext(AppContext);
   const [modalState, setModalState] = useState<ModalState>(null);
   if (localState.screen.type !== "job detail") {
     return <></>;
@@ -32,7 +26,7 @@ export function JobDetail() {
           onDismiss={() => setModalState(null)}
           onConfirm={() => {
             setModalState(null);
-            withLoading2(
+            withLoading(
               store
                 ?.postEvent(deleteJob({ uuid }))
                 .then(() => dispatchLocal({ type: "navigate", screen: "kanban" })),
