@@ -12,4 +12,5 @@ FROM docker.io/caddy AS app
 
 WORKDIR /public
 COPY --from=build /build/app/dist .
+ENV API_SERVICE=biko-jobs-api
 COPY Caddyfile /etc/caddy/Caddyfile
