@@ -19,6 +19,13 @@ import { AppContext } from "./context.ts";
 import { SessionManager } from "./session.tsx";
 
 window.onload = () => {
+  if (import.meta.env.MODE !== "production") {
+    if (import.meta.env.MODE === "development") {
+      document.title = document.title + " (dev)";
+    } else {
+      document.title = document.title + ` (${import.meta.env.MODE})`;
+    }
+  }
   const store = new Store("/api");
   createRoot(document.getElementById("root")!).render(
     <StrictMode>

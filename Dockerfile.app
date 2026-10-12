@@ -5,7 +5,8 @@ ADD . .
 RUN npm clean-install --ignore-scripts
 
 WORKDIR /build/app
-RUN npx vite build
+ARG BUILD_MODE="production"
+RUN npx vite build --mode ${BUILD_MODE}
 
 FROM docker.io/caddy AS app
 
