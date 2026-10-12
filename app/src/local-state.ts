@@ -8,8 +8,8 @@ export type LocalState = {
     | {
         type: "session manager" | "kanban" | "new job";
       }
-    | { type: "job detail"; jobNumber: number }
-    | { type: "edit job"; jobNumber: number };
+    | { type: "job detail"; uuid: string }
+    | { type: "edit job"; uuid: string };
 };
 
 export type Navigate = { type: "navigate"; screen: "kanban" | "new job" | "session manager" };
@@ -17,8 +17,8 @@ export type Action =
   | { type: "set loading" }
   | { type: "done loading" }
   | Navigate
-  | { type: "view job detail"; jobNumber: number }
-  | { type: "edit job"; jobNumber: number }
+  | { type: "view job detail"; uuid: string }
+  | { type: "edit job"; uuid: string }
   | { type: "set current session"; session: { session: string; password: string } | undefined };
 
 export function reducer(state: LocalState, action: Action): LocalState {
@@ -37,11 +37,11 @@ export function reducer(state: LocalState, action: Action): LocalState {
         break;
       }
       case "view job detail": {
-        state.screen = { type: "job detail", jobNumber: action.jobNumber };
+        state.screen = { type: "job detail", uuid: action.uuid };
         break;
       }
       case "edit job": {
-        state.screen = { type: "edit job", jobNumber: action.jobNumber };
+        state.screen = { type: "edit job", uuid: action.uuid };
         break;
       }
       case "set current session": {

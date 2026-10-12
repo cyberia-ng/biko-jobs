@@ -1,14 +1,16 @@
-import { produce } from "immer";
+import { produce, enableMapSet } from "immer";
 import type { Action } from "./action.ts";
 import type { State } from "./state.ts";
 import pick from "lodash/pick.js";
 import { assertNever } from "../assertNever.ts";
 
+enableMapSet();
+
 export function reducer(state: State, action: Action): State {
   return produce(state, (state) => {
     switch (action.type) {
       case "reset session": {
-        state.session = { jobs: [], nextJobNumber: 1 };
+        state.session = { jobs: new Map(), nextJobNumber: 1 };
         break;
       }
       case "update sessions list": {
@@ -19,7 +21,8 @@ export function reducer(state: State, action: Action): State {
         const { event } = action;
         switch (event.type) {
           case "new job":
-            state.session?.jobs.push({
+            state.session?.jobs.set(event.uuid, {
+              uuid: event.uuid,
               number: state.session.nextJobNumber,
               status: "triaged",
               creation: action.timestamp,
@@ -28,18 +31,18 @@ export function reducer(state: State, action: Action): State {
             if (state.session !== undefined) state.session.nextJobNumber++;
             break;
           case "change job status":
-            const job = state.session?.jobs.find((job) => job.number === event.jobNumber);
+            const job = state.session?.jobs.get(event.uuid);
             if (job !== undefined) {
               job.status = event.status;
             }
             break;
           case "delete job":
             if (state.session === undefined) break;
-            state.session.jobs = state.session.jobs.filter((job) => job.number !== event.jobNumber);
+            state.session.jobs.delete(event.uuid);
             break;
           case "edit job": {
             if (state.session === undefined) break;
-            const job = state.session.jobs.find((job) => job.number === event.jobNumber);
+            const job = state.session.jobs.get(event.uuid);
             if (job !== undefined) {
               job.customerName = event.customerName;
               job.description = event.description;

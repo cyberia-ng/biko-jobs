@@ -20,8 +20,8 @@ export function JobDetail() {
   if (localState.screen.type !== "job detail") {
     return <></>;
   }
-  const jobNumber = localState.screen.jobNumber;
-  const job = state?.session?.jobs.find((job) => job.number === jobNumber);
+  const uuid = localState.screen.uuid;
+  const job = state.session?.jobs.get(uuid);
   if (job === undefined) {
     return <></>;
   }
@@ -34,7 +34,7 @@ export function JobDetail() {
             setModalState(null);
             withLoading2(
               store
-                ?.postEvent(deleteJob({ jobNumber }))
+                ?.postEvent(deleteJob({ uuid }))
                 .then(() => dispatchLocal({ type: "navigate", screen: "kanban" })),
             );
           }}
@@ -60,7 +60,7 @@ export function JobDetail() {
               </div>
               <button
                 className="btn btn-secondary me-2"
-                onClick={() => dispatchLocal({ type: "edit job", jobNumber })}
+                onClick={() => dispatchLocal({ type: "edit job", uuid })}
               >
                 <i className="bi bi-pencil me-2" />
                 Edit job
@@ -76,7 +76,7 @@ export function JobDetail() {
               <h3>{job.customerName}</h3>
             </div>
             <div>
-              <h3>#{jobNumber}</h3>
+              <h3>#{job.number}</h3>
             </div>
           </div>
           <div className="text-secondary">
@@ -124,7 +124,7 @@ function Status(props: { job: Job }) {
         withLoading2(
           store?.postEvent(
             changeJobStatus({
-              jobNumber: props.job.number,
+              uuid: props.job.uuid,
               status: e.target.value as Job["status"],
             }),
           ),

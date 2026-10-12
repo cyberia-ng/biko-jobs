@@ -10,6 +10,7 @@ const img3 = readFileSync(join(import.meta.dirname, "img3.jpg"));
 const img4 = readFileSync(join(import.meta.dirname, "img4.jpg"));
 const img5 = readFileSync(join(import.meta.dirname, "img5.jpg"));
 const newJob1 = newJob({
+  uuid: crypto.randomUUID(),
   customerName: "Bob Bobson",
   description: `Brakes
 Front puncture
@@ -26,6 +27,7 @@ Bottom text`,
 });
 
 const newJob2 = newJob({
+  uuid: crypto.randomUUID(),
   customerName: "Jim Jimson",
   description: `Rear mech issues `,
   images: [

@@ -15,6 +15,7 @@ const event = (event: Event["event"]): Event => ({
 
 export type NewJob = {
   type: "new job";
+  uuid: string;
   customerName: string;
   description: string;
   images: Image[];
@@ -23,7 +24,7 @@ export const newJob = (f: Omit<NewJob, "type">) => event({ type: "new job", ...f
 
 export type ChangeJobStatus = {
   type: "change job status";
-  jobNumber: number;
+  uuid: string;
   status: Job["status"];
 };
 export const changeJobStatus = (f: Omit<ChangeJobStatus, "type">) =>
@@ -31,13 +32,13 @@ export const changeJobStatus = (f: Omit<ChangeJobStatus, "type">) =>
 
 export type DeleteJob = {
   type: "delete job";
-  jobNumber: number;
+  uuid: string;
 };
 export const deleteJob = (f: Omit<DeleteJob, "type">) => event({ type: "delete job", ...f });
 
 export type EditJob = {
   type: "edit job";
-  jobNumber: number;
+  uuid: string;
   customerName: string;
   description: string;
   images: Image[];

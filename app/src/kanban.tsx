@@ -19,9 +19,11 @@ export function Kanban() {
 
 function Column(props: { title: string; status: Job["status"] }) {
   const { state, dispatchLocal } = useContext(AppContext);
-  const jobs = state?.session?.jobs.filter((job) => job.status === props.status) ?? [];
-  function viewDetail(jobNumber: number) {
-    dispatchLocal({ type: "view job detail", jobNumber });
+  const jobs = Array.from(state.session?.jobs.values() ?? []).filter(
+    (job) => job.status === props.status,
+  );
+  function viewDetail(uuid: string) {
+    dispatchLocal({ type: "view job detail", uuid });
   }
   return (
     <div className="col-12 col-sm-4">
@@ -36,7 +38,7 @@ function Column(props: { title: string; status: Job["status"] }) {
             className="plain-link"
             onClick={(e) => {
               e.preventDefault();
-              viewDetail(job.number);
+              viewDetail(job.uuid);
             }}
           >
             <div className="row gx-2 mx-1 mb-2 border rounded overflow-hidden">

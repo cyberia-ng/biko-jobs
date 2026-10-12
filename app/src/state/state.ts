@@ -1,8 +1,9 @@
 export type State = {
   sessions: string[];
-  session?: { jobs: Job[]; nextJobNumber: number };
+  session?: { jobs: Map<string, Job>; nextJobNumber: number };
 };
 export type Job = {
+  uuid: string;
   number: number;
   customerName: string;
   description: string;

@@ -15,9 +15,10 @@ export function EditJob(props: { new_?: boolean }) {
   } = useContext(AppContext);
   let job: Job | undefined = undefined;
   if (!isNew) {
-    job = state?.session?.jobs.find(
-      (job) => localState.screen.type === "edit job" && job.number === localState.screen.jobNumber,
-    );
+    if (localState.screen.type !== "edit job") {
+      throw new Error("unreachable");
+    }
+    job = state.session?.jobs.get(localState.screen.uuid);
     if (job === undefined) {
       console.error("Editing non-existent job");
     }
@@ -62,6 +63,7 @@ export function EditJob(props: { new_?: boolean }) {
     if (isNew) {
       await store?.postEvent(
         newJob({
+          uuid: crypto.randomUUID(),
           customerName,
           description,
           images,
@@ -71,13 +73,13 @@ export function EditJob(props: { new_?: boolean }) {
     } else if (job !== undefined) {
       await store?.postEvent(
         editJob({
-          jobNumber: job.number,
+          uuid: job.uuid,
           customerName,
           description,
           images,
         }),
       );
-      dispatchLocal({ type: "view job detail", jobNumber: job.number });
+      dispatchLocal({ type: "view job detail", uuid: job.uuid });
     }
   }
 
