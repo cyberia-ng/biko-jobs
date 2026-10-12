@@ -29,7 +29,7 @@ function Column(props: { title: string; status: Job["status"] }) {
     <div className="col-12 col-sm-4">
       <div className="bg-body p-3 shadow-sm rounded">
         <div className="border-bottom mb-3">
-          <h4>{props.title}</h4>
+          <h3>{props.title}</h3>
         </div>
         {jobs.map((job) => (
           <a
@@ -66,14 +66,14 @@ function Column(props: { title: string; status: Job["status"] }) {
               <div className="col d-flex flex-column">
                 <div className="my-1 d-flex">
                   <div className="flex-grow-1">
-                    <h5>{job.customerName}</h5>
+                    <h4>{job.customerName}</h4>
                   </div>
                   <div>
-                    <h5>#{job.number}</h5>
+                    <h4>#{job.number}</h4>
                   </div>
                 </div>
                 <div className="flex-grow-1">
-                  <div className="h-100 job-description">
+                  <div className="h-100 job-description fs-5">
                     {job.description.replace(/\n/g, " | ")}
                   </div>
                 </div>
