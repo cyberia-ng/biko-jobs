@@ -60,66 +60,74 @@ export function SessionManager() {
           <SessionList selectedSession={sessionId} loadSession={loadSession} />
         </div>
         <div className="col-12 col-md-6 border-md-top">
-          <div className="mb-2">
-            <label className="form-label" htmlFor="sessionId">
-              Session name
-            </label>
-            <input
-              className="form-control fs-4"
-              type="text"
-              id="sessionId"
-              value={sessionId}
-              onChange={(e) => setSessionId(e.target.value)}
-            />
-          </div>
-          <div className="mb-4">
-            <label className="form-label" htmlFor="password">
-              Password
-            </label>
-            <div className="d-flex">
+          <form onSubmit={(e) => e.preventDefault()}>
+            <div className="mb-2">
+              <label className="form-label" htmlFor="sessionId">
+                Session name
+              </label>
               <input
-                className="form-control rounded-end-0 fs-4"
-                type={passwordReveal ? "text" : "password"}
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                className="form-control fs-4"
+                type="text"
+                id="sessionId"
+                value={sessionId}
+                onChange={(e) => setSessionId(e.target.value)}
               />
-              <button
-                className="btn btn-secondary rounded-start-0 fs-4"
-                onClick={() => setPasswordReveal(!passwordReveal)}
-              >
-                {passwordReveal ? (
-                  <i className="bi bi-eye-fill" />
-                ) : (
-                  <i className="bi bi-eye-slash-fill" />
-                )}
-              </button>
             </div>
-          </div>
-          <div className="mb-2 d-flex">
-            <div className="flex-grow-1">
-              <button className="btn btn-success me-2 fs-4" onClick={() => autogenerate()}>
-                Autogenerate
-              </button>
+            <div className="mb-4">
+              <label className="form-label" htmlFor="password">
+                Password
+              </label>
+              <div className="d-flex">
+                <input
+                  className="form-control rounded-end-0 fs-4"
+                  type={passwordReveal ? "text" : "password"}
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary rounded-start-0 fs-4"
+                  onClick={() => setPasswordReveal(!passwordReveal)}
+                >
+                  {passwordReveal ? (
+                    <i className="bi bi-eye-fill" />
+                  ) : (
+                    <i className="bi bi-eye-slash-fill" />
+                  )}
+                </button>
+              </div>
             </div>
-            {localState.currentSession?.session === sessionId ? (
-              <button className="btn btn-primary fs-4" disabled>
-                Connected
-              </button>
-            ) : (
-              <button
-                className="btn btn-primary fs-4"
-                disabled={
-                  localState.currentSession?.session === sessionId ||
-                  sessionId.length === 0 ||
-                  password.length === 0
-                }
-                onClick={() => connect()}
-              >
-                Connect
-              </button>
-            )}
-          </div>
+            <div className="mb-2 d-flex">
+              <div className="flex-grow-1">
+                <button
+                  type="button"
+                  className="btn btn-success me-2 fs-4"
+                  onClick={() => autogenerate()}
+                >
+                  Autogenerate
+                </button>
+              </div>
+              {localState.currentSession?.session === sessionId ? (
+                <button type="button" className="btn btn-primary fs-4" disabled>
+                  Connected
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="btn btn-primary fs-4"
+                  disabled={
+                    localState.currentSession?.session === sessionId ||
+                    sessionId.length === 0 ||
+                    password.length === 0
+                  }
+                  onClick={() => connect()}
+                >
+                  Connect
+                </button>
+              )}
+            </div>
+          </form>
           {localState.currentSession?.session === sessionId && (
             <div className="text-center">
               Scan to connect another device

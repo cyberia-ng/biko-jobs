@@ -73,6 +73,7 @@ export function JobDetail() {
               <h3>#{job.number}</h3>
             </div>
           </div>
+          {job.customerPhoneNumber !== "" && <div className="mb-1">{job.customerPhoneNumber}</div>}
           <div className="text-secondary">
             {job.creation.toLocaleString()} (<TimeAgo time={job.creation} />)
           </div>

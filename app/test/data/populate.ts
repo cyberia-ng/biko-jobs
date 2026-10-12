@@ -10,8 +10,9 @@ const img3 = readFileSync(join(import.meta.dirname, "img3.jpg"));
 const img4 = readFileSync(join(import.meta.dirname, "img4.jpg"));
 const img5 = readFileSync(join(import.meta.dirname, "img5.jpg"));
 const newJob1 = newJob({
-  uuid: crypto.randomUUID(),
+  uuid: "7f0f7f6b-1c80-4b92-9003-ae0a1a902ff4",
   customerName: "Bob Bobson",
+  customerPhoneNumber: "07123456789",
   description: `Brakes
 Front puncture
 Head gasket
@@ -27,8 +28,9 @@ Bottom text`,
 });
 
 const newJob2 = newJob({
-  uuid: crypto.randomUUID(),
+  uuid: "46bc5898-12de-4721-b9ed-deecd548699b",
   customerName: "Jim Jimson",
+  // customerPhoneNumber: "",
   description: `Rear mech issues `,
   images: [
     { type: "image/jpeg", blobId: "img4" },

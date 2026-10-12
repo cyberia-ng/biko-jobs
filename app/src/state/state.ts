@@ -6,6 +6,7 @@ export type Job = {
   uuid: string;
   number: number;
   customerName: string;
+  customerPhoneNumber: string;
   description: string;
   status: (typeof allStatuses)[number];
   images: Image[];

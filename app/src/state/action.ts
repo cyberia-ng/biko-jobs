@@ -17,6 +17,7 @@ export type NewJob = {
   type: "new job";
   uuid: string;
   customerName: string;
+  customerPhoneNumber?: string;
   description: string;
   images: Image[];
 };
@@ -40,6 +41,7 @@ export type EditJob = {
   type: "edit job";
   uuid: string;
   customerName: string;
+  customerPhoneNumber?: string;
   description: string;
   images: Image[];
 };

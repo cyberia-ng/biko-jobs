@@ -27,6 +27,7 @@ export function reducer(state: State, action: Action): State {
               status: "triaged",
               creation: action.timestamp,
               ...pick(event, ["customerName", "description", "images"]),
+              customerPhoneNumber: event.customerPhoneNumber ?? "",
             });
             if (state.session !== undefined) state.session.nextJobNumber++;
             break;
@@ -45,6 +46,7 @@ export function reducer(state: State, action: Action): State {
             const job = state.session.jobs.get(event.uuid);
             if (job !== undefined) {
               job.customerName = event.customerName;
+              job.customerPhoneNumber = event.customerPhoneNumber ?? "";
               job.description = event.description;
               job.images = event.images;
             }
