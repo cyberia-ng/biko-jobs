@@ -1,5 +1,5 @@
 import omit from "lodash/omit.js";
-import { allStatusesV1, type ActionV1, type DeleteJobV1, type ImageV1, type JobV1 } from "./v1.ts";
+import { allStatusesV1, type ActionV1, type DeleteJobV1, type ImageV1 } from "./v1.ts";
 
 export type ActionV2 = Omit<ActionV1, "event"> & {
   version: 2;
@@ -7,10 +7,8 @@ export type ActionV2 = Omit<ActionV1, "event"> & {
   event: UpsertJobV2 | ChangeJobStatusV2 | AddJobTagV2 | RemoveJobTagV2 | DeleteJobV1;
 };
 
-export type JobV2 = Omit<JobV1, "status"> & {
-  status: (typeof allStatusesV2)[number];
-  tags: Set<string>;
-};
+export const allStatusesV2 = [...allStatusesV1, "cancelled"] as const;
+export type StatusV2 = (typeof allStatusesV2)[number];
 
 export type UpsertJobV2 = {
   type: "upsert job";
@@ -25,7 +23,7 @@ export type UpsertJobV2 = {
 export type ChangeJobStatusV2 = {
   type: "change job status";
   uuid: string;
-  status: JobV2["status"];
+  status: StatusV2;
 };
 
 export type AddJobTagV2 = {
@@ -39,8 +37,6 @@ export type RemoveJobTagV2 = {
   uuid: string;
   tag: string;
 };
-
-export const allStatusesV2 = [...allStatusesV1, "cancelled"] as const;
 
 export function migrateFromV1(action: ActionV1): ActionV2 {
   const uuid = crypto.randomUUID(); // Non-deterministic

@@ -21,6 +21,7 @@ import { Store as SessionStore } from "./session-state/store.ts";
 import { ApiClient } from "@biko-jobs/api-client";
 import { enableMapSet, produce } from "immer";
 import { assertNever } from "./assertNever.ts";
+import { Export } from "./screens/export.tsx";
 
 enableMapSet();
 
@@ -146,6 +147,9 @@ function App() {
       break;
     case "edit job":
       screen = <EditJob />;
+      break;
+    case "export":
+      screen = <Export />;
       break;
     default:
       assertNever(localState.screen);

@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { ImageBlob } from "../components/blob-loader.tsx";
 import { TimeAgo } from "../components/time-ago.tsx";
 import { AppContext } from "../context.ts";
-import type { Job } from "../session-state/action.ts";
+import type { Job } from "../session-state/state.ts";
 
 export function Kanban() {
   return (
@@ -73,7 +73,7 @@ function Column(props: { title: string; statuses: Job["status"][] }) {
                   </div>
                 </div>
                 <div className="text-secondary text-end mt-1 kanban-timestamp">
-                  <TimeAgo time={job.creation} />
+                  <TimeAgo time={job.timestamps.creation} />
                 </div>
               </div>
             </div>

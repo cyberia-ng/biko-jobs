@@ -24,6 +24,13 @@ export function Nav() {
         >
           <i className="bi bi-plus-circle fs-1" />
         </NavItem>
+        <NavItem
+          disabled={session === undefined}
+          active={localState.screen.type === "export"}
+          onClick={() => navigate("export")}
+        >
+          <i className="bi bi-box-arrow-up-right fs-1" />
+        </NavItem>
         <div className="flex-grow-1"></div>
         {loading && (
           <NavItem end>

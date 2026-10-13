@@ -18,7 +18,12 @@ export function reducer(state: State, action: Action): State {
           uuid: event.uuid,
           number: existing?.number ?? state.nextJobNumber,
           status: "triaged",
-          creation: existing?.creation ?? action.timestamp,
+          timestamps: {
+            creation: existing?.timestamps.creation ?? action.timestamp,
+            working: existing?.timestamps.working,
+            completed: existing?.timestamps.completed,
+            cancelled: existing?.timestamps.cancelled,
+          },
           ...pick(event, ["customerName", "customerPhoneNumber", "description", "tags", "images"]),
         });
         if (existing === undefined) state.nextJobNumber++;
@@ -33,6 +38,17 @@ export function reducer(state: State, action: Action): State {
         const job = state.jobs.get(event.uuid);
         if (job !== undefined) {
           job.status = event.status;
+          switch (event.status) {
+            case "working":
+              job.timestamps.working = job.timestamps.working ?? action.timestamp;
+              break;
+            case "complete":
+              job.timestamps.completed = job.timestamps.completed ?? action.timestamp;
+              break;
+            case "cancelled":
+              job.timestamps.cancelled = job.timestamps.cancelled ?? action.timestamp;
+              break;
+          }
         }
         break;
       case "delete job":

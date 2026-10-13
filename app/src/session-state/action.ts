@@ -1,12 +1,11 @@
-import type { ActionV1 } from "./actions/v1.ts";
+import type { ActionV1, ImageV1 } from "./actions/v1.ts";
 import { allStatusesV2 } from "./actions/v2.ts";
-import type { ActionV2, JobV2 } from "./actions/v2.ts";
+import type { ActionV2 } from "./actions/v2.ts";
 
 export type AnyVersionAction = ActionV1 | ActionV2;
 
 export type Action = ActionV2;
-export type Job = JobV2;
-
+export type Image = ImageV1;
 export const allStatuses = allStatusesV2;
 
 const withNow = (event: Action["event"]): Action => ({

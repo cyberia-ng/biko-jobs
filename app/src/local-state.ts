@@ -8,12 +8,13 @@ export type State = {
         type: "session manager" | "kanban" | "new job";
       }
     | { type: "job detail"; uuid: string }
-    | { type: "edit job"; uuid: string };
+    | { type: "edit job"; uuid: string }
+    | { type: "export" };
 };
 
 export type Navigate = {
   type: "navigate";
-  screen: "kanban" | "new job" | "session manager";
+  screen: "kanban" | "new job" | "session manager" | "export";
 };
 export type Action =
   | Navigate

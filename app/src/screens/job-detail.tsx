@@ -5,13 +5,13 @@ import { Modal } from "../components/modal.tsx";
 import { Tags } from "../components/tag-control.tsx";
 import { TimeAgo } from "../components/time-ago.tsx";
 import {
-  type Job,
   addJobTag,
   allStatuses,
   changeJobStatus,
   deleteJob,
   removeJobTag,
 } from "../session-state/action.ts";
+import type { Job } from "../session-state/state.ts";
 
 type ModalState = null | "delete job";
 
@@ -79,7 +79,7 @@ export function JobDetail() {
           </div>
           {job.customerPhoneNumber !== "" && <div className="mb-1">{job.customerPhoneNumber}</div>}
           <div className="text-secondary">
-            {job.creation.toLocaleString()} (<TimeAgo time={job.creation} />)
+            {job.timestamps.creation.toLocaleString()} (<TimeAgo time={job.timestamps.creation} />)
           </div>
           <hr />
           <div>
