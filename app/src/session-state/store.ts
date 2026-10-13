@@ -5,19 +5,17 @@ import type { Action, AnyVersionAction } from "./action.ts";
 import { migrateAction } from "./actions/migrate.ts";
 
 export class Store {
-  session: string;
   private client: ApiClient;
   private unsubscribe: () => void;
   private state: State;
   private subscribers: Set<() => void>;
 
-  private constructor(session: string, state: State, client: ApiClient) {
-    this.session = session;
+  private constructor(state: State, client: ApiClient) {
     this.client = client;
     this.state = state;
     this.subscribers = new Set();
     this.unsubscribe = this.client.subscribeEvents((event) => {
-      this.dispatch(event as Action);
+      this.dispatch(migrateAction(event as AnyVersionAction));
     });
   }
 
@@ -25,7 +23,7 @@ export class Store {
     const client = await ApiClient.open("/api", session, pass);
     const actions = (await client.events()) as AnyVersionAction[];
     const state = computeStateFromScratch(actions.map(migrateAction));
-    return new Store(session, state, client);
+    return new Store(state, client);
   }
 
   cleanup() {
