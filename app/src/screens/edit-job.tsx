@@ -1,8 +1,8 @@
 import { useContext, useReducer, useRef, useState, type ReactNode } from "react";
-import { ImageBlob, Spinner } from "./blob-loader.tsx";
-import { AppContext } from "./context.ts";
-import { upsertJob, type Job } from "./session-state/action.ts";
-import { Tags } from "./tag-control.tsx";
+import { ImageBlob, Spinner } from "../components/blob-loader.tsx";
+import { AppContext } from "../context.ts";
+import { upsertJob, type Job } from "../session-state/action.ts";
+import { Tags } from "../components/tag-control.tsx";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;

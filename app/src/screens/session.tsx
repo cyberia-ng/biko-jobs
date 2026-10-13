@@ -1,7 +1,7 @@
 import { useContext, useState } from "react";
-import { AppContext } from "./context.ts";
 import { QRCodeSVG } from "qrcode.react";
-import { serialize } from "./local-state.ts";
+import { AppContext } from "../context.ts";
+import { serialize } from "../local-state.ts";
 
 export function SessionManager() {
   const { sessionsList, localState, dispatchLocal } = useContext(AppContext);

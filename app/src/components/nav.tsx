@@ -1,6 +1,6 @@
 import { useContext, type ReactNode } from "react";
-import { type Navigate } from "./local-state.ts";
-import { AppContext } from "./context.ts";
+import { type Navigate } from "../local-state.ts";
+import { AppContext } from "../context.ts";
 
 export function Nav() {
   const { session, loading, localState, dispatchLocal, refresh } = useContext(AppContext);

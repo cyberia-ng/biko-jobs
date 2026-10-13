@@ -1,17 +1,17 @@
 import { useContext, useState } from "react";
-import { AppContext } from "./context.ts";
-import { ImageBlob } from "./blob-loader.tsx";
-import { Modal } from "./modal.tsx";
+import { AppContext } from "../context.ts";
+import { ImageBlob } from "../components/blob-loader.tsx";
+import { Modal } from "../components/modal.tsx";
+import { Tags } from "../components/tag-control.tsx";
+import { TimeAgo } from "../components/time-ago.tsx";
 import {
+  type Job,
   addJobTag,
   allStatuses,
   changeJobStatus,
   deleteJob,
   removeJobTag,
-  type Job,
-} from "./session-state/action.ts";
-import { TimeAgo } from "./time-ago.tsx";
-import { Tags } from "./tag-control.tsx";
+} from "../session-state/action.ts";
 
 type ModalState = null | "delete job";
 

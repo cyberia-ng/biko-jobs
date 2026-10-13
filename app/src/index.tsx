@@ -10,16 +10,17 @@ import {
   type ReactNode,
 } from "react";
 import { createRoot } from "react-dom/client";
-import { Kanban } from "./kanban.tsx";
-import { Nav } from "./nav.tsx";
+import { Kanban } from "./screens/kanban.tsx";
+import { Nav } from "./components/nav.tsx";
 import { deserialize, reducer, serialize } from "./local-state.ts";
-import { EditJob } from "./edit-job.tsx";
-import { JobDetail } from "./job-detail.tsx";
+import { EditJob } from "./screens/edit-job.tsx";
+import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
-import { SessionManager } from "./session.tsx";
+import { SessionManager } from "./screens/session.tsx";
 import { Store as SessionStore } from "./session-state/store.ts";
 import { ApiClient } from "@biko-jobs/api-client";
 import { enableMapSet, produce } from "immer";
+import { assertNever } from "./assertNever.ts";
 
 enableMapSet();
 
@@ -146,6 +147,8 @@ function App() {
     case "edit job":
       screen = <EditJob />;
       break;
+    default:
+      assertNever(localState.screen);
   }
   return (
     <AppContext value={context}>

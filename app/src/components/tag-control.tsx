@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { AppContext } from "./context.ts";
+import { AppContext } from "../context.ts";
 import { DropdownFreeText } from "./dropdown-freetext.tsx";
 
 const alwaysSuggestedTags = new Set(["difficult", "easy"]);

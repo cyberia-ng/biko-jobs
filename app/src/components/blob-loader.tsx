@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from "react";
-import { AppContext } from "./context.ts";
+import { AppContext } from "../context.ts";
 
 export function Spinner() {
   return (

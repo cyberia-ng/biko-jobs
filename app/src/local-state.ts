@@ -11,7 +11,10 @@ export type State = {
     | { type: "edit job"; uuid: string };
 };
 
-export type Navigate = { type: "navigate"; screen: "kanban" | "new job" | "session manager" };
+export type Navigate = {
+  type: "navigate";
+  screen: "kanban" | "new job" | "session manager";
+};
 export type Action =
   | Navigate
   | { type: "view job detail"; uuid: string }

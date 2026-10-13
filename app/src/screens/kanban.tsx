@@ -1,8 +1,8 @@
-import { ImageBlob } from "./blob-loader.tsx";
 import { useContext } from "react";
-import { AppContext } from "./context.ts";
-import { TimeAgo } from "./time-ago.tsx";
-import type { Job } from "./session-state/action.ts";
+import { ImageBlob } from "../components/blob-loader.tsx";
+import { TimeAgo } from "../components/time-ago.tsx";
+import { AppContext } from "../context.ts";
+import type { Job } from "../session-state/action.ts";
 
 export function Kanban() {
   return (
