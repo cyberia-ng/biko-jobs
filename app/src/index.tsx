@@ -12,13 +12,16 @@ import {
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./kanban.tsx";
 import { Nav } from "./nav.tsx";
-import { initialLocalState, reducer } from "./local-state.ts";
+import { deserialize, reducer, serialize } from "./local-state.ts";
 import { EditJob } from "./edit-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
 import { SessionManager } from "./session.tsx";
-import { Store } from "./session-state/store.ts";
+import { Store as SessionStore } from "./session-state/store.ts";
 import { ApiClient } from "@biko-jobs/api-client";
+import { enableMapSet, produce } from "immer";
+
+enableMapSet();
 
 window.onload = () => {
   if (import.meta.env.MODE !== "production") {
@@ -36,19 +39,31 @@ window.onload = () => {
 };
 
 function App() {
-  const [localState, dispatchLocal] = useReducer(reducer, initialLocalState(window.location.hash));
+  const [localState, dispatchLocal] = useReducer(reducer, deserialize(window.location.hash));
+  useEffect(() => {
+    window.location.hash = serialize(localState);
+  }, [localState]);
+
+  const [loadingIds, dispatchLoading] = useReducer(
+    (state: Set<string>, [add, id]: [boolean, string]) =>
+      produce(state, (state) => {
+        if (add) state.add(id);
+        else state.delete(id);
+      }),
+    new Set(),
+  );
   const withLoading = useCallback(
     (description: string, p: Promise<void> | undefined) => {
       if (p === undefined) return;
       const id = crypto.randomUUID();
-      dispatchLocal({ type: "set loading", id });
+      dispatchLoading([true, id]);
       p.catch((e: unknown) => console.error("loading promise rejection", description, e)); // TODO error surfacing
-      p.finally(() => dispatchLocal({ type: "done loading", id }));
+      p.finally(() => dispatchLoading([false, id]));
     },
-    [dispatchLocal],
+    [dispatchLoading],
   );
 
-  const [sessionStore, setSessionStore] = useState<Store | undefined>(undefined);
+  const [sessionStore, setSessionStore] = useState<SessionStore | undefined>(undefined);
   const sessionState = useSyncExternalStore(
     useCallback(
       (cb) => (sessionStore === undefined ? () => () => undefined : sessionStore.subscribe(cb)),
@@ -59,6 +74,7 @@ function App() {
       [sessionStore],
     ),
   );
+  useEffect(() => () => sessionStore?.cleanup(), [sessionStore]);
   const refreshSessionState = useCallback(
     () => withLoading("refreshing session state", sessionStore?.refreshState()),
     [sessionStore, withLoading],
@@ -87,12 +103,11 @@ function App() {
     }
     withLoading(
       `connecting to session: ${localState.currentSession.session}`,
-      Store.connect(localState.currentSession.session, localState.currentSession.password)
+      SessionStore.connect(localState.currentSession.session, localState.currentSession.password)
         .then(setSessionStore)
         .then(refreshSessionsList),
     );
   }, [localState.currentSession, withLoading, refreshSessionsList]);
-  useEffect(() => () => sessionStore?.cleanup(), [sessionStore]);
   useEffect(() => refreshSessionsList(), [refreshSessionsList]);
 
   const context: AppContextT = {
@@ -108,6 +123,7 @@ function App() {
             writeBlob: (id, data) =>
               withLoading(`writing blob: ${id}`, sessionStore.writeBlob(id, data)),
           },
+    loading: loadingIds.size !== 0,
     localState,
     dispatchLocal,
     refresh,

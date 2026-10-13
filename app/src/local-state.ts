@@ -1,8 +1,7 @@
 import { produce } from "immer";
 import { assertNever } from "./assertNever.ts";
 
-export type LocalState = {
-  loading: Set<string>;
+export type State = {
   currentSession: { session: string; password: string } | undefined;
   screen:
     | {
@@ -14,24 +13,14 @@ export type LocalState = {
 
 export type Navigate = { type: "navigate"; screen: "kanban" | "new job" | "session manager" };
 export type Action =
-  | { type: "set loading"; id: string }
-  | { type: "done loading"; id: string }
   | Navigate
   | { type: "view job detail"; uuid: string }
   | { type: "edit job"; uuid: string }
   | { type: "set current session"; session: { session: string; password: string } | undefined };
 
-export function reducer(state: LocalState, action: Action): LocalState {
+export function reducer(state: State, action: Action): State {
   return produce(state, (state) => {
     switch (action.type) {
-      case "set loading": {
-        state.loading.add(action.id);
-        break;
-      }
-      case "done loading": {
-        state.loading.delete(action.id);
-        break;
-      }
       case "navigate": {
         state.screen = { type: action.screen };
         break;
@@ -54,24 +43,23 @@ export function reducer(state: LocalState, action: Action): LocalState {
   });
 }
 
-export function initialLocalState(hashFragment: string): LocalState {
-  let hashData = hashFragment;
-  if (hashData[0] === "#") {
-    hashData = hashData.slice(1);
+export const initialState: State = {
+  currentSession: undefined,
+  screen: { type: "session manager" },
+};
+
+export function deserialize(hash: string): State {
+  if (hash.length === 0 || hash === "#") {
+    return initialState;
   }
-  let currentSession: { session: string; password: string } | undefined;
   try {
-    const parsed = JSON.parse(atob(hashData));
-    currentSession = { session: parsed.session, password: parsed.password };
+    return JSON.parse(decodeURIComponent(hash.slice(1)));
     // oxlint-disable-next-line no-unused-vars
   } catch (e) {
-    currentSession = undefined;
+    return initialState;
   }
-  return {
-    loading: new Set(),
-    currentSession,
-    screen: { type: "session manager" },
-  };
 }
 
-export const isLoading = (state: LocalState) => state.loading.size !== 0;
+export function serialize(state: State): string {
+  return encodeURIComponent(JSON.stringify(state));
+}

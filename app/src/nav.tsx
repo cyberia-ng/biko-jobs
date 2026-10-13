@@ -1,9 +1,9 @@
 import { useContext, type ReactNode } from "react";
-import { isLoading, type Navigate } from "./local-state.ts";
+import { type Navigate } from "./local-state.ts";
 import { AppContext } from "./context.ts";
 
 export function Nav() {
-  const { session, localState, dispatchLocal, refresh } = useContext(AppContext);
+  const { session, loading, localState, dispatchLocal, refresh } = useContext(AppContext);
   function navigate(screen: Navigate["screen"]) {
     dispatchLocal({ type: "navigate", screen });
   }
@@ -25,7 +25,7 @@ export function Nav() {
           <i className="bi bi-plus-circle fs-1" />
         </NavItem>
         <div className="flex-grow-1"></div>
-        {isLoading(localState) && (
+        {loading && (
           <NavItem end>
             <div className="spinner-border" role="status">
               <span className="visually-hidden">Loading...</span>

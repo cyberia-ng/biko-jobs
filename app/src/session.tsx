@@ -1,6 +1,7 @@
 import { useContext, useState } from "react";
 import { AppContext } from "./context.ts";
 import { QRCodeSVG } from "qrcode.react";
+import { serialize } from "./local-state.ts";
 
 export function SessionManager() {
   const { sessionsList, localState, dispatchLocal } = useContext(AppContext);
@@ -16,7 +17,10 @@ export function SessionManager() {
   }
   const [passwordReveal, setPasswordReveal] = useState(false);
   const sessionUrl = new URL(window.location.href);
-  sessionUrl.hash = btoa(JSON.stringify({ session: sessionId, password }));
+  sessionUrl.hash = serialize({
+    currentSession: { session: sessionId, password },
+    screen: { type: "kanban" },
+  });
   function autogenerate() {
     const baseSessionId = Temporal.Now.plainDateISO()
       .toLocaleString("en-GB", {
