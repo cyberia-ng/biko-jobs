@@ -23,6 +23,7 @@ export class WrappedWebSocketServer {
   private connections: Map<string, Set<WebSocket>>;
   constructor(server: Server) {
     const wss = new WebSocketServer({ server });
+    wss.on("error", (err) => console.error("WSS error:", err));
     this.connections = new Map();
     wss.on("connection", (ws, req) => {
       if (req.url === undefined) {
@@ -37,6 +38,7 @@ export class WrappedWebSocketServer {
       const sessionId = decodeURIComponent(urlMatch[1]!);
       const sessionConnections = this.connections.getOrInsert(sessionId, new Set());
       sessionConnections.add(ws);
+      ws.on("error", (err) => console.error("WS error:", err, "code", (err as any).code));
       ws.on("close", () => {
         const sessionConnections = this.connections.getOrInsert(sessionId, new Set());
         sessionConnections.delete(ws);
