@@ -1,5 +1,5 @@
 import { useContext, useReducer, useRef, useState, type ReactNode } from "react";
-import { BlobLoader, Spinner } from "./blob-loader.tsx";
+import { ImageBlob, Spinner } from "./blob-loader.tsx";
 import { AppContext } from "./context.ts";
 import { editJob, newJob, type Job } from "./session-state/action.ts";
 
@@ -138,31 +138,17 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
       <div className="row mb-3">
         {photos.map(({ blobId, uploaded }) => (
           <div className="row mb-3" key={blobId}>
-            {uploaded ? (
-              <BlobLoader
-                blobId={blobId}
-                notFound=""
-                loaded={(data) => (
-                  <img
-                    src={`data:image/jpeg;base64,${data.toBase64()}`}
-                    className="object-fit-cover col-8"
-                  />
-                )}
-                loading={
-                  <div className="col-8 position-relative">
-                    <div className="position-absolute top-50 start-50 translate-middle">
-                      <Spinner />
-                    </div>
+            <div className="col-8">
+              {uploaded ? (
+                <ImageBlob blobId={blobId} type="image/jpeg" />
+              ) : (
+                <div className="d-flex">
+                  <div className="m-auto">
+                    <Spinner />
                   </div>
-                }
-              />
-            ) : (
-              <div className="col-8 position-relative">
-                <div className="position-absolute top-50 start-50 translate-middle">
-                  <Spinner />
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             <div className="col-4 d-flex">
               <button
                 type="button"

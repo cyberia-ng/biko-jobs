@@ -1,6 +1,6 @@
 import { useContext, useState } from "react";
 import { AppContext } from "./context.ts";
-import { BlobLoader, Spinner } from "./blob-loader.tsx";
+import { ImageBlob } from "./blob-loader.tsx";
 import { Modal } from "./modal.tsx";
 import { allStatuses, changeJobStatus, deleteJob, type Job } from "./session-state/action.ts";
 import { TimeAgo } from "./time-ago.tsx";
@@ -83,17 +83,7 @@ export function JobDetail() {
         <div className="col-12 col-md-6 border-start">
           {job.images.map((image) => (
             <div key={image.blobId} className="mb-2 bg-white p-2 rounded shadow-sm">
-              <BlobLoader
-                blobId={image.blobId}
-                loading={<Spinner />}
-                notFound=""
-                loaded={(data) => (
-                  <img
-                    src={`data:${job.images[0]!.type};base64,${data.toBase64()}`}
-                    className="img-fluid h-100 w-100 object-fit-cover rounded"
-                  />
-                )}
-              />
+              <ImageBlob blobId={image.blobId} type={image.type} />
             </div>
           ))}
         </div>

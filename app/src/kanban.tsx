@@ -1,4 +1,4 @@
-import { BlobLoader, Spinner } from "./blob-loader.tsx";
+import { ImageBlob } from "./blob-loader.tsx";
 import { useContext } from "react";
 import { AppContext } from "./context.ts";
 import { TimeAgo } from "./time-ago.tsx";
@@ -43,23 +43,7 @@ function Column(props: { title: string; status: Job["status"] }) {
             <div className="row gx-2 mx-1 mb-2 border rounded overflow-hidden">
               <div className="col-4 ps-0">
                 {job.images.length > 0 && (
-                  <BlobLoader
-                    blobId={job.images[0]!.blobId}
-                    loading={
-                      <div className="h-100 position-relative">
-                        <div className="position-absolute top-50 start-50 translate-middle">
-                          <Spinner />
-                        </div>
-                      </div>
-                    }
-                    notFound=":("
-                    loaded={(data) => (
-                      <img
-                        src={`data:${job.images[0]!.type};base64,${data.toBase64()}`}
-                        className="img-fluid h-100 w-100 object-fit-cover"
-                      />
-                    )}
-                  />
+                  <ImageBlob blobId={job.images[0]!.blobId} type={job.images[0]!.type} />
                 )}
               </div>
               <div className="col d-flex flex-column">
