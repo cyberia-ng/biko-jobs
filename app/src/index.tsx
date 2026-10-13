@@ -87,11 +87,11 @@ function App() {
     }
     withLoading(
       `connecting to session: ${localState.currentSession.session}`,
-      Store.connect(localState.currentSession.session, localState.currentSession.password).then(
-        setSessionStore,
-      ),
+      Store.connect(localState.currentSession.session, localState.currentSession.password)
+        .then(setSessionStore)
+        .then(refreshSessionsList),
     );
-  }, [localState.currentSession, withLoading]);
+  }, [localState.currentSession, withLoading, refreshSessionsList]);
   useEffect(() => () => sessionStore?.cleanup(), [sessionStore]);
   useEffect(() => refreshSessionsList(), [refreshSessionsList]);
 
