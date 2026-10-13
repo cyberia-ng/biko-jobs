@@ -1,5 +1,4 @@
-import type { Job } from "./state/state.ts";
-// import "./kanban.css";
+import type { Job } from "./session-state/state.ts";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { useContext } from "react";
 import { AppContext } from "./context.ts";
@@ -18,8 +17,8 @@ export function Kanban() {
 }
 
 function Column(props: { title: string; status: Job["status"] }) {
-  const { state, dispatchLocal } = useContext(AppContext);
-  const jobs = Array.from(state.session?.jobs.values() ?? []).filter(
+  const { session, dispatchLocal } = useContext(AppContext);
+  const jobs = Array.from(session?.state.jobs.values() ?? []).filter(
     (job) => job.status === props.status,
   );
   function viewDetail(uuid: string) {

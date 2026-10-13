@@ -16,16 +16,16 @@ export function BlobLoader(props: {
   onError?: (e: unknown) => void;
   loaded: (data: Uint8Array<ArrayBuffer>) => ReactNode;
 }) {
-  const { store } = useContext(AppContext);
+  const { session } = useContext(AppContext);
   const [state, setState] = useState<"loading" | "error" | "not found" | Uint8Array<ArrayBuffer>>(
     "loading",
   );
   useEffect(() => {
-    store
+    session
       ?.getBlob(props.blobId)
       .then((data) => setState(data ?? "not found"))
       .catch((err) => props.onError?.(err));
-  }, [store, props]);
+  }, [session, props]);
   switch (state) {
     case "loading":
       return props.loading;

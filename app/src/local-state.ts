@@ -2,7 +2,7 @@ import { produce } from "immer";
 import { assertNever } from "./assertNever.ts";
 
 export type LocalState = {
-  loading: boolean;
+  loading: Set<string>;
   currentSession: { session: string; password: string } | undefined;
   screen:
     | {
@@ -14,8 +14,8 @@ export type LocalState = {
 
 export type Navigate = { type: "navigate"; screen: "kanban" | "new job" | "session manager" };
 export type Action =
-  | { type: "set loading" }
-  | { type: "done loading" }
+  | { type: "set loading"; id: string }
+  | { type: "done loading"; id: string }
   | Navigate
   | { type: "view job detail"; uuid: string }
   | { type: "edit job"; uuid: string }
@@ -25,11 +25,11 @@ export function reducer(state: LocalState, action: Action): LocalState {
   return produce(state, (state) => {
     switch (action.type) {
       case "set loading": {
-        state.loading = true;
+        state.loading.add(action.id);
         break;
       }
       case "done loading": {
-        state.loading = false;
+        state.loading.delete(action.id);
         break;
       }
       case "navigate": {
@@ -68,8 +68,10 @@ export function initialLocalState(hashFragment: string): LocalState {
     currentSession = undefined;
   }
   return {
-    loading: false,
+    loading: new Set(),
     currentSession,
     screen: { type: "session manager" },
   };
 }
+
+export const isLoading = (state: LocalState) => state.loading.size !== 0;

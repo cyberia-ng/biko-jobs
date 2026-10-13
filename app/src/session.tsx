@@ -1,10 +1,9 @@
 import { useContext, useState } from "react";
 import { AppContext } from "./context.ts";
 import { QRCodeSVG } from "qrcode.react";
-import pick from "lodash/pick.js";
 
 export function SessionManager() {
-  const { state, localState, dispatchLocal } = useContext(AppContext);
+  const { sessionsList, localState, dispatchLocal } = useContext(AppContext);
   const [sessionId, setSessionId] = useState(localState.currentSession?.session ?? "");
   const [password, setPassword] = useState(
     localState.currentSession?.password ??
@@ -16,6 +15,8 @@ export function SessionManager() {
     setPassword(window.localStorage.getItem(`session passwords/${sessionId}`) ?? "");
   }
   const [passwordReveal, setPasswordReveal] = useState(false);
+  const sessionUrl = new URL(window.location.href);
+  sessionUrl.hash = btoa(JSON.stringify({ session: sessionId, password }));
   function autogenerate() {
     const baseSessionId = Temporal.Now.plainDateISO()
       .toLocaleString("en-GB", {
@@ -27,7 +28,7 @@ export function SessionManager() {
       .replace(/,/g, "");
     let newSessionId = baseSessionId;
     let suffixNumber = 0;
-    while (state.sessions.includes(newSessionId)) {
+    while (sessionsList.includes(newSessionId)) {
       suffixNumber++;
       newSessionId = `${baseSessionId} (${suffixNumber})`;
     }
@@ -133,9 +134,16 @@ export function SessionManager() {
               Scan to connect another device
               <div className="d-flex">
                 <div className="mx-auto p-2 border rounded">
-                  <SessionQRCode session={sessionId} password={password} />
+                  <QRCodeSVG value={sessionUrl.toString()} height="256" width="256" />;
                 </div>
               </div>
+              {import.meta.env.DEV && (
+                <div className="text-center">
+                  <a href={sessionUrl.toString()} target="_blank">
+                    {sessionUrl.toString()}
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -144,23 +152,17 @@ export function SessionManager() {
   );
 }
 
-export function SessionQRCode(props: { session: string; password: string }) {
-  const location = new URL(window.location.href);
-  location.hash = btoa(JSON.stringify(pick(props, ["session", "password"])));
-  return <QRCodeSVG value={location.toString()} height="256" width="256" />;
-}
-
 export function SessionList(props: {
   selectedSession: string;
   loadSession: (sessionId: string) => void;
 }) {
-  const { localState, state } = useContext(AppContext);
+  const { localState, sessionsList } = useContext(AppContext);
   return (
     <div className="border-start border-top">
       <div
         className={
           "border-bottom p-2 d-flex" +
-          (state.sessions.includes(props.selectedSession) ? "" : " bg-primary-subtle")
+          (sessionsList.includes(props.selectedSession) ? "" : " bg-primary-subtle")
         }
         onClick={() => props.loadSession("")}
       >
@@ -169,7 +171,7 @@ export function SessionList(props: {
           <i className="bi bi-chevron-right" />
         </div>
       </div>
-      {state.sessions.toReversed().map((session) => (
+      {sessionsList.toReversed().map((session) => (
         <div
           className={
             "border-bottom p-2 d-flex" +

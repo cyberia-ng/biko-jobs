@@ -1,6 +1,6 @@
 import "temporal-polyfill/global";
 import { readFileSync } from "node:fs";
-import { newJob } from "../../src/state/action.ts";
+import { newJob } from "../../src/session-state/action.ts";
 import { join } from "node:path";
 import { ApiClient } from "@biko-jobs/api-client";
 

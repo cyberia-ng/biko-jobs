@@ -1,21 +1,21 @@
 import { useContext, useState } from "react";
 import { AppContext } from "./context.ts";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
-import { allStatuses, type Job } from "./state/state.ts";
+import { allStatuses, type Job } from "./session-state/state.ts";
 import { Modal } from "./modal.tsx";
-import { changeJobStatus, deleteJob } from "./state/action.ts";
+import { changeJobStatus, deleteJob } from "./session-state/action.ts";
 import { TimeAgo } from "./time-ago.tsx";
 
 type ModalState = null | "delete job";
 
 export function JobDetail() {
-  const { state, localState, dispatchLocal, store, withLoading } = useContext(AppContext);
+  const { session, localState, dispatchLocal } = useContext(AppContext);
   const [modalState, setModalState] = useState<ModalState>(null);
   if (localState.screen.type !== "job detail") {
     return <></>;
   }
   const uuid = localState.screen.uuid;
-  const job = state.session?.jobs.get(uuid);
+  const job = session?.state.jobs.get(uuid);
   if (job === undefined) {
     return <></>;
   }
@@ -26,11 +26,8 @@ export function JobDetail() {
           onDismiss={() => setModalState(null)}
           onConfirm={() => {
             setModalState(null);
-            withLoading(
-              store
-                ?.postEvent(deleteJob({ uuid }))
-                .then(() => dispatchLocal({ type: "navigate", screen: "kanban" })),
-            );
+            session?.dispatch(deleteJob({ uuid }));
+            dispatchLocal({ type: "navigate", screen: "kanban" });
           }}
           title="Confirm deletion"
           body="Really delete this job?"
@@ -107,7 +104,7 @@ export function JobDetail() {
 }
 
 function Status(props: { job: Job }) {
-  const { store, withLoading: withLoading2 } = useContext(AppContext);
+  const { session } = useContext(AppContext);
   return (
     <select
       value={props.job.status}
@@ -116,13 +113,11 @@ function Status(props: { job: Job }) {
         if (e.target.value === props.job.status) {
           return;
         }
-        withLoading2(
-          store?.postEvent(
-            changeJobStatus({
-              uuid: props.job.uuid,
-              status: e.target.value as Job["status"],
-            }),
-          ),
+        session?.dispatch(
+          changeJobStatus({
+            uuid: props.job.uuid,
+            status: e.target.value as Job["status"],
+          }),
         );
       }}
     >

@@ -5,18 +5,20 @@ import {
   useCallback,
   useEffect,
   useReducer,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./kanban.tsx";
-import { Store } from "./store.ts";
 import { Nav } from "./nav.tsx";
 import { initialLocalState, reducer } from "./local-state.ts";
 import { EditJob } from "./edit-job.tsx";
 import { JobDetail } from "./job-detail.tsx";
-import { AppContext } from "./context.ts";
+import { AppContext, type AppContextT } from "./context.ts";
 import { SessionManager } from "./session.tsx";
+import { Store } from "./session-state/store.ts";
+import { ApiClient } from "@biko-jobs/api-client";
 
 window.onload = () => {
   if (import.meta.env.MODE !== "production") {
@@ -26,46 +28,91 @@ window.onload = () => {
       document.title = document.title + ` (${import.meta.env.MODE})`;
     }
   }
-  const store = new Store("/api");
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App store={store} />
+      <App />
     </StrictMode>,
   );
 };
 
-function App({ store }: { store: Store }) {
+function App() {
   const [localState, dispatchLocal] = useReducer(reducer, initialLocalState(window.location.hash));
   const withLoading = useCallback(
-    (p: Promise<void>) => {
-      dispatchLocal({ type: "set loading" });
-      p.finally(() => dispatchLocal({ type: "done loading" })); // TODO error surfacing
+    (description: string, p: Promise<void> | undefined) => {
+      if (p === undefined) return;
+      const id = crypto.randomUUID();
+      dispatchLocal({ type: "set loading", id });
+      p.catch((e: unknown) => console.error("loading promise rejection", description, e)); // TODO error surfacing
+      p.finally(() => dispatchLocal({ type: "done loading", id }));
     },
     [dispatchLocal],
   );
-  const state = useSyncExternalStore(
-    useCallback((cb) => store.subscribe(cb), [store]),
-    store.getSnapshot.bind(store),
+
+  const [sessionStore, setSessionStore] = useState<Store | undefined>(undefined);
+  const sessionState = useSyncExternalStore(
+    useCallback(
+      (cb) => (sessionStore === undefined ? () => () => undefined : sessionStore.subscribe(cb)),
+      [sessionStore],
+    ),
+    useCallback(
+      () => (sessionStore === undefined ? undefined : sessionStore.getSnapshot()),
+      [sessionStore],
+    ),
   );
-  const refresh = useCallback(() => withLoading(store.refreshState()), [store, withLoading]);
-  useEffect(() => refresh(), [refresh]);
+  const refreshSessionState = useCallback(
+    () => withLoading("refreshing session state", sessionStore?.refreshState()),
+    [sessionStore, withLoading],
+  );
+
+  const [sessionsList, setSessionsList] = useState<string[]>([]);
+  const refreshSessionsList = useCallback(
+    () =>
+      withLoading("refreshing session list", ApiClient.listSessions("/api").then(setSessionsList)),
+    [withLoading],
+  );
+  const refresh = useCallback(() => {
+    refreshSessionsList();
+    refreshSessionState();
+  }, [refreshSessionState, refreshSessionsList]);
+
   useEffect(() => {
-    const currentSession = localState.currentSession;
-    if (currentSession !== undefined) {
-      if (window.localStorage.getItem(`session passwords/${currentSession.session}`) === null) {
-        window.localStorage.setItem(
-          `session passwords/${currentSession.session}`,
-          currentSession.password,
-        );
-      }
-      withLoading(
-        (async () => {
-          await store.connect(currentSession.session, currentSession.password);
-          await store.refreshState();
-        })(),
+    if (localState.currentSession === undefined) {
+      return;
+    }
+    if (window.localStorage.getItem(`session passwords/${localState.currentSession}`) === null) {
+      window.localStorage.setItem(
+        `session passwords/${localState.currentSession.session}`,
+        localState.currentSession.password,
       );
     }
-  }, [localState.currentSession, store, withLoading]);
+    withLoading(
+      `connecting to session: ${localState.currentSession.session}`,
+      Store.connect(localState.currentSession.session, localState.currentSession.password).then(
+        setSessionStore,
+      ),
+    );
+  }, [localState.currentSession, withLoading]);
+  useEffect(() => () => sessionStore?.cleanup(), [sessionStore]);
+  useEffect(() => refreshSessionsList(), [refreshSessionsList]);
+
+  const context: AppContextT = {
+    sessionsList,
+    session:
+      sessionState === undefined || sessionStore === undefined
+        ? undefined
+        : {
+            state: sessionState,
+            dispatch: (action) =>
+              withLoading(`posting event: ${action.event.type}`, sessionStore.postEvent(action)),
+            getBlob: sessionStore.getBlob.bind(sessionStore),
+            writeBlob: (id, data) =>
+              withLoading(`writing blob: ${id}`, sessionStore.writeBlob(id, data)),
+          },
+    localState,
+    dispatchLocal,
+    refresh,
+  };
+
   let screen: ReactNode;
   switch (localState.screen.type) {
     case "session manager":
@@ -85,16 +132,7 @@ function App({ store }: { store: Store }) {
       break;
   }
   return (
-    <AppContext
-      value={{
-        state,
-        store,
-        localState,
-        dispatchLocal,
-        withLoading: withLoading,
-        refresh,
-      }}
-    >
+    <AppContext value={context}>
       <div className="vh-100 d-flex flex-column flex-sm-row">
         <div>
           <Nav />

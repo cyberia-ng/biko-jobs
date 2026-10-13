@@ -1,0 +1,82 @@
+import { ApiClient } from "@biko-jobs/api-client";
+import { reducer } from "./reducer.ts";
+import { initialState, type State } from "./state.ts";
+import type { Action } from "./action.ts";
+
+export class Store {
+  session: string;
+  private client: ApiClient;
+  private unsubscribe: () => void;
+  private state: State;
+  private subscribers: Set<() => void>;
+
+  private constructor(session: string, state: State, client: ApiClient) {
+    this.session = session;
+    this.client = client;
+    this.state = state;
+    this.subscribers = new Set();
+    this.unsubscribe = this.client.subscribeEvents((event) => {
+      this.dispatch(event as Action);
+    });
+  }
+
+  static async connect(session: string, pass: string) {
+    const client = await ApiClient.open("/api", session, pass);
+    const actions = (await client.events()) as Action[];
+    const state = computeStateFromScratch(actions);
+    return new Store(session, state, client);
+  }
+
+  cleanup() {
+    this.unsubscribe();
+  }
+
+  async refreshState() {
+    this.client.refreshWebSocket();
+    const actions = (await this.client.events()) as Action[];
+    this.state = computeStateFromScratch(actions);
+    this.callSubscribers();
+  }
+
+  getSnapshot(): State {
+    return this.state;
+  }
+
+  subscribe(callback: () => void): () => void {
+    this.subscribers.add(callback);
+    return () => {
+      this.subscribers.delete(callback);
+    };
+  }
+
+  async postEvent(event: Action) {
+    await this.client?.postEvent(event);
+  }
+
+  async writeBlob(id: string, data: Uint8Array<ArrayBuffer>) {
+    await this.client?.putBlob(id, data);
+  }
+
+  async getBlob(id: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
+    return this.client?.getBlob(id);
+  }
+
+  private callSubscribers() {
+    for (const subscriber of this.subscribers) {
+      subscriber();
+    }
+  }
+
+  private dispatch(action: Action) {
+    this.state = reducer(this.state, action);
+    this.callSubscribers();
+  }
+}
+
+function computeStateFromScratch(actions: Action[]): State {
+  let state = initialState;
+  for (const action of actions) {
+    state = reducer(state, action);
+  }
+  return state;
+}

@@ -1,12 +1,12 @@
 import { useContext, useReducer, useRef, useState, type ReactNode } from "react";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { AppContext } from "./context.ts";
-import type { Job } from "./state/state.ts";
-import { editJob, newJob } from "./state/action.ts";
+import type { Job } from "./session-state/state.ts";
+import { editJob, newJob } from "./session-state/action.ts";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
-  const { state, localState } = useContext(AppContext);
+  const { session, localState } = useContext(AppContext);
   let content: ReactNode;
   let job: Job | undefined = undefined;
   if (isNew) {
@@ -15,10 +15,10 @@ export function EditJob(props: { new_?: boolean }) {
     if (localState.screen.type !== "edit job") {
       throw new Error("unreachable");
     }
-    if (state.session === undefined) {
+    if (session === undefined) {
       content = "Not connected";
     } else {
-      job = state.session?.jobs.get(localState.screen.uuid);
+      job = session.state.jobs.get(localState.screen.uuid);
       if (job === undefined) {
         content = "Job does not exist";
       } else {
@@ -30,7 +30,7 @@ export function EditJob(props: { new_?: boolean }) {
 }
 
 function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }) {
-  const { store, withLoading, dispatchLocal } = useContext(AppContext);
+  const { session, dispatchLocal } = useContext(AppContext);
   const job = props.type === "edit job" ? props.job : undefined;
 
   const [customerName, setCustomerName] = useState<string>(job?.customerName ?? "");
@@ -71,10 +71,10 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
       photoInputRef.current.value = "";
     }
   }
-  async function submit() {
+  function submit() {
     const images = photos.map(({ blobId }) => ({ type: "image/jpeg", blobId }));
     if (props.type === "new job") {
-      await store?.postEvent(
+      session?.dispatch(
         newJob({
           uuid: crypto.randomUUID(),
           customerName,
@@ -85,7 +85,7 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
       );
       reset();
     } else if (job !== undefined) {
-      await store?.postEvent(
+      session?.dispatch(
         editJob({
           uuid: job.uuid,
           customerName,
@@ -199,18 +199,14 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
                   e.target.value = "";
                   return data;
                 })
-                .then((data) => store?.writeBlob(id, data))
+                .then((data) => session?.writeBlob(id, data))
                 .then(() => reducePhotos({ type: "complete upload", blobId: id }));
             }
           }}
         />
       </div>
       <div className="mb-3">
-        <button
-          type="submit"
-          className="btn btn-primary me-3"
-          onClick={() => withLoading(submit())}
-        >
+        <button type="submit" className="btn btn-primary me-3" onClick={() => submit()}>
           {props.type === "new job" ? "Submit" : "Save"}
         </button>
         {props.type === "new job" && (

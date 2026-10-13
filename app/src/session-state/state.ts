@@ -1,6 +1,6 @@
 export type State = {
-  sessions: string[];
-  session?: { jobs: Map<string, Job>; nextJobNumber: number };
+  jobs: Map<string, Job>;
+  nextJobNumber: number;
 };
 export type Job = {
   uuid: string;
@@ -17,5 +17,5 @@ export type Image = {
   blobId: string;
 };
 
-export const initialState: State = { sessions: [] };
+export const initialState: State = { jobs: new Map(), nextJobNumber: 1 };
 export const allStatuses = ["triaged", "working", "complete"] as const;

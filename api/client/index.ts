@@ -9,26 +9,15 @@ export class ApiClient {
   private baseUrl: string;
   private session: string;
   private key: CryptoKey;
-  private ws: WebSocket;
+  private ws?: WebSocket;
   private subscribers: Set<(event: unknown) => void>;
 
-  private constructor(baseUrl: string, session: string, key: CryptoKey, ws: WebSocket) {
+  private constructor(baseUrl: string, session: string, key: CryptoKey) {
     this.baseUrl = baseUrl;
     this.session = session;
     this.key = key;
-    this.ws = ws;
     this.subscribers = new Set();
-    ws.addEventListener("message", (e) => {
-      (e.data as Blob)
-        .bytes()
-        .then((data) => this.decrypt(data))
-        .then((data) => mpDecoder.decode(data))
-        .then((event) => {
-          for (const cb of this.subscribers) {
-            cb(event);
-          }
-        });
-    });
+    this.refreshWebSocket();
   }
 
   static async listSessions(baseUrl: string): Promise<string[]> {
@@ -81,9 +70,32 @@ export class ApiClient {
       false,
       ["encrypt", "decrypt"],
     );
-    const wsBaseUrl = baseUrl.replace(/^http/, "ws");
-    const ws = new WebSocket(`${wsBaseUrl}/session/${encodedSessionId}/events`);
-    return new ApiClient(baseUrl, encodedSessionId, key, ws);
+    return new ApiClient(baseUrl, encodedSessionId, key);
+  }
+
+  refreshWebSocket() {
+    this.closeWebSocket();
+    const wsBaseUrl = this.baseUrl.replace(/^http/, "ws");
+    this.ws = new WebSocket(`${wsBaseUrl}/session/${this.session}/events`);
+    this.ws.addEventListener("message", (e) => {
+      (e.data as Blob)
+        .bytes()
+        .then((data) => this.decrypt(data))
+        .then((data) => mpDecoder.decode(data))
+        .then((event) => {
+          for (const cb of this.subscribers) {
+            cb(event);
+          }
+        });
+    });
+    this.ws.addEventListener("error", (event) => {
+      console.error("WS error", event);
+    });
+    return this.ws;
+  }
+
+  closeWebSocket() {
+    this.ws?.close();
   }
 
   private async encrypt(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
@@ -154,9 +166,5 @@ export class ApiClient {
     return () => {
       this.subscribers.delete(cb);
     };
-  }
-
-  closeWebSocket() {
-    this.ws.close();
   }
 }
