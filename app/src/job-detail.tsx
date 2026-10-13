@@ -2,8 +2,16 @@ import { useContext, useState } from "react";
 import { AppContext } from "./context.ts";
 import { ImageBlob } from "./blob-loader.tsx";
 import { Modal } from "./modal.tsx";
-import { allStatuses, changeJobStatus, deleteJob, type Job } from "./session-state/action.ts";
+import {
+  addJobTag,
+  allStatuses,
+  changeJobStatus,
+  deleteJob,
+  removeJobTag,
+  type Job,
+} from "./session-state/action.ts";
 import { TimeAgo } from "./time-ago.tsx";
+import { Tags } from "./tag-control.tsx";
 
 type ModalState = null | "delete job";
 
@@ -41,7 +49,7 @@ export function JobDetail() {
             <div className="d-flex">
               <div className="flex-grow-1">
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-primary fs-4 me-2"
                   onClick={() => dispatchLocal({ type: "navigate", screen: "kanban" })}
                 >
                   <i className="bi bi-caret-left-fill" />
@@ -49,13 +57,13 @@ export function JobDetail() {
                 </button>
               </div>
               <button
-                className="btn btn-secondary me-2"
+                className="btn btn-secondary me-2 fs-4"
                 onClick={() => dispatchLocal({ type: "edit job", uuid })}
               >
                 <i className="bi bi-pencil me-2" />
                 Edit job
               </button>
-              <button className="btn btn-danger" onClick={() => setModalState("delete job")}>
+              <button className="btn btn-danger fs-4" onClick={() => setModalState("delete job")}>
                 <i className="bi bi-trash me-1" />
                 Delete job
               </button>
@@ -76,6 +84,15 @@ export function JobDetail() {
           <hr />
           <div>
             <Status job={job} />
+          </div>
+          <hr />
+          <div className="job-detail-tags">
+            <Tags
+              tags={job.tags}
+              onAddTag={(tag) => session?.dispatch(addJobTag({ uuid: job.uuid, tag }))}
+              onDeleteTag={(tag) => session?.dispatch(removeJobTag({ uuid: job.uuid, tag }))}
+              dropdownClassAll="fs-4"
+            />
           </div>
           <hr />
           <div style={{ whiteSpace: "pre-wrap" }}>{job.description}</div>
@@ -127,5 +144,7 @@ function statusText(status: Job["status"]): string {
       return "Working";
     case "complete":
       return "Complete";
+    case "cancelled":
+      return "Cancelled";
   }
 }

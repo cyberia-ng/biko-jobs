@@ -18,11 +18,14 @@ const withNow = (event: Action["event"]): Action => ({
 
 type Event<T extends string> = Omit<Extract<Action["event"], { type: T }>, "type">;
 
-export const newJob = (f: Event<"new job">) => withNow({ type: "new job", ...f });
+export const upsertJob = (f: Event<"upsert job">) => withNow({ type: "upsert job", ...f });
 
 export const changeJobStatus = (f: Event<"change job status">) =>
   withNow({ type: "change job status", ...f });
 
 export const deleteJob = (f: Event<"delete job">) => withNow({ type: "delete job", ...f });
 
-export const editJob = (f: Event<"edit job">) => withNow({ type: "edit job", ...f });
+export const addJobTag = (f: Event<"add job tag">) => withNow({ type: "add job tag", ...f });
+
+export const removeJobTag = (f: Event<"remove job tag">) =>
+  withNow({ type: "remove job tag", ...f });

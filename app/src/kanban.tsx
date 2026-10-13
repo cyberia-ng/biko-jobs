@@ -8,24 +8,24 @@ export function Kanban() {
   return (
     <div className="m-2">
       <div className="row g-2 h-100">
-        <Column title="Triaged" status="triaged" />
-        <Column title="Working" status="working" />
-        <Column title="Complete" status="complete" />
+        <Column title="Triaged" statuses={["triaged"]} />
+        <Column title="Working" statuses={["working"]} />
+        <Column title="Done" statuses={["complete", "cancelled"]} />
       </div>
     </div>
   );
 }
 
-function Column(props: { title: string; status: Job["status"] }) {
+function Column(props: { title: string; statuses: Job["status"][] }) {
   const { session, dispatchLocal } = useContext(AppContext);
-  const jobs = Array.from(session?.state.jobs.values() ?? []).filter(
-    (job) => job.status === props.status,
+  const jobs = Array.from(session?.state.jobs.values() ?? []).filter((job) =>
+    props.statuses.includes(job.status),
   );
   function viewDetail(uuid: string) {
     dispatchLocal({ type: "view job detail", uuid });
   }
   return (
-    <div className="col-12 col-sm-4">
+    <div className="col-12 col-lg-4 fs-5">
       <div className="bg-body p-3 shadow-sm rounded">
         <div className="border-bottom mb-3">
           <h3>{props.title}</h3>
@@ -47,7 +47,7 @@ function Column(props: { title: string; status: Job["status"] }) {
                 )}
               </div>
               <div className="col d-flex flex-column">
-                <div className="my-1 d-flex">
+                <div className="mt-1 mb-0 d-flex">
                   <div className="flex-grow-1">
                     <h4>{job.customerName}</h4>
                   </div>
@@ -55,8 +55,20 @@ function Column(props: { title: string; status: Job["status"] }) {
                     <h4>#{job.number}</h4>
                   </div>
                 </div>
-                <div className="flex-grow-1">
-                  <div className="h-100 job-description fs-5">
+                {job.tags.size !== 0 && (
+                  <div className="d-flex flex-wrap gap-1 fs-6">
+                    {Array.from(job.tags).map((tag) => (
+                      <div
+                        key={tag}
+                        className="kanban-tag px-2 bg-info-subtle text-info-emphasis rounded-pill"
+                      >
+                        {tag}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-1 flex-grow-1">
+                  <div className="h-100 job-description">
                     {job.description.replace(/\n/g, " | ")}
                   </div>
                 </div>

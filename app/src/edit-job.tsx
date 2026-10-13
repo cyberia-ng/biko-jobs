@@ -1,7 +1,8 @@
 import { useContext, useReducer, useRef, useState, type ReactNode } from "react";
 import { ImageBlob, Spinner } from "./blob-loader.tsx";
 import { AppContext } from "./context.ts";
-import { editJob, newJob, type Job } from "./session-state/action.ts";
+import { upsertJob, type Job } from "./session-state/action.ts";
+import { Tags } from "./tag-control.tsx";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
@@ -37,6 +38,11 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
     job?.customerPhoneNumber ?? "",
   );
   const [description, setDescription] = useState<string>(job?.description ?? "");
+  const [tags, dispatchTags] = useReducer(
+    (tags: Set<string>, [add, tag]: [boolean, string]) =>
+      add ? tags.union(new Set([tag])) : tags.difference(new Set([tag])),
+    job?.tags ?? new Set(),
+  );
   type Photos = Array<{ blobId: string; uploaded: boolean }>;
   type PhotosAction =
     | { type: "start upload"; blobId: string }
@@ -72,27 +78,19 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
   }
   function submit() {
     const images = photos.map(({ blobId }) => ({ type: "image/jpeg", blobId }));
+    session?.dispatch(
+      upsertJob({
+        uuid: job?.uuid ?? crypto.randomUUID(),
+        customerName,
+        customerPhoneNumber,
+        description,
+        tags,
+        images,
+      }),
+    );
     if (props.type === "new job") {
-      session?.dispatch(
-        newJob({
-          uuid: crypto.randomUUID(),
-          customerName,
-          customerPhoneNumber,
-          description,
-          images,
-        }),
-      );
       reset();
     } else if (job !== undefined) {
-      session?.dispatch(
-        editJob({
-          uuid: job.uuid,
-          customerName,
-          customerPhoneNumber,
-          description,
-          images,
-        }),
-      );
       dispatchLocal({ type: "view job detail", uuid: job.uuid });
     }
   }
@@ -133,6 +131,13 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
           rows={5}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
+      <div className="mb-3 edit-job-tags">
+        <Tags
+          tags={tags}
+          onAddTag={(tag) => dispatchTags([true, tag])}
+          onDeleteTag={(tag) => dispatchTags([false, tag])}
         />
       </div>
       <div className="row mb-3">

@@ -1,6 +1,6 @@
 export type ActionV1 = {
   timestamp: Temporal.Instant;
-  event: NewJob | ChangeJobStatus | DeleteJob | EditJob;
+  event: NewJobV1 | ChangeJobStatusV1 | DeleteJobV1 | EditJobV1;
 };
 
 export type JobV1 = {
@@ -10,41 +10,41 @@ export type JobV1 = {
   customerPhoneNumber: string;
   description: string;
   status: (typeof allStatusesV1)[number];
-  images: Image[];
+  images: ImageV1[];
   creation: Temporal.Instant;
 };
 export const allStatusesV1 = ["triaged", "working", "complete"] as const;
 
-type Image = {
+export type ImageV1 = {
   type: string;
   blobId: string;
 };
 
-type NewJob = {
+export type NewJobV1 = {
   type: "new job";
   uuid: string;
   customerName: string;
-  customerPhoneNumber?: string;
+  customerPhoneNumber: string;
   description: string;
-  images: Image[];
+  images: ImageV1[];
 };
 
-type ChangeJobStatus = {
+export type ChangeJobStatusV1 = {
   type: "change job status";
   uuid: string;
   status: JobV1["status"];
 };
 
-type DeleteJob = {
+export type DeleteJobV1 = {
   type: "delete job";
   uuid: string;
 };
 
-type EditJob = {
+export type EditJobV1 = {
   type: "edit job";
   uuid: string;
   customerName: string;
-  customerPhoneNumber?: string;
+  customerPhoneNumber: string;
   description: string;
-  images: Image[];
+  images: ImageV1[];
 };

@@ -24,3 +24,11 @@ $bootstrap-icons-font-dir: "bootstrap-icons/font/fonts";
 .kanban-timestamp {
   font-size: calc(var(--bs-body-font-size) * 0.8);
 }
+
+.job-detail-tags .dropdown-menu {
+  min-width: 18rem;
+}
+
+.edit-job-tags .dropdown-menu {
+  min-width: 12rem;
+}
