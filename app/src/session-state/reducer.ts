@@ -8,6 +8,10 @@ enableMapSet();
 
 export function reducer(state: State, action: Action): State {
   return produce(state, (state) => {
+    if (state.processedActionIDs.has(action.uuid)) {
+      return;
+    }
+    state.processedActionIDs.add(action.uuid);
     const { event } = action;
     switch (event.type) {
       case "new job":

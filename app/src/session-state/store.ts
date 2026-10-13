@@ -1,7 +1,8 @@
 import { ApiClient } from "@biko-jobs/api-client";
 import { reducer } from "./reducer.ts";
 import { initialState, type State } from "./state.ts";
-import type { Action } from "./action.ts";
+import type { Action, AnyVersionAction } from "./action.ts";
+import { migrateAction } from "./actions/migrate.ts";
 
 export class Store {
   session: string;
@@ -22,8 +23,8 @@ export class Store {
 
   static async connect(session: string, pass: string) {
     const client = await ApiClient.open("/api", session, pass);
-    const actions = (await client.events()) as Action[];
-    const state = computeStateFromScratch(actions);
+    const actions = (await client.events()) as AnyVersionAction[];
+    const state = computeStateFromScratch(actions.map(migrateAction));
     return new Store(session, state, client);
   }
 
@@ -33,8 +34,8 @@ export class Store {
 
   async refreshState() {
     this.client.refreshWebSocket();
-    const actions = (await this.client.events()) as Action[];
-    this.state = computeStateFromScratch(actions);
+    const actions = (await this.client.events()) as AnyVersionAction[];
+    this.state = computeStateFromScratch(actions.map(migrateAction));
     this.callSubscribers();
   }
 
@@ -49,8 +50,9 @@ export class Store {
     };
   }
 
-  async postEvent(event: Action) {
-    await this.client?.postEvent(event);
+  async postEvent(action: Action) {
+    this.dispatch(action);
+    await this.client?.postEvent(action);
   }
 
   async writeBlob(id: string, data: Uint8Array<ArrayBuffer>) {

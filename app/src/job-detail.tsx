@@ -1,9 +1,8 @@
 import { useContext, useState } from "react";
 import { AppContext } from "./context.ts";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
-import { allStatuses, type Job } from "./session-state/state.ts";
 import { Modal } from "./modal.tsx";
-import { changeJobStatus, deleteJob } from "./session-state/action.ts";
+import { allStatuses, changeJobStatus, deleteJob, type Job } from "./session-state/action.ts";
 import { TimeAgo } from "./time-ago.tsx";
 
 type ModalState = null | "delete job";

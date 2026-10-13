@@ -1,8 +1,7 @@
 import { useContext, useReducer, useRef, useState, type ReactNode } from "react";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { AppContext } from "./context.ts";
-import type { Job } from "./session-state/state.ts";
-import { editJob, newJob } from "./session-state/action.ts";
+import { editJob, newJob, type Job } from "./session-state/action.ts";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;

@@ -1,8 +1,8 @@
-import type { Job } from "./session-state/state.ts";
 import { BlobLoader, Spinner } from "./blob-loader.tsx";
 import { useContext } from "react";
 import { AppContext } from "./context.ts";
 import { TimeAgo } from "./time-ago.tsx";
+import type { Job } from "./session-state/action.ts";
 
 export function Kanban() {
   return (
@@ -32,7 +32,7 @@ function Column(props: { title: string; status: Job["status"] }) {
         </div>
         {jobs.map((job) => (
           <a
-            key={job.number}
+            key={job.uuid}
             href="#"
             className="plain-link"
             onClick={(e) => {
