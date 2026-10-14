@@ -6,6 +6,7 @@ import { expect } from "chai";
 import { mkdtempDisposableSync } from "node:fs";
 import { Sessions } from "@biko-jobs/api/sessions.ts";
 import { join } from "node:path";
+import type { Server } from "node:http";
 
 const test = it;
 
@@ -205,5 +206,54 @@ describe("api", () => {
     using tempDir = mkdtempDisposableSync("biko-jobs-db-test");
     new Sessions(join(tempDir.path, "test.db"));
     new Sessions(join(tempDir.path, "test.db"));
+  });
+
+  describe("websockets", () => {
+    let listener: Server;
+    let port: number;
+    let sockets: Set<WebSocket>;
+
+    beforeEach((done) => {
+      const app = createApp();
+      port = Math.round(Math.random() * (65535 - 1024) + 1024);
+      listener = app.listen(port, () => done(0));
+      sockets = new Set();
+    });
+
+    afterEach((done) => {
+      for (const socket of sockets) {
+        socket.close();
+      }
+      listener.close(() => {
+        done();
+      });
+      listener.closeAllConnections();
+    });
+
+    describe("events websocket", () => {
+      test("connects", (done) => {
+        const socket = new WebSocket(`http://localhost:${port}/session/some-session/events`);
+        sockets.add(socket);
+        socket.addEventListener("open", () => done());
+      });
+
+      test("receives events", (done) => {
+        const socket = new WebSocket(`http://localhost:${port}/session/some-session/events`);
+        sockets.add(socket);
+        const data = Buffer.from("hello world", "utf8");
+        socket.addEventListener("message", (msg) => {
+          (msg.data as Blob)
+            .bytes()
+            .then((receivedData) => expect(receivedData).to.deep.equal(data))
+            .then(() => done())
+            .catch((e) => done(e));
+        });
+        fetch(`http://localhost:${port}/session/some-session/events`, {
+          method: "POST",
+          body: data,
+          headers: { "Content-Type": "application/octet-stream" },
+        });
+      });
+    });
   });
 });
