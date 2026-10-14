@@ -255,5 +255,44 @@ describe("api", () => {
         });
       });
     });
+
+    describe("websocket channels", () => {
+      test("connects", (done) => {
+        const socket = new WebSocket(`http://localhost:${port}/channel/some-channel`);
+        sockets.add(socket);
+        socket.addEventListener("open", () => done());
+      });
+
+      test("both ends can communicate", (done) => {
+        const socketA = new WebSocket(`http://localhost:${port}/channel/some-channel`);
+        sockets.add(socketA);
+        const socketB = new WebSocket(`http://localhost:${port}/channel/some-channel`);
+        sockets.add(socketB);
+        const msg1 = Buffer.from("hello world", "utf8");
+        const msg2 = Buffer.from("hola mundo", "utf8");
+
+        Promise.all([
+          new Promise<void>((res) => socketA.addEventListener("open", () => res())),
+          new Promise<void>((res) => socketB.addEventListener("open", () => res())),
+        ])
+          .then(() => {
+            const msgA = new Promise<Blob>((res) =>
+              socketA.addEventListener("message", (msg) => res(msg.data)),
+            ).then((d) => d.bytes());
+            const msgB = new Promise<Blob>((res) =>
+              socketB.addEventListener("message", (msg) => res(msg.data)),
+            ).then((d) => d.bytes());
+            socketA.send(msg1);
+            socketB.send(msg2);
+            return Promise.all([msgA, msgB]);
+          })
+          .then(([dataA, dataB]) => {
+            expect(dataA).to.deep.equal(msg2);
+            expect(dataB).to.deep.equal(msg1);
+          })
+          .then(() => done())
+          .catch((e) => done(e));
+      });
+    });
   });
 });

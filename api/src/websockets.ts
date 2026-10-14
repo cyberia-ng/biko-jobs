@@ -19,38 +19,73 @@ if (!Map.prototype.hasOwnProperty("getOrInsert")) {
   });
 }
 
+export class MapSet<K, V> {
+  private map: Map<K, Set<V>>;
+
+  constructor() {
+    this.map = new Map();
+  }
+
+  get(id: K): Set<V> {
+    return this.map.getOrInsert(id, new Set());
+  }
+
+  add(id: K, item: V) {
+    this.get(id).add(item);
+  }
+
+  remove(id: K, item: V) {
+    const set = this.get(id);
+    set?.delete(item);
+    if (set?.size === 0) {
+      this.map.delete(id);
+    }
+  }
+}
+
 export class WrappedWebSocketServer {
-  private connections: Map<string, Set<WebSocket>>;
+  private eventsConnections: MapSet<string, WebSocket>;
+  private channels: MapSet<string, WebSocket>;
+
   constructor(server: Server) {
+    this.eventsConnections = new MapSet();
+    this.channels = new MapSet();
     const wss = new WebSocketServer({ server });
     wss.on("error", (err) => console.error("WSS error:", err));
-    this.connections = new Map();
     wss.on("connection", (ws, req) => {
       if (req.url === undefined) {
         throw new Error("unreachable?");
       }
-      const url = new URL(req.url, "http://localhost");
-      const urlMatch = url.pathname.match(/^\/session\/([^/]+)\/events/);
-      if (urlMatch === null) {
-        ws.close(1002, "Unsupported path");
-        return;
-      }
-      const sessionId = decodeURIComponent(urlMatch[1]!);
-      const sessionConnections = this.connections.getOrInsert(sessionId, new Set());
-      sessionConnections.add(ws);
       ws.on("error", (err) => console.error("WS error:", err, "code", (err as any).code));
-      ws.on("close", () => {
-        const sessionConnections = this.connections.getOrInsert(sessionId, new Set());
-        sessionConnections.delete(ws);
-        if (sessionConnections.size === 0) {
-          this.connections.delete(sessionId);
+      const parsedUrl = wsUrlParse(req.url);
+      switch (parsedUrl?.type) {
+        case undefined: {
+          ws.close(1002, "Unsupported path");
+          return;
         }
-      });
+        case "session events": {
+          this.eventsConnections.add(parsedUrl.session, ws);
+          ws.on("close", () => this.eventsConnections.remove(parsedUrl.session, ws));
+          return;
+        }
+        case "channel": {
+          this.channels.add(parsedUrl.channel, ws);
+          ws.on("message", (msg) => {
+            for (const channelConnection of this.channels.get(parsedUrl.channel) ?? []) {
+              if (channelConnection !== ws) {
+                channelConnection.send(msg);
+              }
+            }
+          });
+          ws.on("close", () => this.channels.remove(parsedUrl.channel, ws));
+          return;
+        }
+      }
     });
   }
 
   notifyClientsForSession(id: string, event: Uint8Array<ArrayBuffer>) {
-    const connections = this.connections.get(id) ?? [];
+    const connections = this.eventsConnections.get(id) ?? [];
     for (const ws of connections) {
       ws.send(event, (err) => {
         if (err) {
@@ -59,4 +94,23 @@ export class WrappedWebSocketServer {
       });
     }
   }
+}
+
+function wsUrlParse(
+  urlSuffix: string,
+): { type: "session events"; session: string } | { type: "channel"; channel: string } | undefined {
+  const url = new URL(urlSuffix, "http://localhost");
+
+  const sessionEventsMatch = url.pathname.match(/^\/session\/([^/]+)\/events/);
+  if (sessionEventsMatch !== null) {
+    const session = decodeURIComponent(sessionEventsMatch[1]!);
+    return { type: "session events", session };
+  }
+
+  const channelMatch = url.pathname.match(/^\/channel\/([^/]+)/);
+  if (channelMatch !== null) {
+    const channel = decodeURIComponent(channelMatch[1]!);
+    return { type: "channel", channel };
+  }
+  return undefined;
 }
