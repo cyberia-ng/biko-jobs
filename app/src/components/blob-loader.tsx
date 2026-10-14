@@ -11,16 +11,30 @@ export function Spinner() {
 
 export function ImageBlob(props: { blobId: string; type: string; onError?: (e: unknown) => void }) {
   const { session } = useContext(AppContext);
-  const [state, setState] = useState<"loading" | "error" | "not found" | Uint8Array<ArrayBuffer>>(
-    "loading",
-  );
+  const [state, setState] = useState<
+    { type: "loading" | "error" | "not found" } | { type: "loaded"; url: string }
+  >({ type: "loading" });
   useEffect(() => {
     session
       ?.getBlob(props.blobId)
-      .then((data) => setState(data ?? "not found"))
+      .then((data) => {
+        if (data === undefined) {
+          setState({ type: "not found" });
+        } else {
+          const blob = new Blob([data], { type: props.type });
+          const url = URL.createObjectURL(blob);
+          setState({ type: "loaded", url });
+        }
+      })
       .catch((err) => props.onError?.(err));
   }, [session, props]);
-  switch (state) {
+  useEffect(
+    () => () => {
+      if (state.type === "loaded") URL.revokeObjectURL(state.url);
+    },
+    [state],
+  );
+  switch (state.type) {
     case "loading":
       return (
         <div className="h-100 d-flex">
@@ -37,11 +51,6 @@ export function ImageBlob(props: { blobId: string; type: string; onError?: (e: u
         </div>
       );
     default:
-      return (
-        <img
-          src={`data:${props.type};base64,${state.toBase64()}`}
-          className="img-fluid h-100 w-100 object-fit-cover"
-        />
-      );
+      return <img src={state.url} className="img-fluid h-100 w-100 object-fit-cover" />;
   }
 }
