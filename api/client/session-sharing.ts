@@ -88,7 +88,6 @@ export class SessionSharingChannel {
   static async open(opts: SessionSharingChannelOpts): Promise<SessionSharingChannel> {
     const { publicKey, privateKey } = await crypto.subtle.generateKey("X25519", false, [
       "deriveKey",
-      "deriveBits",
     ]);
     const publicKeyBytes = new Uint8Array(await crypto.subtle.exportKey("raw", publicKey));
     const ws = new WebSocket(`${opts.baseUrl}/channel/share-${opts.session}`);
@@ -113,10 +112,7 @@ export async function receiveSharedSession(
   serverPublicKey: Uint8Array<ArrayBuffer>,
   onGenerateKey: (publicKey: Uint8Array) => void,
 ): Promise<ReceiveSharedSessionResult> {
-  const { publicKey, privateKey } = await crypto.subtle.generateKey("X25519", false, [
-    "deriveKey",
-    "deriveBits",
-  ]);
+  const { publicKey, privateKey } = await crypto.subtle.generateKey("X25519", false, ["deriveKey"]);
   const publicKeyBytes = new Uint8Array(await crypto.subtle.exportKey("raw", publicKey));
   onGenerateKey(publicKeyBytes);
   const serverPublicKey_ = await crypto.subtle.importKey(
@@ -134,24 +130,24 @@ export async function receiveSharedSession(
     ["decrypt"],
   );
   const ws = new WebSocket(`${baseUrl}/channel/share-${session}`);
+  async function handleMessage(
+    event: MessageEvent<Blob>,
+  ): Promise<ReceiveSharedSessionResult | { type: "other client" }> {
+    const data = await event.data.bytes();
+    const message = mpDecoder.decode(data) as ServerMessage;
+    if (message.clientPubKey.toHex() !== publicKeyBytes.toHex()) return { type: "other client" };
+    if (message.type === "rejected") return { type: "rejected" };
+    const decrypted = new Uint8Array(
+      await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: message.iv },
+        sharedKey,
+        message.encryptedPassword,
+      ),
+    );
+    const password = new TextDecoder().decode(decrypted);
+    return { type: "accepted", password };
+  }
   return new Promise<ReceiveSharedSessionResult>((resolve, reject) => {
-    async function handleMessage(
-      event: MessageEvent<Blob>,
-    ): Promise<ReceiveSharedSessionResult | { type: "other client" }> {
-      const data = await event.data.bytes();
-      const message = mpDecoder.decode(data) as ServerMessage;
-      if (message.clientPubKey.toHex() !== publicKeyBytes.toHex()) return { type: "other client" };
-      if (message.type === "rejected") return { type: "rejected" };
-      const decrypted = new Uint8Array(
-        await crypto.subtle.decrypt(
-          { name: "AES-GCM", iv: message.iv },
-          sharedKey,
-          message.encryptedPassword,
-        ),
-      );
-      const password = new TextDecoder().decode(decrypted);
-      return { type: "accepted", password };
-    }
     ws.addEventListener("message", (event) =>
       handleMessage(event)
         .then((result) => {
