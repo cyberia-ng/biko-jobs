@@ -8,9 +8,6 @@ export default {
       "/api": {
         target: "http://localhost:3000",
         rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-      "^/api/session/.*/events": {
-        target: "ws://localhost:3000",
         ws: true,
       },
     },

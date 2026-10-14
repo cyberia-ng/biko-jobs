@@ -30,7 +30,7 @@ export class WrappedWebSocketServer {
         throw new Error("unreachable?");
       }
       const url = new URL(req.url, "http://localhost");
-      const urlMatch = url.pathname.match(/\/session\/([^/]+)\/events/);
+      const urlMatch = url.pathname.match(/^\/session\/([^/]+)\/events/);
       if (urlMatch === null) {
         ws.close(1002, "Unsupported path");
         return;

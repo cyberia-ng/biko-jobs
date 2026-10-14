@@ -22,6 +22,7 @@ export class ApiClient {
 
   static async listSessions(baseUrl: string): Promise<string[]> {
     const res = await fetch(`${baseUrl}/session`);
+    raiseForStatus(res);
     return res.json();
   }
 
