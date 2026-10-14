@@ -3,22 +3,6 @@ import { WebSocketServer } from "ws";
 import type { WebSocket } from "ws";
 import type { Server } from "node:http";
 
-if (!Map.prototype.hasOwnProperty("getOrInsert")) {
-  Object.defineProperty(Map.prototype, "getOrInsert", {
-    value: function (key: string, default_: unknown) {
-      if (this.has(key)) {
-        return this.get(key);
-      } else {
-        this.set(key, default_);
-        return default_;
-      }
-    },
-    writable: true,
-    configurable: true,
-    enumerable: false,
-  });
-}
-
 export class MapSet<K, V> {
   private map: Map<K, Set<V>>;
 
@@ -27,7 +11,14 @@ export class MapSet<K, V> {
   }
 
   get(id: K): Set<V> {
-    return this.map.getOrInsert(id, new Set());
+    const set = this.map.get(id);
+    if (set !== undefined) {
+      return set;
+    } else {
+      const newSet = new Set<V>();
+      this.map.set(id, newSet);
+      return newSet;
+    }
   }
 
   add(id: K, item: V) {
