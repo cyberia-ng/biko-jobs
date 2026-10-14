@@ -18,7 +18,7 @@ import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
 import { SessionManager } from "./screens/session.tsx";
 import { Store as SessionStore } from "./session-state/store.ts";
-import { ApiClient } from "@biko-jobs/api-client";
+import { listSessions } from "@biko-jobs/api-client";
 import { enableMapSet, produce } from "immer";
 import { assertNever } from "./assertNever.ts";
 import { Export } from "./screens/export.tsx";
@@ -84,8 +84,7 @@ function App() {
 
   const [sessionsList, setSessionsList] = useState<string[]>([]);
   const refreshSessionsList = useCallback(
-    () =>
-      withLoading("refreshing session list", ApiClient.listSessions("/api").then(setSessionsList)),
+    () => withLoading("refreshing session list", listSessions("/api").then(setSessionsList)),
     [withLoading],
   );
   const refresh = useCallback(() => {

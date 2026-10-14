@@ -7,6 +7,7 @@ import { mkdtempDisposableSync } from "node:fs";
 import { Sessions } from "@biko-jobs/api/sessions.ts";
 import { join } from "node:path";
 import type { Server } from "node:http";
+import { inspect } from "node:util";
 
 const test = it;
 
@@ -216,7 +217,7 @@ describe("api", () => {
     beforeEach((done) => {
       const app = createApp();
       port = Math.round(Math.random() * (65535 - 1024) + 1024);
-      listener = app.listen(port, () => done(0));
+      listener = app.listen(port, () => done());
       sockets = new Set();
     });
 
@@ -260,6 +261,7 @@ describe("api", () => {
       test("connects", (done) => {
         const socket = new WebSocket(`http://localhost:${port}/channel/some-channel`);
         sockets.add(socket);
+        socket.addEventListener("error", (e) => done(new Error(inspect(e))));
         socket.addEventListener("open", () => done());
       });
 
@@ -268,6 +270,8 @@ describe("api", () => {
         sockets.add(socketA);
         const socketB = new WebSocket(`http://localhost:${port}/channel/some-channel`);
         sockets.add(socketB);
+        socketA.addEventListener("error", (e) => done(new Error(inspect(e))));
+        socketB.addEventListener("error", (e) => done(new Error(inspect(e))));
         const msg1 = Buffer.from("hello world", "utf8");
         const msg2 = Buffer.from("hola mundo", "utf8");
 

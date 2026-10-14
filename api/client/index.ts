@@ -20,12 +20,6 @@ export class ApiClient {
     this.refreshWebSocket();
   }
 
-  static async listSessions(baseUrl: string): Promise<string[]> {
-    const res = await fetch(`${baseUrl}/session`);
-    raiseForStatus(res);
-    return res.json();
-  }
-
   static async open(baseUrl: string, session: string, pass: string): Promise<ApiClient> {
     const encodedSessionId = encodeURIComponent(session);
     let salt: Uint8Array<ArrayBuffer> | undefined;
@@ -168,4 +162,10 @@ export class ApiClient {
       this.subscribers.delete(cb);
     };
   }
+}
+
+export async function listSessions(baseUrl: string): Promise<string[]> {
+  const res = await fetch(`${baseUrl}/session`);
+  raiseForStatus(res);
+  return res.json();
 }
