@@ -1,3 +1,5 @@
+import { assertNever } from "./assertNever.ts";
+
 export type State =
   | {
       screen: "kanban" | "new job" | "export";
@@ -7,7 +9,7 @@ export type State =
       keyExchange:
         | {
             session: string;
-            serverPublicKeyB64: string;
+            serverPublicKey: Uint8Array<ArrayBuffer>;
           }
         | undefined;
     }
@@ -29,18 +31,75 @@ export const initialState: State = {
   keyExchange: undefined,
 };
 
-export function deserialize(hash: string): State {
+export function deserialize(hash: string): State | undefined {
   if (hash.length === 0) {
     return initialState;
   }
-  try {
-    return JSON.parse(decodeURIComponent(hash));
-    // oxlint-disable-next-line no-unused-vars
-  } catch (e) {
-    return initialState;
+  const components = hash.split("/").map(decodeURIComponent);
+  switch (components.shift()) {
+    case "kanban":
+      return basicScreen("kanban");
+    case "new-job":
+      return basicScreen("new job");
+    case "export":
+      return basicScreen("export");
+    case "session-manager": {
+      const session = components.shift();
+      const serverPublicKeyB64 = components.shift();
+      if (session !== undefined && serverPublicKeyB64 !== undefined) {
+        return sessionManager({
+          session,
+          serverPublicKey: Uint8Array.fromBase64(serverPublicKeyB64, { alphabet: "base64url" }),
+        });
+      } else {
+        return sessionManager();
+      }
+    }
+    case "job-detail": {
+      const uuid = components.shift();
+      if (uuid === undefined) return undefined;
+      return jobDetail(uuid);
+    }
+    case "edit-job": {
+      const uuid = components.shift();
+      if (uuid === undefined) return undefined;
+      return editJob(uuid);
+    }
+    default:
+      return undefined;
   }
 }
 
 export function serialize(state: State): string {
-  return encodeURIComponent(JSON.stringify(state));
+  const components: string[] = [];
+  switch (state.screen) {
+    case "kanban":
+      components.push("kanban");
+      break;
+    case "new job":
+      components.push("new-job");
+      break;
+    case "export":
+      components.push("export");
+      break;
+    case "session manager": {
+      components.push("session-manager");
+      if (state.keyExchange !== undefined) {
+        components.push(state.keyExchange.session);
+        components.push(state.keyExchange.serverPublicKey.toBase64({ alphabet: "base64url" }));
+      }
+      break;
+    }
+    case "job detail":
+      components.push("job-detail");
+      components.push(state.uuid);
+      break;
+    case "edit job":
+      components.push("edit-job");
+      components.push(state.uuid);
+      break;
+    default:
+      assertNever(state);
+  }
+  return components.map(encodeURIComponent).join("/");
 }

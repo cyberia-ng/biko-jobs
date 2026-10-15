@@ -242,10 +242,9 @@ function ShareSession({ session, password }: { session: string; password: string
   if (channel === undefined) {
     return "loading";
   } else {
-    const pubKeyB64 = channel.publicKey.toBase64();
     const hash = serialize({
       screen: "session manager",
-      keyExchange: { session, serverPublicKeyB64: pubKeyB64 },
+      keyExchange: { session, serverPublicKey: channel.publicKey },
     });
     const url = new URL(window.location.href);
     url.hash = hash;
@@ -304,8 +303,7 @@ function Login() {
   useEffect(() => {
     if (navigationState.screen !== "session manager") return;
     if (navigationState.keyExchange !== undefined) {
-      const { session, serverPublicKeyB64 } = navigationState.keyExchange;
-      const serverPublicKey = Uint8Array.fromBase64(serverPublicKeyB64);
+      const { session, serverPublicKey } = navigationState.keyExchange;
       SessionSharingReceiver.open({
         baseUrl: "api",
         session,

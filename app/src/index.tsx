@@ -13,7 +13,11 @@ import {
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./screens/kanban.tsx";
 import { Nav } from "./components/nav.tsx";
-import { deserialize, serialize } from "./navigation-state.ts";
+import {
+  deserialize,
+  initialState as initialNavigationState,
+  serialize,
+} from "./navigation-state.ts";
 import { EditJob } from "./screens/edit-job.tsx";
 import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT, type LoginState } from "./context.ts";
@@ -45,7 +49,7 @@ window.onload = () => {
 
 function App() {
   const [hash, navigateHash] = useHashLocation();
-  const navigationState = useMemo(() => deserialize(hash), [hash]);
+  const navigationState = useMemo(() => deserialize(hash) ?? initialNavigationState, [hash]);
   function navigate(state: NavigationState) {
     navigateHash(serialize(state));
   }
