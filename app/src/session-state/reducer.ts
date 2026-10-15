@@ -17,7 +17,7 @@ export function reducer(state: State, action: Action): State {
         state.jobs.set(event.uuid, {
           uuid: event.uuid,
           number: existing?.number ?? state.nextJobNumber,
-          status: "triaged",
+          status: existing?.status ?? "triaged",
           timestamps: {
             creation: existing?.timestamps.creation ?? action.timestamp,
             working: existing?.timestamps.working,
