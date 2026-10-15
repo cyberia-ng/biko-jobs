@@ -20,6 +20,7 @@ export type Job = {
     working: Temporal.Instant | undefined;
     completed: Temporal.Instant | undefined;
     cancelled: Temporal.Instant | undefined;
+    hasComplexMovement: boolean;
   };
 };
 

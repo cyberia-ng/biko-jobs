@@ -23,6 +23,7 @@ export function reducer(state: State, action: Action): State {
             working: existing?.timestamps.working,
             completed: existing?.timestamps.completed,
             cancelled: existing?.timestamps.cancelled,
+            hasComplexMovement: existing?.timestamps.hasComplexMovement ?? false,
           },
           ...pick(event, ["customerName", "customerPhoneNumber", "description", "tags", "images"]),
         });
@@ -36,19 +37,24 @@ export function reducer(state: State, action: Action): State {
         break;
       case "change job status":
         const job = state.jobs.get(event.uuid);
-        if (job !== undefined) {
-          job.status = event.status;
+        if (job !== undefined && job.status !== event.status) {
           switch (event.status) {
             case "working":
               job.timestamps.working = job.timestamps.working ?? action.timestamp;
+              if (job.status !== "triaged") job.timestamps.hasComplexMovement = true;
               break;
             case "complete":
               job.timestamps.completed = job.timestamps.completed ?? action.timestamp;
+              if (job.status !== "working") job.timestamps.hasComplexMovement = true;
               break;
             case "cancelled":
               job.timestamps.cancelled = job.timestamps.cancelled ?? action.timestamp;
+              if (job.status === "complete") {
+                job.timestamps.hasComplexMovement = true;
+              }
               break;
           }
+          job.status = event.status;
         }
         break;
       case "delete job":

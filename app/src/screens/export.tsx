@@ -16,6 +16,7 @@ export function Export() {
         working: timestamps.working?.toString(),
         completed: timestamps.completed?.toString(),
         cancelled: timestamps.cancelled?.toString(),
+        complexMovement: timestamps.hasComplexMovement,
       })) ?? [],
     );
     const csvStr = unparse(jobs);
