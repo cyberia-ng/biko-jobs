@@ -26,7 +26,9 @@ function Column(props: { title: string; statuses: Job["status"][] }) {
     <div className="col-12 col-lg-4 fs-5">
       <div className="bg-body p-3 shadow-sm rounded">
         <div className="border-bottom mb-3">
-          <h3>{props.title}</h3>
+          <h3>
+            {props.title} ({jobs.length})
+          </h3>
         </div>
         {jobs.map((job) => (
           <a
