@@ -17,6 +17,7 @@ import {
 } from "../components/modal.tsx";
 import { updateCanvas } from "jdenticon";
 import { serialize, sessionManager } from "../navigation-state.ts";
+import { Spinner } from "../components/blob-loader.tsx";
 
 export function SessionManager() {
   const { sessionsList, loginState, setLoginState } = useContext(AppContext);
@@ -25,6 +26,7 @@ export function SessionManager() {
     loginState?.password ?? window.localStorage.getItem(`session passwords/${sessionId}`) ?? "",
   );
   function loadSession(sessionId: string) {
+    setShowShareSession(false);
     setSessionId(sessionId);
     setPassword(window.localStorage.getItem(`session passwords/${sessionId}`) ?? "");
   }
@@ -148,6 +150,7 @@ export function SessionManager() {
                   <button
                     type="button"
                     className="btn btn-secondary fs-4"
+                    disabled={loginState?.session !== sessionId || sessionId.length === 0}
                     onClick={() => setShowShareSession(!showShareSession)}
                   >
                     Share session
@@ -240,7 +243,11 @@ function ShareSession({ session, password }: { session: string; password: string
   }, [session, password]);
   useEffect(() => () => channel?.close(), [channel]);
   if (channel === undefined) {
-    return "loading";
+    return (
+      <div className="text-center">
+        <Spinner />
+      </div>
+    );
   } else {
     const hash = serialize({
       screen: "session manager",
@@ -341,7 +348,9 @@ function Login() {
           <div className="mb-2 fs-5">The image on the approving device should match this one:</div>
           <div>
             {sessionSharingReceiver === undefined ? (
-              "loading"
+              <div className="text-center">
+                <Spinner />
+              </div>
             ) : (
               <Jdenticon
                 value={sessionSharingReceiver.publicKey}
