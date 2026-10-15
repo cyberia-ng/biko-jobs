@@ -21,16 +21,17 @@ import {
   removeJobTag,
 } from "../session-state/action.ts";
 import type { Job } from "../session-state/state.ts";
+import { basicScreen, editJob } from "../navigation-state.ts";
 
 type ModalState = null | "delete job";
 
 export function JobDetail() {
-  const { session, localState, dispatchLocal } = useContext(AppContext);
+  const { session, navigationState, navigate } = useContext(AppContext);
   const [modalState, setModalState] = useState<ModalState>(null);
-  if (localState.screen.type !== "job detail") {
+  if (navigationState.screen !== "job detail") {
     return <></>;
   }
-  const uuid = localState.screen.uuid;
+  const uuid = navigationState.uuid;
   const job = session?.state.jobs.get(uuid);
   if (job === undefined) {
     return <></>;
@@ -43,7 +44,7 @@ export function JobDetail() {
           onConfirm={() => {
             setModalState(null);
             session?.dispatch(deleteJob({ uuid }));
-            dispatchLocal({ type: "navigate", screen: "kanban" });
+            navigate(basicScreen("kanban"));
           }}
         >
           <ModalHeader>
@@ -64,7 +65,7 @@ export function JobDetail() {
               <div className="flex-grow-1">
                 <button
                   className="btn btn-primary fs-4 me-2"
-                  onClick={() => dispatchLocal({ type: "navigate", screen: "kanban" })}
+                  onClick={() => navigate(basicScreen("kanban"))}
                 >
                   <i className="bi bi-caret-left-fill" />
                   Back
@@ -72,7 +73,7 @@ export function JobDetail() {
               </div>
               <button
                 className="btn btn-secondary me-2 fs-4"
-                onClick={() => dispatchLocal({ type: "edit job", uuid })}
+                onClick={() => navigate(editJob(uuid))}
               >
                 <i className="bi bi-pencil me-2" />
                 Edit job

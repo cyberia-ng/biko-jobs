@@ -3,6 +3,7 @@ import { ImageBlob } from "../components/blob-loader.tsx";
 import { TimeAgo } from "../components/time-ago.tsx";
 import { AppContext } from "../context.ts";
 import type { Job } from "../session-state/state.ts";
+import { jobDetail } from "../navigation-state.ts";
 
 export function Kanban() {
   return (
@@ -17,13 +18,10 @@ export function Kanban() {
 }
 
 function Column(props: { title: string; statuses: Job["status"][] }) {
-  const { session, dispatchLocal } = useContext(AppContext);
+  const { session, navigate } = useContext(AppContext);
   const jobs = Array.from(session?.state.jobs.values() ?? []).filter((job) =>
     props.statuses.includes(job.status),
   );
-  function viewDetail(uuid: string) {
-    dispatchLocal({ type: "view job detail", uuid });
-  }
   return (
     <div className="col-12 col-lg-4 fs-5">
       <div className="bg-body p-3 shadow-sm rounded">
@@ -37,7 +35,7 @@ function Column(props: { title: string; statuses: Job["status"][] }) {
             className="plain-link"
             onClick={(e) => {
               e.preventDefault();
-              viewDetail(job.uuid);
+              navigate(jobDetail(job.uuid));
             }}
           >
             <div className="row gx-2 mx-1 mb-2 border rounded overflow-hidden">

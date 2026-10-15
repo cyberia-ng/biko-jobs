@@ -3,9 +3,8 @@ import { AppContext } from "../context.ts";
 import { unparse } from "papaparse";
 
 export function Export() {
-  const { session, localState } = useContext(AppContext);
-  const sessionId =
-    localState.loginState.type === "logged in" ? localState.loginState.session : undefined;
+  const { session, loginState } = useContext(AppContext);
+  const sessionId = loginState?.session;
   function generatePseudonymised() {
     const jobs = Array.from(
       session?.state.jobs.values().map(({ uuid, number, description, status, timestamps }) => ({

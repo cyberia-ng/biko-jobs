@@ -1,33 +1,30 @@
 import { useContext, type ReactNode } from "react";
-import { type Navigate } from "../local-state.ts";
 import { AppContext } from "../context.ts";
+import { basicScreen, sessionManager } from "../navigation-state.ts";
 
 export function Nav() {
-  const { session, loading, localState, dispatchLocal, refresh } = useContext(AppContext);
-  function navigate(screen: Navigate["screen"]) {
-    dispatchLocal({ type: "navigate", screen });
-  }
+  const { session, loading, navigationState, navigate, refresh } = useContext(AppContext);
   return (
     <div className="h-100">
       <div className="shadow h-100 bg-dark nav nav-pills d-flex flex-row flex-sm-column">
         <NavItem
           disabled={session === undefined}
-          active={localState.screen.type === "kanban"}
-          onClick={() => navigate("kanban")}
+          active={navigationState.screen === "kanban"}
+          onClick={() => navigate(basicScreen("kanban"))}
         >
           <i className="bi bi-layout-three-columns fs-1" />
         </NavItem>
         <NavItem
           disabled={session === undefined}
-          active={localState.screen.type === "new job"}
-          onClick={() => navigate("new job")}
+          active={navigationState.screen === "new job"}
+          onClick={() => navigate(basicScreen("new job"))}
         >
           <i className="bi bi-plus-circle fs-1" />
         </NavItem>
         <NavItem
           disabled={session === undefined}
-          active={localState.screen.type === "export"}
-          onClick={() => navigate("export")}
+          active={navigationState.screen === "export"}
+          onClick={() => navigate(basicScreen("export"))}
         >
           <i className="bi bi-box-arrow-up-right fs-1" />
         </NavItem>
@@ -41,8 +38,8 @@ export function Nav() {
         )}
         <NavItem
           end
-          active={localState.screen.type === "session manager"}
-          onClick={() => navigate("session manager")}
+          active={navigationState.screen === "session manager"}
+          onClick={() => navigate(sessionManager())}
         >
           <i className="bi bi-journal-text fs-1" />
         </NavItem>

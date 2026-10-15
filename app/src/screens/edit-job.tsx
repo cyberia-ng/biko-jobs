@@ -4,22 +4,23 @@ import { AppContext } from "../context.ts";
 import { upsertJob } from "../session-state/action.ts";
 import { Tags } from "../components/tag-control.tsx";
 import type { Job } from "../session-state/state.ts";
+import { jobDetail } from "../navigation-state.ts";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
-  const { session, localState } = useContext(AppContext);
+  const { session, navigationState } = useContext(AppContext);
   let content: ReactNode;
   let job: Job | undefined = undefined;
   if (isNew) {
     content = <EditJobForm type="new job" key={undefined} />;
   } else {
-    if (localState.screen.type !== "edit job") {
+    if (navigationState.screen !== "edit job") {
       throw new Error("unreachable");
     }
     if (session === undefined) {
       content = "Not connected";
     } else {
-      job = session.state.jobs.get(localState.screen.uuid);
+      job = session.state.jobs.get(navigationState.uuid);
       if (job === undefined) {
         content = "Job does not exist";
       } else {
@@ -31,7 +32,7 @@ export function EditJob(props: { new_?: boolean }) {
 }
 
 function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }) {
-  const { session, dispatchLocal } = useContext(AppContext);
+  const { session, navigate } = useContext(AppContext);
   const job = props.type === "edit job" ? props.job : undefined;
 
   const [customerName, setCustomerName] = useState<string>(job?.customerName ?? "");
@@ -92,7 +93,7 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
     if (props.type === "new job") {
       reset();
     } else if (job !== undefined) {
-      dispatchLocal({ type: "view job detail", uuid: job.uuid });
+      navigate(jobDetail(job.uuid));
     }
   }
 

@@ -4,6 +4,7 @@ import {
   StrictMode,
   useCallback,
   useEffect,
+  useMemo,
   useReducer,
   useState,
   useSyncExternalStore,
@@ -12,16 +13,18 @@ import {
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./screens/kanban.tsx";
 import { Nav } from "./components/nav.tsx";
-import { deserialize, reducer, serialize } from "./local-state.ts";
+import { deserialize, serialize } from "./navigation-state.ts";
 import { EditJob } from "./screens/edit-job.tsx";
 import { JobDetail } from "./screens/job-detail.tsx";
-import { AppContext, type AppContextT } from "./context.ts";
+import { AppContext, type AppContextT, type LoginState } from "./context.ts";
 import { SessionManager } from "./screens/session.tsx";
 import { Store as SessionStore } from "./session-state/store.ts";
 import { listSessions } from "@biko-jobs/api-client";
 import { enableMapSet, produce } from "immer";
 import { assertNever } from "./assertNever.ts";
 import { Export } from "./screens/export.tsx";
+import { useHashLocation } from "./use-hash-location.ts";
+import type { State as NavigationState } from "./navigation-state.ts";
 
 enableMapSet();
 
@@ -41,10 +44,12 @@ window.onload = () => {
 };
 
 function App() {
-  const [localState, dispatchLocal] = useReducer(reducer, deserialize(window.location.hash));
-  useEffect(() => {
-    window.location.hash = serialize(localState);
-  }, [localState]);
+  const [hash, navigateHash] = useHashLocation();
+  const navigationState = useMemo(() => deserialize(hash), [hash]);
+  function navigate(state: NavigationState) {
+    navigateHash(serialize(state));
+  }
+  const [loginState, setLoginState] = useState<LoginState>(undefined);
 
   const [loadingIds, dispatchLoading] = useReducer(
     (state: Set<string>, [add, id]: [boolean, string]) =>
@@ -93,28 +98,25 @@ function App() {
   }, [refreshSessionState, refreshSessionsList]);
 
   useEffect(() => {
-    if (localState.loginState.type !== "logged in") {
+    if (loginState === undefined) {
       return;
     }
-    if (
-      window.localStorage.getItem(`session passwords/${localState.loginState.session}`) === null
-    ) {
-      window.localStorage.setItem(
-        `session passwords/${localState.loginState.session}`,
-        localState.loginState.password,
-      );
+    if (window.localStorage.getItem(`session passwords/${loginState.session}`) === null) {
+      window.localStorage.setItem(`session passwords/${loginState.session}`, loginState.password);
     }
     withLoading(
-      `connecting to session: ${localState.loginState.session}`,
-      SessionStore.connect(localState.loginState.session, localState.loginState.password)
+      `connecting to session: ${loginState.session}`,
+      SessionStore.connect(loginState.session, loginState.password)
         .then(setSessionStore)
         .then(refreshSessionsList),
     );
-  }, [localState.loginState, withLoading, refreshSessionsList]);
+  }, [loginState, withLoading, refreshSessionsList]);
   useEffect(() => refreshSessionsList(), [refreshSessionsList]);
 
   const context: AppContextT = {
     sessionsList,
+    loginState,
+    setLoginState,
     session:
       sessionState === undefined || sessionStore === undefined
         ? undefined
@@ -127,15 +129,15 @@ function App() {
               withLoading(`writing blob: ${id}`, sessionStore.writeBlob(id, data)),
           },
     loading: loadingIds.size !== 0,
-    localState,
-    dispatchLocal,
+    navigationState,
+    navigate,
     refresh,
   };
 
   let screen: ReactNode;
-  switch (localState.screen.type) {
+  switch (navigationState.screen) {
     case "session manager":
-      screen = <SessionManager key={JSON.stringify(localState.loginState)} />;
+      screen = <SessionManager key={JSON.stringify(loginState)} />;
       break;
     case "kanban":
       screen = <Kanban />;
@@ -153,7 +155,7 @@ function App() {
       screen = <Export />;
       break;
     default:
-      assertNever(localState.screen);
+      assertNever(navigationState);
   }
   return (
     <AppContext value={context}>

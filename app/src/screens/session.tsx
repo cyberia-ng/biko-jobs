@@ -1,7 +1,6 @@
 import { useContext, useEffect, useReducer, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { AppContext } from "../context.ts";
-import { serialize } from "../local-state.ts";
 import {
   SessionSharingChannel,
   SessionSharingReceiver,
@@ -17,16 +16,13 @@ import {
   ModalTitle,
 } from "../components/modal.tsx";
 import { updateCanvas } from "jdenticon";
+import { serialize, sessionManager } from "../navigation-state.ts";
 
 export function SessionManager() {
-  const { sessionsList, localState, dispatchLocal } = useContext(AppContext);
-  const [sessionId, setSessionId] = useState(
-    localState.loginState.type === "logged in" ? localState.loginState.session : "",
-  );
+  const { sessionsList, loginState, setLoginState } = useContext(AppContext);
+  const [sessionId, setSessionId] = useState(loginState?.session ?? "");
   const [password, setPassword] = useState(
-    localState.loginState.type === "logged in"
-      ? localState.loginState.password
-      : (window.localStorage.getItem(`session passwords/${sessionId}`) ?? ""),
+    loginState?.password ?? window.localStorage.getItem(`session passwords/${sessionId}`) ?? "",
   );
   function loadSession(sessionId: string) {
     setSessionId(sessionId);
@@ -67,7 +63,7 @@ export function SessionManager() {
   }
   async function connect() {
     window.localStorage.setItem(`session passwords/${sessionId}`, password);
-    dispatchLocal({ type: "log in", session: sessionId, password });
+    setLoginState({ session: sessionId, password });
   }
   return (
     <>
@@ -128,8 +124,7 @@ export function SessionManager() {
                     Autogenerate
                   </button>
                 </div>
-                {localState.loginState.type === "logged in" &&
-                localState.loginState.session === sessionId ? (
+                {loginState?.session === sessionId ? (
                   <button type="button" className="btn btn-primary fs-4" disabled>
                     Connected
                   </button>
@@ -138,8 +133,7 @@ export function SessionManager() {
                     type="submit"
                     className="btn btn-primary fs-4"
                     disabled={
-                      (localState.loginState.type === "logged in" &&
-                        localState.loginState.session === sessionId) ||
+                      loginState?.session === sessionId ||
                       sessionId.length === 0 ||
                       password.length === 0
                     }
@@ -175,7 +169,7 @@ export function SessionList(props: {
   selectedSession: string;
   loadSession: (sessionId: string) => void;
 }) {
-  const { localState, sessionsList } = useContext(AppContext);
+  const { loginState, sessionsList } = useContext(AppContext);
   return (
     <div className="border-start border-top">
       <div
@@ -199,12 +193,11 @@ export function SessionList(props: {
           key={session}
           onClick={() => props.loadSession(session)}
         >
-          {localState.loginState.type === "logged in" &&
-            localState.loginState.session === session && (
-              <div>
-                <i className="bi bi-link-45deg text-primary me-2" />
-              </div>
-            )}
+          {loginState?.session === session && (
+            <div>
+              <i className="bi bi-link-45deg text-primary me-2" />
+            </div>
+          )}
           <div className="flex-grow-1">{session}</div>
           <div>
             <i className="bi bi-chevron-right" />
@@ -251,8 +244,8 @@ function ShareSession({ session, password }: { session: string; password: string
   } else {
     const pubKeyB64 = channel.publicKey.toBase64();
     const hash = serialize({
-      loginState: { type: "key exchange", session, serverPublicKeyB64: pubKeyB64 },
-      screen: { type: "session manager" },
+      screen: "session manager",
+      keyExchange: { session, serverPublicKeyB64: pubKeyB64 },
     });
     const url = new URL(window.location.href);
     url.hash = hash;
@@ -302,19 +295,20 @@ function ShareSession({ session, password }: { session: string; password: string
 }
 
 function Login() {
-  const { localState, dispatchLocal } = useContext(AppContext);
+  const { loginState, navigationState, navigate, setLoginState } = useContext(AppContext);
   const [sessionSharingReceiver, setSessionSharingReceiver] = useReducer(
     (state: SessionSharingReceiver | undefined, action: SessionSharingReceiver) => state ?? action,
     undefined,
   );
   const [rejected, setRejected] = useState(false);
   useEffect(() => {
-    if (localState.loginState.type === "key exchange") {
-      const { session } = localState.loginState;
-      const serverPublicKey = Uint8Array.fromBase64(localState.loginState.serverPublicKeyB64);
+    if (navigationState.screen !== "session manager") return;
+    if (navigationState.keyExchange !== undefined) {
+      const { session, serverPublicKeyB64 } = navigationState.keyExchange;
+      const serverPublicKey = Uint8Array.fromBase64(serverPublicKeyB64);
       SessionSharingReceiver.open({
         baseUrl: "api",
-        session: localState.loginState.session,
+        session,
         serverPublicKey,
         onWebSocketError: console.error.bind(console),
       })
@@ -325,21 +319,22 @@ function Login() {
         .then((result) => {
           switch (result.type) {
             case "accepted":
-              dispatchLocal({ type: "log in", session, password: result.password });
+              setLoginState({ session, password: result.password });
+              navigate(sessionManager());
               break;
             case "rejected":
               setRejected(true);
           }
         });
     }
-  }, [localState.loginState, dispatchLocal]);
+  }, [navigationState, navigate, loginState, setLoginState]);
   useEffect(() => () => sessionSharingReceiver?.close(), [sessionSharingReceiver]);
-  if (localState.loginState.type !== "key exchange") {
+  if (navigationState.screen !== "session manager" || navigationState.keyExchange === undefined) {
     return null;
   }
   if (!rejected) {
     return (
-      <Modal onDismiss={() => dispatchLocal({ type: "cancel key exchange" })}>
+      <Modal onDismiss={() => navigate(sessionManager())}>
         <ModalHeader>
           <ModalTitle>Pairing</ModalTitle>
           <ModalCloseButton />
@@ -366,7 +361,7 @@ function Login() {
     );
   } else {
     return (
-      <Modal onDismiss={() => dispatchLocal({ type: "cancel key exchange" })}>
+      <Modal onDismiss={() => navigate(sessionManager())}>
         <ModalHeader>
           <ModalTitle>Pairing rejected</ModalTitle>
           <ModalCloseButton />
