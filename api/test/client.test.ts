@@ -141,7 +141,7 @@ describe("key exchange", () => {
       baseUrl: `http://localhost:${port}`,
       session: "some-session",
       password: "some-password",
-      confirm,
+      approve: confirm,
       onKeyExchange: (clientPubKey) => {
         exchangedClientPubKey = clientPubKey;
       },
@@ -170,7 +170,7 @@ describe("key exchange", () => {
       baseUrl: `http://localhost:${port}`,
       session: "some-session",
       password: "some-password",
-      confirm: () => Promise.resolve(false),
+      approve: () => Promise.resolve(false),
       onKeyExchange: () => {},
       onError: () => {},
     });

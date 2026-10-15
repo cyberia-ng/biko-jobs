@@ -93,22 +93,24 @@ function App() {
   }, [refreshSessionState, refreshSessionsList]);
 
   useEffect(() => {
-    if (localState.currentSession === undefined) {
+    if (localState.loginState.type !== "logged in") {
       return;
     }
-    if (window.localStorage.getItem(`session passwords/${localState.currentSession}`) === null) {
+    if (
+      window.localStorage.getItem(`session passwords/${localState.loginState.session}`) === null
+    ) {
       window.localStorage.setItem(
-        `session passwords/${localState.currentSession.session}`,
-        localState.currentSession.password,
+        `session passwords/${localState.loginState.session}`,
+        localState.loginState.password,
       );
     }
     withLoading(
-      `connecting to session: ${localState.currentSession.session}`,
-      SessionStore.connect(localState.currentSession.session, localState.currentSession.password)
+      `connecting to session: ${localState.loginState.session}`,
+      SessionStore.connect(localState.loginState.session, localState.loginState.password)
         .then(setSessionStore)
         .then(refreshSessionsList),
     );
-  }, [localState.currentSession, withLoading, refreshSessionsList]);
+  }, [localState.loginState, withLoading, refreshSessionsList]);
   useEffect(() => refreshSessionsList(), [refreshSessionsList]);
 
   const context: AppContextT = {
@@ -133,7 +135,7 @@ function App() {
   let screen: ReactNode;
   switch (localState.screen.type) {
     case "session manager":
-      screen = <SessionManager />;
+      screen = <SessionManager key={JSON.stringify(localState.loginState)} />;
       break;
     case "kanban":
       screen = <Kanban />;

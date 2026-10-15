@@ -2,7 +2,10 @@ import { produce } from "immer";
 import { assertNever } from "./assertNever.ts";
 
 export type State = {
-  currentSession: { session: string; password: string } | undefined;
+  loginState:
+    | { type: "logged in"; session: string; password: string }
+    | { type: "key exchange"; session: string; serverPublicKeyB64: string }
+    | { type: "not logged in" };
   screen:
     | {
         type: "session manager" | "kanban" | "new job";
@@ -20,7 +23,8 @@ export type Action =
   | Navigate
   | { type: "view job detail"; uuid: string }
   | { type: "edit job"; uuid: string }
-  | { type: "set current session"; session: { session: string; password: string } | undefined };
+  | { type: "log in"; session: string; password: string }
+  | { type: "cancel key exchange" };
 
 export function reducer(state: State, action: Action): State {
   return produce(state, (state) => {
@@ -37,8 +41,16 @@ export function reducer(state: State, action: Action): State {
         state.screen = { type: "edit job", uuid: action.uuid };
         break;
       }
-      case "set current session": {
-        state.currentSession = action.session;
+      case "log in": {
+        state.loginState = {
+          type: "logged in",
+          session: action.session,
+          password: action.password,
+        };
+        break;
+      }
+      case "cancel key exchange": {
+        state.loginState = { type: "not logged in" };
         break;
       }
       default:
@@ -48,7 +60,7 @@ export function reducer(state: State, action: Action): State {
 }
 
 export const initialState: State = {
-  currentSession: undefined,
+  loginState: { type: "not logged in" },
   screen: { type: "session manager" },
 };
 

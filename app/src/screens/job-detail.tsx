@@ -1,7 +1,16 @@
 import { useContext, useState } from "react";
 import { AppContext } from "../context.ts";
 import { ImageBlob } from "../components/blob-loader.tsx";
-import { Modal } from "../components/modal.tsx";
+import {
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalConfirmButton,
+  ModalDismissButton,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from "../components/modal.tsx";
 import { Tags } from "../components/tag-control.tsx";
 import { TimeAgo } from "../components/time-ago.tsx";
 import {
@@ -36,12 +45,17 @@ export function JobDetail() {
             session?.dispatch(deleteJob({ uuid }));
             dispatchLocal({ type: "navigate", screen: "kanban" });
           }}
-          title="Confirm deletion"
-          body="Really delete this job?"
-          confirmText="Delete"
-          closeText="Cancel"
-          confirmBtnClass="btn-danger"
-        />
+        >
+          <ModalHeader>
+            <ModalTitle>Confirm deletion</ModalTitle>
+            <ModalCloseButton />
+          </ModalHeader>
+          <ModalBody>Really delete this job?</ModalBody>
+          <ModalFooter>
+            <ModalDismissButton>Cancel</ModalDismissButton>
+            <ModalConfirmButton className="btn btn-danger">Delete</ModalConfirmButton>
+          </ModalFooter>
+        </Modal>
       )}
       <div className="m-2 row">
         <div className="col-12 col-md-6 bg-white rounded shadow-sm p-2 fs-5">

@@ -4,6 +4,8 @@ import { unparse } from "papaparse";
 
 export function Export() {
   const { session, localState } = useContext(AppContext);
+  const sessionId =
+    localState.loginState.type === "logged in" ? localState.loginState.session : undefined;
   function generatePseudonymised() {
     const jobs = Array.from(
       session?.state.jobs.values().map(({ uuid, number, description, status, timestamps }) => ({
@@ -32,7 +34,7 @@ export function Export() {
         <ExportRow
           text="Export pseudonymised CSV"
           generate={generatePseudonymised}
-          filename={(localState.currentSession?.session ?? "") + ".pseudonymised.csv"}
+          filename={(sessionId ?? "") + ".pseudonymised.csv"}
         />
       </div>
     </div>
