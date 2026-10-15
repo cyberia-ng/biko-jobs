@@ -12,10 +12,10 @@ export function Export() {
         number,
         description,
         status,
-        creation: timestamps.creation.toZonedDateTimeISO("UTC"),
-        working: timestamps.working?.toZonedDateTimeISO("UTC"),
-        completed: timestamps.completed?.toZonedDateTimeISO("UTC"),
-        cancelled: timestamps.cancelled?.toZonedDateTimeISO("UTC"),
+        creation: timestamps.creation.toString(),
+        working: timestamps.working?.toString(),
+        completed: timestamps.completed?.toString(),
+        cancelled: timestamps.cancelled?.toString(),
       })) ?? [],
     );
     const csvStr = unparse(jobs);
