@@ -98,115 +98,127 @@ function EditJobForm(props: { type: "new job" } | { type: "edit job"; job: Job }
   }
 
   return (
-    <form onSubmit={(e) => e.preventDefault()}>
-      <div className="mb-3">
-        <label htmlFor="customerName" className="form-label">
-          Customer name
-        </label>
-        <input
-          type="text"
-          className="form-control"
-          id="customerName"
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-        />
-      </div>
-      <div className="mb-3">
-        <label htmlFor="customerPhoneNumber" className="form-label">
-          Customer phone number
-        </label>
-        <input
-          type="tel"
-          className="form-control"
-          id="customerPhoneNumber"
-          value={customerPhoneNumber}
-          onChange={(e) => setCustomerPhoneNumber(e.target.value)}
-        />
-      </div>
-      <div className="mb-3">
-        <label htmlFor="description" className="form-label">
-          Job description
-        </label>
-        <textarea
-          id="description"
-          className="form-control"
-          rows={5}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </div>
-      <div className="mb-3 edit-job-tags">
-        <Tags
-          tags={tags}
-          onAddTag={(tag) => dispatchTags([true, tag])}
-          onDeleteTag={(tag) => dispatchTags([false, tag])}
-        />
-      </div>
-      <div className="row mb-3">
-        {photos.map(({ blobId, uploaded }) => (
-          <div className="row mb-3" key={blobId}>
-            <div className="col-8">
-              {uploaded ? (
-                <ImageBlob blobId={blobId} type="image/jpeg" />
-              ) : (
-                <div className="d-flex">
-                  <div className="m-auto">
-                    <Spinner />
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="col-4 d-flex">
-              <button
-                type="button"
-                className="btn btn-danger align-self-center"
-                onClick={() => reducePhotos({ type: "delete", blobId })}
-              >
-                <i className="bi bi-trash" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mb-3">
-        <label htmlFor="photos" className="form-label">
-          Attach photo
-        </label>
-        <input
-          id="photos"
-          multiple
-          type="file"
-          accept="image/jpeg"
-          capture="environment"
-          className="form-control"
-          ref={photoInputRef}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file !== undefined) {
-              const id = crypto.randomUUID();
-              reducePhotos({ type: "start upload", blobId: id });
-              file
-                .bytes()
-                .then((data) => {
-                  e.target.value = "";
-                  return data;
-                })
-                .then((data) => session?.writeBlob(id, data))
-                .then(() => reducePhotos({ type: "complete upload", blobId: id }));
-            }
-          }}
-        />
-      </div>
-      <div className="mb-3">
-        <button type="submit" className="btn btn-primary me-3" onClick={() => submit()}>
-          {props.type === "new job" ? "Submit" : "Save"}
-        </button>
-        {props.type === "new job" && (
-          <button type="button" className="btn btn-danger" onClick={reset}>
-            Reset
+    <>
+      {props.type === "edit job" && (
+        <div className="mb-2">
+          <button className="btn btn-primary" onClick={() => navigate(jobDetail(props.job.uuid))}>
+            <i className="bi bi-caret-left-fill" />
+            Back
           </button>
-        )}
+        </div>
+      )}
+      <div>
+        <form onSubmit={(e) => e.preventDefault()}>
+          <div className="mb-3">
+            <label htmlFor="customerName" className="form-label">
+              Customer name
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              id="customerName"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+            />
+          </div>
+          <div className="mb-3">
+            <label htmlFor="customerPhoneNumber" className="form-label">
+              Customer phone number
+            </label>
+            <input
+              type="tel"
+              className="form-control"
+              id="customerPhoneNumber"
+              value={customerPhoneNumber}
+              onChange={(e) => setCustomerPhoneNumber(e.target.value)}
+            />
+          </div>
+          <div className="mb-3">
+            <label htmlFor="description" className="form-label">
+              Job description
+            </label>
+            <textarea
+              id="description"
+              className="form-control"
+              rows={5}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          <div className="mb-3 edit-job-tags">
+            <Tags
+              tags={tags}
+              onAddTag={(tag) => dispatchTags([true, tag])}
+              onDeleteTag={(tag) => dispatchTags([false, tag])}
+            />
+          </div>
+          <div className="row mb-3">
+            {photos.map(({ blobId, uploaded }) => (
+              <div className="row mb-3" key={blobId}>
+                <div className="col-8">
+                  {uploaded ? (
+                    <ImageBlob blobId={blobId} type="image/jpeg" />
+                  ) : (
+                    <div className="d-flex">
+                      <div className="m-auto">
+                        <Spinner />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="col-4 d-flex">
+                  <button
+                    type="button"
+                    className="btn btn-danger align-self-center"
+                    onClick={() => reducePhotos({ type: "delete", blobId })}
+                  >
+                    <i className="bi bi-trash" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mb-3">
+            <label htmlFor="photos" className="form-label">
+              Attach photo
+            </label>
+            <input
+              id="photos"
+              multiple
+              type="file"
+              accept="image/jpeg"
+              capture="environment"
+              className="form-control"
+              ref={photoInputRef}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file !== undefined) {
+                  const id = crypto.randomUUID();
+                  reducePhotos({ type: "start upload", blobId: id });
+                  file
+                    .bytes()
+                    .then((data) => {
+                      e.target.value = "";
+                      return data;
+                    })
+                    .then((data) => session?.writeBlob(id, data))
+                    .then(() => reducePhotos({ type: "complete upload", blobId: id }));
+                }
+              }}
+            />
+          </div>
+          <div className="mb-3">
+            <button type="submit" className="btn btn-primary me-3" onClick={() => submit()}>
+              {props.type === "new job" ? "Submit" : "Save"}
+            </button>
+            {props.type === "new job" && (
+              <button type="button" className="btn btn-danger" onClick={reset}>
+                Reset
+              </button>
+            )}
+          </div>
+        </form>
       </div>
-    </form>
+    </>
   );
 }
