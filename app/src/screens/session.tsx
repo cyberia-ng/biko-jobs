@@ -271,7 +271,7 @@ function ShareSession({ session, password }: { session: string; password: string
                 Check that this image matches the one on the device to be paired:
               </div>
               <Jdenticon
-                value={pairingApprovalData.clientPublicKey.toHex()}
+                value={pairingApprovalData.clientPublicKey}
                 width={150}
                 height={150}
                 className="d-block mx-auto p-2 border rounded"
@@ -351,7 +351,7 @@ function Login() {
               "loading"
             ) : (
               <Jdenticon
-                value={sessionSharingReceiver.publicKey.toHex()}
+                value={sessionSharingReceiver.publicKey}
                 width={150}
                 height={150}
                 className="d-block mx-auto p-2 rounded border"
@@ -388,16 +388,17 @@ function Jdenticon({
   width,
   height,
 }: {
-  value: string;
+  value: Uint8Array<ArrayBuffer>;
   className?: string;
   width?: number;
   height?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
-    if (canvasRef.current !== null) {
-      updateCanvas(canvasRef.current, value);
-    }
+    crypto.subtle
+      .digest("SHA-256", value)
+      .then((hash) => new Uint8Array(hash).toHex())
+      .then((hashStr) => canvasRef.current !== null && updateCanvas(canvasRef.current, hashStr));
   }, [canvasRef, value]);
   return <canvas ref={canvasRef} className={className} width={width} height={height} />;
 }
