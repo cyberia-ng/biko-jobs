@@ -3,8 +3,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { AppContext } from "../context.ts";
 import { serialize } from "../local-state.ts";
 import {
-  receiveSharedSession,
   SessionSharingChannel,
+  SessionSharingReceiver,
 } from "@biko-jobs/api-client/session-sharing.ts";
 import {
   Modal,
@@ -303,8 +303,8 @@ function ShareSession({ session, password }: { session: string; password: string
 
 function Login() {
   const { localState, dispatchLocal } = useContext(AppContext);
-  const [clientPublicKey, setClientPublicKey] = useReducer(
-    (pkState: Uint8Array<ArrayBuffer> | undefined, pk: Uint8Array<ArrayBuffer>) => pkState ?? pk,
+  const [sessionSharingReceiver, setSessionSharingReceiver] = useReducer(
+    (state: SessionSharingReceiver | undefined, action: SessionSharingReceiver) => state ?? action,
     undefined,
   );
   const [rejected, setRejected] = useState(false);
@@ -312,20 +312,28 @@ function Login() {
     if (localState.loginState.type === "key exchange") {
       const { session } = localState.loginState;
       const serverPublicKey = Uint8Array.fromBase64(localState.loginState.serverPublicKeyB64);
-      receiveSharedSession("/api", localState.loginState.session, serverPublicKey, (publicKey) =>
-        setClientPublicKey(publicKey),
-      ).then((result) => {
-        switch (result.type) {
-          case "accepted":
-            dispatchLocal({ type: "log in", session, password: result.password });
-            break;
-          case "rejected":
-            setRejected(true);
-        }
-      });
+      SessionSharingReceiver.open({
+        baseUrl: "api",
+        session: localState.loginState.session,
+        serverPublicKey,
+        onWebSocketError: console.error.bind(console),
+      })
+        .then((sessionSharingReceiver) => {
+          setSessionSharingReceiver(sessionSharingReceiver);
+          return sessionSharingReceiver.receivePassword();
+        })
+        .then((result) => {
+          switch (result.type) {
+            case "accepted":
+              dispatchLocal({ type: "log in", session, password: result.password });
+              break;
+            case "rejected":
+              setRejected(true);
+          }
+        });
     }
   }, [localState.loginState, dispatchLocal]);
-  // TODO cleanup websocket on cancel
+  useEffect(() => () => sessionSharingReceiver?.close(), [sessionSharingReceiver]);
   if (localState.loginState.type !== "key exchange") {
     return null;
   }
@@ -339,11 +347,11 @@ function Login() {
         <ModalBody>
           <div className="mb-2 fs-5">The image on the approving device should match this one:</div>
           <div>
-            {clientPublicKey === undefined ? (
+            {sessionSharingReceiver === undefined ? (
               "loading"
             ) : (
               <Jdenticon
-                value={clientPublicKey.toHex()}
+                value={sessionSharingReceiver.publicKey.toHex()}
                 width={150}
                 height={150}
                 className="d-block mx-auto p-2 rounded border"

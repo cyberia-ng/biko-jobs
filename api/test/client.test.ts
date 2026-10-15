@@ -6,8 +6,8 @@ import { ApiClient, listSessions } from "@biko-jobs/api-client";
 import { expect } from "chai";
 import { mpEncoder, mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
 import {
-  receiveSharedSession,
   SessionSharingChannel,
+  SessionSharingReceiver,
   type SessionSharingError,
 } from "@biko-jobs/api-client/session-sharing.ts";
 
@@ -115,6 +115,7 @@ describe("key exchange", () => {
   let listener: Server;
   let port: number;
   let sessionSharingChannel: SessionSharingChannel | undefined = undefined;
+  let sessionSharingReceiver: SessionSharingReceiver | undefined = undefined;
 
   beforeEach((done) => {
     const app = createApp();
@@ -124,6 +125,7 @@ describe("key exchange", () => {
 
   afterEach((done) => {
     sessionSharingChannel?.close();
+    sessionSharingReceiver?.close();
     listener.close(() => {
       done();
     });
@@ -131,10 +133,9 @@ describe("key exchange", () => {
   });
 
   it("works", async () => {
-    let generatedClientPubKey: Uint8Array | undefined = undefined;
     const confirm = async (receivedClientPubKey: Uint8Array) =>
-      generatedClientPubKey !== undefined &&
-      Buffer.compare(generatedClientPubKey, receivedClientPubKey) === 0;
+      sessionSharingReceiver !== undefined &&
+      Buffer.compare(sessionSharingReceiver.publicKey, receivedClientPubKey) === 0;
     let exchangedClientPubKey: Uint8Array | undefined = undefined;
     let sharingError: SessionSharingError | undefined = undefined;
     sessionSharingChannel = await SessionSharingChannel.open({
@@ -149,16 +150,20 @@ describe("key exchange", () => {
         sharingError = error;
       },
     });
-    const receiveResult = await receiveSharedSession(
-      `http://localhost:${port}`,
-      "some-session",
-      sessionSharingChannel.publicKey,
-      (publicKey) => {
-        generatedClientPubKey = publicKey;
+
+    let receivingError: Event | undefined = undefined;
+    sessionSharingReceiver = await SessionSharingReceiver.open({
+      baseUrl: `http://localhost:${port}`,
+      session: "some-session",
+      serverPublicKey: sessionSharingChannel.publicKey,
+      onWebSocketError: (event) => {
+        receivingError = event;
       },
-    );
+    });
+    const receiveResult = await sessionSharingReceiver.receivePassword();
     expect(sharingError).to.equal(undefined);
-    expect(exchangedClientPubKey).to.deep.equal(generatedClientPubKey);
+    expect(receivingError).to.equal(undefined);
+    expect(exchangedClientPubKey).to.deep.equal(sessionSharingReceiver.publicKey);
     expect(receiveResult.type).to.not.equal("rejected");
     expect(
       (receiveResult as Extract<typeof receiveResult, { type: "accepted" }>).password,
@@ -174,12 +179,13 @@ describe("key exchange", () => {
       onKeyExchange: () => {},
       onError: () => {},
     });
-    const receiveResult = await receiveSharedSession(
-      `http://localhost:${port}`,
-      "some-session",
-      sessionSharingChannel.publicKey,
-      () => {},
-    );
+    sessionSharingReceiver = await SessionSharingReceiver.open({
+      baseUrl: `http://localhost:${port}`,
+      session: "some-session",
+      serverPublicKey: sessionSharingChannel.publicKey,
+      onWebSocketError: () => {},
+    });
+    const receiveResult = await sessionSharingReceiver.receivePassword();
     expect(receiveResult.type).to.equal("rejected");
   });
 });

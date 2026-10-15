@@ -111,64 +111,98 @@ export class SessionSharingChannel {
 export type ReceiveSharedSessionResult =
   | { type: "accepted"; password: string }
   | { type: "rejected" };
-export async function receiveSharedSession(
-  baseUrl: string,
-  session: string,
-  serverPublicKey: Uint8Array<ArrayBuffer>,
-  onGenerateKey: (publicKey: Uint8Array<ArrayBuffer>) => void,
-): Promise<ReceiveSharedSessionResult> {
-  const { publicKey, privateKey } = await crypto.subtle.generateKey("X25519", false, ["deriveKey"]);
-  const publicKeyBytes = new Uint8Array(await crypto.subtle.exportKey("raw", publicKey));
-  onGenerateKey(publicKeyBytes);
-  const serverPublicKey_ = await crypto.subtle.importKey(
-    "raw",
-    serverPublicKey,
-    "X25519",
-    true,
-    [],
-  );
-  const sharedKey = await crypto.subtle.deriveKey(
-    { name: "X25519", public: serverPublicKey_ },
-    privateKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["decrypt"],
-  );
-  const ws = new WebSocket(`${baseUrl}/channel/share-${session}`);
-  async function handleMessage(
+
+export type SessionSharingReceiverOpts = {
+  baseUrl: string;
+  session: string;
+  serverPublicKey: Uint8Array<ArrayBuffer>;
+  onWebSocketError: (e: Event) => void;
+};
+export class SessionSharingReceiver {
+  private opts: SessionSharingReceiverOpts;
+  private ws: WebSocket;
+  publicKey: Uint8Array<ArrayBuffer>;
+  private sharedKey: CryptoKey;
+
+  private constructor(
+    opts: SessionSharingReceiverOpts,
+    ws: WebSocket,
+    publicKey: Uint8Array<ArrayBuffer>,
+    sharedKey: CryptoKey,
+  ) {
+    this.opts = opts;
+    this.ws = ws;
+    this.publicKey = publicKey;
+    this.sharedKey = sharedKey;
+  }
+
+  static async open(opts: SessionSharingReceiverOpts) {
+    const { publicKey, privateKey } = await crypto.subtle.generateKey("X25519", false, [
+      "deriveKey",
+    ]);
+    const publicKeyBytes = new Uint8Array(await crypto.subtle.exportKey("raw", publicKey));
+    const serverPublicKey = await crypto.subtle.importKey(
+      "raw",
+      opts.serverPublicKey,
+      "X25519",
+      true,
+      [],
+    );
+    const sharedKey = await crypto.subtle.deriveKey(
+      { name: "X25519", public: serverPublicKey },
+      privateKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"],
+    );
+    const ws = new WebSocket(`${opts.baseUrl}/channel/share-${opts.session}`);
+    ws.addEventListener("error", opts.onWebSocketError);
+    await new Promise<void>((res) => ws.addEventListener("open", () => res()));
+    return new SessionSharingReceiver(opts, ws, publicKeyBytes, sharedKey);
+  }
+
+  private async handleMessage(
     event: MessageEvent<Blob>,
   ): Promise<ReceiveSharedSessionResult | { type: "ignore" }> {
     const data = await event.data.bytes();
     const message = mpDecoder.decode(data) as Message;
     if (message.type === "client/pubkey") return { type: "ignore" };
-    if (message.clientPubKey.toHex() !== publicKeyBytes.toHex()) return { type: "ignore" };
+    if (message.clientPubKey.toHex() !== this.publicKey.toHex()) return { type: "ignore" };
     if (message.type === "server/rejected") return { type: "rejected" };
     const decrypted = new Uint8Array(
       await crypto.subtle.decrypt(
         { name: "AES-GCM", iv: message.iv },
-        sharedKey,
+        this.sharedKey,
         message.encryptedPassword,
       ),
     );
     const password = new TextDecoder().decode(decrypted);
     return { type: "accepted", password };
   }
-  return new Promise<ReceiveSharedSessionResult>((resolve, reject) => {
-    ws.addEventListener("message", (event) =>
-      handleMessage(event)
-        .then((result) => {
-          if (result.type !== "ignore") {
-            resolve(result);
-          }
-        })
-        .catch((e) => reject(e)),
-    );
-    ws.addEventListener("open", () => {
-      const message: ClientMessage = {
-        type: "client/pubkey",
-        publicKey: publicKeyBytes,
-      };
-      ws.send(mpEncoder.encode(message));
-    });
-  }).finally(() => ws.close());
+
+  async receivePassword(): Promise<ReceiveSharedSessionResult> {
+    return new Promise<ReceiveSharedSessionResult>((resolve, reject) => {
+      const handler = (event: MessageEvent<Blob>) =>
+        this.handleMessage(event)
+          .then((result) => {
+            if (result.type !== "ignore") {
+              this.ws.removeEventListener("message", handler);
+              resolve(result);
+            }
+          })
+          .catch((e) => {
+            this.ws.removeEventListener("message", handler);
+            reject(e);
+          });
+      this.ws.addEventListener("message", handler);
+      const message: ClientMessage = { type: "client/pubkey", publicKey: this.publicKey };
+      this.ws.send(mpEncoder.encode(message));
+    }).finally(() => this.close());
+  }
+
+  close() {
+    if (this.ws.readyState === WebSocket.CLOSED) return;
+    this.ws.removeEventListener("error", this.opts.onWebSocketError);
+    this.ws.close();
+  }
 }
