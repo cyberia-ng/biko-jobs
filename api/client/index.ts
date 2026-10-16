@@ -164,7 +164,9 @@ export class ApiClient {
   }
 }
 
-export async function listSessions(baseUrl: string): Promise<string[]> {
+export async function listSessions(
+  baseUrl: string,
+): Promise<Array<{ session: string; finalized: boolean }>> {
   const res = await fetch(`${baseUrl}/session`);
   raiseForStatus(res);
   return res.json();

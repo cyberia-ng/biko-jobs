@@ -1,7 +1,18 @@
+import { Encoder } from "@msgpack/msgpack";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
 import { inspect } from "node:util";
+import * as z from "zod";
+
+const encoder = new Encoder();
+
+export const FinalizationData = z.object({
+  events: z.array(z.instanceof(Uint8Array)),
+  existingEventsHash: z.instanceof(Uint8Array),
+  blobsToKeep: z.set(z.string()),
+});
+export type FinalizationData = z.infer<typeof FinalizationData>;
 
 export class Sessions {
   private db: DatabaseSync;
@@ -12,6 +23,9 @@ export class Sessions {
     addBlob: StatementSync;
     getBlob: StatementSync;
     listSessions: StatementSync;
+    finalizeSession: StatementSync;
+    clearEvents: StatementSync;
+    clearBlobsExcept: StatementSync;
   };
 
   constructor(sqlitePath: string) {
@@ -20,22 +34,34 @@ export class Sessions {
     migrateDb(this.db);
     this.statements = {
       getOrInsertSession: this.db.prepare(
-        "INSERT INTO sessions (name) VALUES (?) ON CONFLICT (name) DO UPDATE SET name = name RETURNING id;",
+        "INSERT INTO sessions (name) VALUES (?) ON CONFLICT (name) DO UPDATE SET name = name RETURNING id, finalized;",
       ),
       addEvent: this.db.prepare("INSERT INTO events (session, data) VALUES (?, ?);"),
       readEvents: this.db.prepare(
-        "SELECT (data) FROM events LEFT JOIN sessions ON events.session = sessions.id WHERE sessions.name = ? ORDER BY events.id;",
+        "SELECT data FROM events LEFT JOIN sessions ON events.session = sessions.id WHERE sessions.name = ? ORDER BY events.id;",
       ),
       addBlob: this.db.prepare("INSERT INTO blobs (session, name, data) VALUES (?, ?, ?);"),
       getBlob: this.db.prepare(
-        "SELECT (data) FROM blobs LEFT JOIN sessions ON blobs.session = sessions.id WHERE sessions.name = ? AND blobs.name = ?;",
+        "SELECT data FROM blobs LEFT JOIN sessions ON blobs.session = sessions.id WHERE sessions.name = ? AND blobs.name = ?;",
       ),
-      listSessions: this.db.prepare("SELECT (name) FROM sessions ORDER BY id;"),
+      listSessions: this.db.prepare("SELECT name, finalized FROM sessions ORDER BY id;"),
+      finalizeSession: this.db.prepare(
+        "INSERT INTO sessions (name, finalized) VALUES (?, TRUE) ON CONFLICT (name) DO UPDATE SET finalized = TRUE",
+      ),
+      clearEvents: this.db.prepare(
+        "DELETE FROM events WHERE events.session IN (SELECT id FROM sessions WHERE sessions.name = ?);",
+      ),
+      clearBlobsExcept: this.db.prepare(
+        "DELETE FROM blobs WHERE blobs.session IN (SELECT id FROM sessions WHERE sessions.name = ?) AND blobs.name NOT IN (SELECT name FROM json_each(?));",
+      ),
     };
   }
 
   addEvent(session: string, event: Uint8Array) {
-    const id = this.statements.getOrInsertSession.get(session)!.id as number;
+    const row = this.statements.getOrInsertSession.get(session)!;
+    const id = row.id as number;
+    const finalized = Boolean(row.finalized as number);
+    if (finalized) throw "session finalized";
     this.statements.addEvent.run(id, event);
   }
 
@@ -44,14 +70,18 @@ export class Sessions {
     return rows.map((row) => row.data as Uint8Array);
   }
 
-  addBlob(session: string, blob: string, data: Uint8Array): boolean {
-    const id = this.statements.getOrInsertSession.get(session)!.id as number;
+  addBlob(session: string, blob: string, data: Uint8Array) {
+    const row = this.statements.getOrInsertSession.get(session)!;
+    const id = row.id as number;
+    const finalized = Boolean(row.finalized as number);
+    if (finalized) {
+      throw "session finalized";
+    }
     try {
       this.statements.addBlob.run(id, blob, data);
-      return true;
     } catch (e) {
       if ((e as any).errstr === "constraint failed") {
-        return false;
+        throw "conflict";
       }
       throw e;
     }
@@ -61,8 +91,39 @@ export class Sessions {
     return this.statements.getBlob.get(session, blob)?.data as Uint8Array | undefined;
   }
 
-  sessionNames(): string[] {
-    return this.statements.listSessions.all().map((row) => row.name as string);
+  sessions(): { session: string; finalized: boolean }[] {
+    return this.statements.listSessions
+      .all()
+      .map((row) => ({ session: row.name as string, finalized: Boolean(row.finalized as number) }));
+  }
+
+  isFinalized(session: string): boolean {
+    const { finalized } = this.statements.getOrInsertSession.get(session)!;
+    return Boolean(finalized);
+  }
+
+  async finalize(session: string, data: FinalizationData) {
+    if (this.isFinalized(session)) throw "session finalized";
+    const events = this.events(session);
+    const serverExistingEventsHash = new Uint8Array(
+      await crypto.subtle.digest("SHA-256", encoder.encode(events)),
+    );
+    if (data.existingEventsHash.toHex() !== serverExistingEventsHash.toHex()) {
+      throw "existing events hash mismatch";
+    }
+
+    this.db.exec("BEGIN TRANSACTION;");
+    try {
+      this.statements.clearEvents.run(session);
+      this.statements.clearBlobsExcept.run(session, JSON.stringify(Array.from(data.blobsToKeep)));
+      for (const event of data.events) {
+        this.addEvent(session, event);
+      }
+      this.statements.finalizeSession.run(session);
+    } catch (e) {
+      this.db.exec("ROLLBACK;");
+      throw e;
+    }
   }
 }
 

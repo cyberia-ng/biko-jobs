@@ -93,7 +93,11 @@ function App() {
 
   const [sessionsList, setSessionsList] = useState<string[]>([]);
   const refreshSessionsList = useCallback(
-    () => withLoading("refreshing session list", listSessions("/api").then(setSessionsList)),
+    () =>
+      withLoading(
+        "refreshing session list",
+        listSessions("/api").then((s) => setSessionsList(s.map(({ session }) => session))),
+      ),
     [withLoading],
   );
   const refresh = useCallback(() => {

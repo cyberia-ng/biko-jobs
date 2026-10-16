@@ -1,6 +1,7 @@
 import { Encoder } from "@msgpack/msgpack";
-import type { Sessions } from "./sessions.ts";
+import { FinalizationData, type Sessions } from "./sessions.ts";
 import express from "express";
+import { mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
 
 export function addRoutes(
   app: ReturnType<typeof express>,
@@ -27,7 +28,16 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    sessions.addEvent(req.params.session, req.body);
+
+    try {
+      sessions.addEvent(req.params.session, req.body);
+    } catch (e) {
+      if (e === "session finalized") {
+        res.header("Allow", "GET, HEAD");
+        res.status(405).send();
+        return;
+      } else throw e;
+    }
     onEvent(req.params.session, req.body);
     res.status(200).send();
   });
@@ -40,12 +50,21 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    if (sessions.addBlob(req.params.session, req.params.blob, req.body)) {
-      res.status(201);
-    } else {
-      res.status(409);
+    try {
+      sessions.addBlob(req.params.session, req.params.blob, req.body);
+    } catch (e) {
+      switch (e) {
+        case "conflict":
+          res.status(409).send();
+          return;
+        case "session finalized":
+          res.status(405).header("Allow", "GET, HEAD").send();
+          return;
+        default:
+          throw e;
+      }
     }
-    res.send();
+    res.status(201).send();
   });
 
   app.get("/session/:session/blob/:blob", (req, res) => {
@@ -61,6 +80,40 @@ export function addRoutes(
 
   app.get("/session", (_req, res) => {
     res.status(200);
-    res.json(sessions.sessionNames());
+    res.json(sessions.sessions());
+  });
+
+  app.post("/session/:session/finalize", express.raw(), (req, res, next) => {
+    if (req.body === undefined) {
+      res.status(400).send();
+      return;
+    }
+    if (!(req.body instanceof Buffer)) {
+      throw new Error("unreachable: expected Buffer");
+    }
+    let finalizationData: FinalizationData;
+    try {
+      const decoded = mpDecoder.decode(req.body);
+      finalizationData = FinalizationData.parse(decoded);
+    } catch (_e) {
+      res.status(400).send();
+      return;
+    }
+    sessions
+      .finalize(req.params.session, finalizationData)
+      .then(() => res.status(200).send())
+      .catch((e) => {
+        switch (e) {
+          case "session finalized":
+            res.status(409).send();
+            break;
+          case "existing events hash mismatch":
+            res.status(422).send();
+            break;
+          default:
+            throw e;
+        }
+      })
+      .catch(next);
   });
 }

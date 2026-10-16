@@ -106,7 +106,10 @@ describe("api client", () => {
       await clientB.postEvent("hello");
       clientB.closeWebSocket();
       const receivedSessions = await listSessions(`http://localhost:${port}`);
-      expect(receivedSessions).to.deep.equal(["some session", "some other session"]);
+      expect(receivedSessions).to.deep.equal([
+        { session: "some session", finalized: false },
+        { session: "some other session", finalized: false },
+      ]);
     });
   });
 });
