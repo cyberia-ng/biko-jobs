@@ -203,7 +203,7 @@ describe("api", () => {
     });
   });
 
-  describe("re-using a database works", () => {
+  test("re-using a database works", () => {
     using tempDir = mkdtempDisposableSync("biko-jobs-db-test");
     new Sessions(join(tempDir.path, "test.db"));
     new Sessions(join(tempDir.path, "test.db"));

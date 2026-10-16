@@ -80,7 +80,7 @@ function migrateDb(db: DatabaseSync) {
     })
     .toSorted(({ num: numA }, { num: numB }) => numA - numB);
   const getPragmaStmt = db.prepare("PRAGMA user_version;");
-  const version = getPragmaStmt.get()![0] as number;
+  const version = (getPragmaStmt.get()!.user_version as number | undefined) ?? 0;
   for (const migration of migrations) {
     if (migration.num <= version) continue;
     db.exec("BEGIN TRANSACTION;");
