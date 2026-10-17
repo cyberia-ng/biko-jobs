@@ -125,6 +125,13 @@ describe("api client", () => {
           }
         });
     }
+
+    test("succeeds when events match", async () => {
+      const event = "some event";
+      await client.postEvent(event);
+      await client.finalize([event], [], []);
+    });
+
     test("makes session read-only", async () => {
       await client.finalize([], [], []);
       await expectClientError(client.postEvent([]), "session finalized");

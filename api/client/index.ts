@@ -1,5 +1,6 @@
 import type { FinalizationData } from "@biko-jobs/api/sessions.ts";
 import { mpEncoder, mpDecoder } from "./messagepack.ts";
+import zip from "lodash/zip.js";
 
 export type ClientErrorInfo =
   | { type: "http error"; status: number }
@@ -175,6 +176,17 @@ export class ApiClient {
     );
   }
 
+  private async initializationVectors(): Promise<Uint8Array<ArrayBuffer>[]> {
+    const res = await fetch(`${this.baseUrl}/session/${this.encodedSession}/events`);
+    this.raiseForStatus(res);
+    const body = await res.bytes();
+    const rawEvents = mpDecoder.decode(body) as Uint8Array<ArrayBuffer>[];
+    const ivs = rawEvents
+      .map((data) => mpDecoder.decode(data) as [Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>])
+      .map(([iv]) => iv);
+    return ivs;
+  }
+
   async events(): Promise<unknown[]> {
     const res = await fetch(`${this.baseUrl}/session/${this.encodedSession}/events`);
     this.raiseForStatus(res);
@@ -228,8 +240,16 @@ export class ApiClient {
   }
 
   async finalize(existingEvents: unknown[], replacementEvents: unknown[], blobsToKeep: string[]) {
+    const existingIVs = await this.initializationVectors();
+    const existingEventsEncrypted = await Promise.all(
+      zip(existingIVs, existingEvents).map(async ([iv, event]) => {
+        const encoded = mpEncoder.encode(event);
+        const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, this.key, encoded);
+        return mpEncoder.encode([iv, new Uint8Array(encrypted)]);
+      }),
+    );
     const existingEventsHash = new Uint8Array(
-      await crypto.subtle.digest("SHA-256", mpEncoder.encode(existingEvents)),
+      await crypto.subtle.digest("SHA-256", mpEncoder.encode(existingEventsEncrypted)),
     );
     const events = replacementEvents.map((e) => mpEncoder.encode(e));
     const body: FinalizationData = {
