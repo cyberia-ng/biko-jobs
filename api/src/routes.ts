@@ -20,7 +20,7 @@ export function addRoutes(
     res.send(response);
   });
 
-  app.post("/session/:session/events", express.raw(), (req, res) => {
+  app.post("/session/:session/events", express.raw(), (req, res, next) => {
     if (req.body === undefined) {
       res.status(400).send();
       return;
@@ -29,20 +29,23 @@ export function addRoutes(
       throw new Error("unreachable: expected Buffer");
     }
 
-    try {
-      sessions.addEvent(req.params.session, req.body);
-    } catch (e) {
-      if (e === "session finalized") {
-        res.header("Allow", "GET, HEAD");
-        res.status(405).send();
-        return;
-      } else throw e;
-    }
-    onEvent(req.params.session, req.body);
-    res.status(200).send();
+    sessions
+      .addEvent(req.params.session, req.body)
+      .then(() => {
+        onEvent(req.params.session, req.body);
+        res.status(200).send();
+      })
+      .catch((e) => {
+        if (e === "session finalized") {
+          res.header("Allow", "GET, HEAD");
+          res.status(405).send();
+          return;
+        } else throw e;
+      })
+      .catch(next);
   });
 
-  app.put("/session/:session/blob/:blob", express.raw({ limit: "10MB" }), (req, res) => {
+  app.put("/session/:session/blob/:blob", express.raw({ limit: "10MB" }), (req, res, next) => {
     if (req.body === undefined) {
       res.status(400).send();
       return;
@@ -50,21 +53,22 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    try {
-      sessions.addBlob(req.params.session, req.params.blob, req.body);
-    } catch (e) {
-      switch (e) {
-        case "conflict":
-          res.status(409).send();
-          return;
-        case "session finalized":
-          res.status(405).header("Allow", "GET, HEAD").send();
-          return;
-        default:
-          throw e;
-      }
-    }
-    res.status(201).send();
+    sessions
+      .addBlob(req.params.session, req.params.blob, req.body)
+      .then(() => res.status(201).send())
+      .catch((e) => {
+        switch (e) {
+          case "conflict":
+            res.status(409).send();
+            return;
+          case "session finalized":
+            res.status(405).header("Allow", "GET, HEAD").send();
+            return;
+          default:
+            throw e;
+        }
+      })
+      .catch(next);
   });
 
   app.get("/session/:session/blob/:blob", (req, res) => {
