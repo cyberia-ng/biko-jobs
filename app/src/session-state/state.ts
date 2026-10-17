@@ -1,7 +1,10 @@
-import type { allStatuses, Image } from "./action.ts";
+import type { Action, allStatuses, Image } from "./action.ts";
 
 export type State = {
-  processedActionIDs: Set<string>;
+  processedActions: {
+    ids: Set<string>;
+    list: Action[];
+  };
   jobs: Map<string, Job>;
   nextJobNumber: number;
 };
@@ -25,7 +28,10 @@ export type Job = {
 };
 
 export const initialState: State = {
-  processedActionIDs: new Set(),
+  processedActions: {
+    ids: new Set(),
+    list: [],
+  },
   jobs: new Map(),
   nextJobNumber: 1,
 };

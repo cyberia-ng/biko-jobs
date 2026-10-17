@@ -64,12 +64,15 @@ export function ShareSession({ session, password }: { session: string; password:
           <Modal
             onDismiss={() => pairingApprovalData.approve(false)}
             onConfirm={() => pairingApprovalData.approve(true)}
+            className="fs-5"
           >
             <ModalHeader>
-              <ModalTitle>Pairing request</ModalTitle>
+              <ModalTitle>
+                <h4>Pairing request</h4>
+              </ModalTitle>
             </ModalHeader>
             <ModalBody>
-              <div className="fs-5 mb-2">
+              <div className="mb-2">
                 Check that this image matches the one on the device to be paired:
               </div>
               <Jdenticon
@@ -80,8 +83,8 @@ export function ShareSession({ session, password }: { session: string; password:
               />
             </ModalBody>
             <ModalFooter>
-              <ModalConfirmButton className="btn btn-success fs-5">Approve</ModalConfirmButton>
-              <ModalDismissButton className="btn btn-secondary fs-5">Cancel</ModalDismissButton>
+              <ModalConfirmButton className="btn btn-success">Approve</ModalConfirmButton>
+              <ModalDismissButton className="btn btn-secondary ">Cancel</ModalDismissButton>
             </ModalFooter>
           </Modal>
         )}

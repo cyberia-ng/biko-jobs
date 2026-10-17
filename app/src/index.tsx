@@ -135,6 +135,7 @@ function App() {
             getBlob: sessionStore.getBlob.bind(sessionStore),
             writeBlob: (id, data) =>
               withLoading(`writing blob: ${id}`, sessionStore.writeBlob(id, data)),
+            finalize: sessionStore.finalize.bind(sessionStore),
           },
     loading: loadingIds.size !== 0,
     navigationState,

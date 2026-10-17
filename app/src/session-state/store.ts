@@ -61,6 +61,10 @@ export class Store {
     return this.client?.getBlob(id);
   }
 
+  async finalize(replacementActions: Action[]) {
+    return this.client?.finalize(this.state.processedActions.list, replacementActions, []);
+  }
+
   private callSubscribers() {
     for (const subscriber of this.subscribers) {
       subscriber();

@@ -6,10 +6,11 @@ import { assertNever } from "../assertNever.ts";
 
 export function reducer(state: State, action: Action): State {
   return produce(state, (state) => {
-    if (state.processedActionIDs.has(action.uuid)) {
+    if (state.processedActions.ids.has(action.uuid)) {
       return;
     }
-    state.processedActionIDs.add(action.uuid);
+    state.processedActions.ids.add(action.uuid);
+    state.processedActions.list.push(action);
     const { event } = action;
     switch (event.type) {
       case "upsert job":

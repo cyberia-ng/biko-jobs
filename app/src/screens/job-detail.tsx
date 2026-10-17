@@ -37,7 +37,7 @@ export function JobDetail() {
     return <></>;
   }
   return (
-    <>
+    <div className="fs-4">
       {modalState === "delete job" && (
         <Modal
           onDismiss={() => setModalState(null)}
@@ -48,7 +48,9 @@ export function JobDetail() {
           }}
         >
           <ModalHeader>
-            <ModalTitle>Confirm deletion</ModalTitle>
+            <ModalTitle>
+              <h4>Confirm deletion</h4>
+            </ModalTitle>
             <ModalCloseButton />
           </ModalHeader>
           <ModalBody>Really delete this job?</ModalBody>
@@ -59,26 +61,23 @@ export function JobDetail() {
         </Modal>
       )}
       <div className="m-2 row">
-        <div className="col-12 col-md-6 bg-white rounded shadow-sm p-2 fs-5">
+        <div className="col-12 col-md-6 bg-white rounded shadow-sm p-2">
           <div className="mb-4">
             <div className="d-flex">
               <div className="flex-grow-1">
                 <button
-                  className="btn btn-primary fs-4 me-2"
+                  className="btn btn-primary me-2"
                   onClick={() => navigate(basicScreen("kanban"))}
                 >
                   <i className="bi bi-caret-left-fill" />
                   Back
                 </button>
               </div>
-              <button
-                className="btn btn-secondary me-2 fs-4"
-                onClick={() => navigate(editJob(uuid))}
-              >
+              <button className="btn btn-secondary me-2" onClick={() => navigate(editJob(uuid))}>
                 <i className="bi bi-pencil me-2" />
                 Edit job
               </button>
-              <button className="btn btn-danger fs-4" onClick={() => setModalState("delete job")}>
+              <button className="btn btn-danger" onClick={() => setModalState("delete job")}>
                 <i className="bi bi-trash me-1" />
                 Delete job
               </button>
@@ -106,7 +105,6 @@ export function JobDetail() {
               tags={job.tags}
               onAddTag={(tag) => session?.dispatch(addJobTag({ uuid: job.uuid, tag }))}
               onDeleteTag={(tag) => session?.dispatch(removeJobTag({ uuid: job.uuid, tag }))}
-              dropdownClassAll="fs-4"
             />
           </div>
           <hr />
@@ -120,7 +118,7 @@ export function JobDetail() {
           ))}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

@@ -3,7 +3,11 @@ import { createContext, useContext, useRef, type PropsWithChildren } from "react
 type ModalProps = { onConfirm?: () => void; onDismiss?: () => void };
 const ModalContext = createContext<ModalProps>(null as any);
 
-export function Modal({ children, ...props }: PropsWithChildren<ModalProps>) {
+export function Modal({
+  children,
+  className,
+  ...props
+}: PropsWithChildren<ModalProps & { className?: string }>) {
   const modalRef = useRef<HTMLDivElement>(null);
   function handleClick(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
     if (e.target === modalRef.current) {
@@ -12,10 +16,12 @@ export function Modal({ children, ...props }: PropsWithChildren<ModalProps>) {
   }
   return (
     <ModalContext value={props}>
-      <div className="modal-backdrop show"></div>
-      <div className="modal show d-block" tabIndex={-1} onClick={handleClick} ref={modalRef}>
-        <div className="modal-dialog">
-          <div className="modal-content">{children}</div>
+      <div className={className ?? ""}>
+        <div className="modal-backdrop show"></div>
+        <div className="modal show d-block" tabIndex={-1} onClick={handleClick} ref={modalRef}>
+          <div className="modal-dialog">
+            <div className="modal-content">{children}</div>
+          </div>
         </div>
       </div>
     </ModalContext>
@@ -26,7 +32,7 @@ export function ModalHeader({ children }: PropsWithChildren<{}>) {
 }
 
 export function ModalTitle({ children }: PropsWithChildren<{}>) {
-  return <h5 className="modal-title">{children}</h5>;
+  return <div className="modal-title">{children}</div>;
 }
 
 export function ModalCloseButton() {
@@ -68,10 +74,16 @@ export function ModalDismissButton({
 export function ModalConfirmButton({
   children,
   className,
-}: PropsWithChildren<{ className?: string }>) {
+  disabled,
+}: PropsWithChildren<{ className?: string; disabled?: boolean }>) {
   const { onConfirm } = useContext(ModalContext);
   return (
-    <button type="button" className={className ?? "btn btn-primary"} onClick={() => onConfirm?.()}>
+    <button
+      type="button"
+      className={className ?? "btn btn-primary"}
+      disabled={disabled ?? false}
+      onClick={() => onConfirm?.()}
+    >
       {children}
     </button>
   );

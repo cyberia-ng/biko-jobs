@@ -53,13 +53,15 @@ export function Login() {
   }
   if (!rejected) {
     return (
-      <Modal onDismiss={() => navigate(sessionManager())}>
+      <Modal className="fs-5" onDismiss={() => navigate(sessionManager())}>
         <ModalHeader>
-          <ModalTitle>Pairing</ModalTitle>
+          <ModalTitle>
+            <h4>Pairing</h4>
+          </ModalTitle>
           <ModalCloseButton />
         </ModalHeader>
         <ModalBody>
-          <div className="mb-2 fs-5">The image on the approving device should match this one:</div>
+          <div className="mb-2">The image on the approving device should match this one:</div>
           <div>
             {sessionSharingReceiver === undefined ? (
               <div className="text-center">
@@ -76,7 +78,7 @@ export function Login() {
           </div>
         </ModalBody>
         <ModalFooter>
-          <ModalDismissButton className="btn btn-danger fs-5">Cancel pairing</ModalDismissButton>
+          <ModalDismissButton className="btn btn-danger">Cancel pairing</ModalDismissButton>
         </ModalFooter>
       </Modal>
     );
@@ -84,14 +86,14 @@ export function Login() {
     return (
       <Modal onDismiss={() => navigate(sessionManager())}>
         <ModalHeader>
-          <ModalTitle>Pairing rejected</ModalTitle>
+          <ModalTitle>
+            <h4>Pairing rejected</h4>
+          </ModalTitle>
           <ModalCloseButton />
         </ModalHeader>
-        <ModalBody>
-          <div className="fs-5">The remote device rejected the pairing request.</div>
-        </ModalBody>
+        <ModalBody>The remote device rejected the pairing request.</ModalBody>
         <ModalFooter>
-          <ModalDismissButton className="btn btn-primary fs-5">OK</ModalDismissButton>
+          <ModalDismissButton className="btn btn-primary">OK</ModalDismissButton>
         </ModalFooter>
       </Modal>
     );

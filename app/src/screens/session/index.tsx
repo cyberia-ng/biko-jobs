@@ -3,20 +3,23 @@ import { AppContext } from "../../context.ts";
 import { SessionList } from "./list.tsx";
 import { Login } from "./login.tsx";
 import { ShareSession } from "./share.tsx";
+import { Finalize } from "./finalize.tsx";
 
 export function SessionManager() {
   const { sessionsList, loginState, setLoginState } = useContext(AppContext);
-  const [sessionId, setSessionId] = useState(loginState?.session ?? "");
+  const [session, setSession] = useState(loginState?.session ?? "");
   const [password, setPassword] = useState(
-    loginState?.password ?? window.localStorage.getItem(`session passwords/${sessionId}`) ?? "",
+    loginState?.password ?? window.localStorage.getItem(`session passwords/${session}`) ?? "",
   );
-  function loadSession(sessionId: string) {
-    setShowShareSession(false);
-    setSessionId(sessionId);
-    setPassword(window.localStorage.getItem(`session passwords/${sessionId}`) ?? "");
-  }
   const [passwordReveal, setPasswordReveal] = useState(false);
   const [showShareSession, setShowShareSession] = useState(false);
+  const [finalize, setFinalize] = useState<string | undefined>(undefined);
+  const isConnected = loginState?.session === session;
+  function loadSession(sessionId: string) {
+    setShowShareSession(false);
+    setSession(sessionId);
+    setPassword(window.localStorage.getItem(`session passwords/${sessionId}`) ?? "");
+  }
   function autogenerate() {
     const baseSessionId = Temporal.Now.plainDateISO()
       .toLocaleString("en-GB", {
@@ -32,7 +35,7 @@ export function SessionManager() {
       suffixNumber++;
       newSessionId = `${baseSessionId} (${suffixNumber})`;
     }
-    setSessionId(newSessionId);
+    setSession(newSessionId);
     const pwLen = 20;
     const pwCharset = "abcdefghijklmnopqrstuvwxyz0123456789";
     const limit = 256 - (256 % pwCharset.length);
@@ -49,18 +52,19 @@ export function SessionManager() {
     setPassword(pw);
   }
   async function connect() {
-    window.localStorage.setItem(`session passwords/${sessionId}`, password);
-    setLoginState({ session: sessionId, password });
+    window.localStorage.setItem(`session passwords/${session}`, password);
+    setLoginState({ session: session, password });
   }
   return (
     <>
+      {finalize && <Finalize session={session} onDismiss={() => setFinalize(undefined)} />}
       <div className="bg-white m-2 p-2 rounded shadow-sm fs-4">
         <Login />
         <div className="row m-0">
           <div className="col-12 col-md-6 border-end p-2 pe-0">
             <h3>Sessions</h3>
             <hr className="me-2" />
-            <SessionList selectedSession={sessionId} loadSession={loadSession} />
+            <SessionList selectedSession={session} loadSession={loadSession} />
           </div>
           <div className="col-12 col-md-6 border-md-top">
             <form onSubmit={(e) => e.preventDefault()}>
@@ -72,8 +76,8 @@ export function SessionManager() {
                   className="form-control fs-4"
                   type="text"
                   id="sessionId"
-                  value={sessionId}
-                  onChange={(e) => setSessionId(e.target.value)}
+                  value={session}
+                  onChange={(e) => setSession(e.target.value)}
                 />
               </div>
               <div className="mb-4">
@@ -105,23 +109,44 @@ export function SessionManager() {
                 <div className="flex-grow-1">
                   <button
                     type="button"
-                    className="btn btn-success me-2 fs-4"
+                    className="btn btn-success me-2"
                     onClick={() => autogenerate()}
                   >
                     Autogenerate
                   </button>
                 </div>
-                {loginState?.session === sessionId ? (
-                  <button type="button" className="btn btn-primary fs-4" disabled>
+                {isConnected && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary me-2"
+                    onClick={() => setFinalize(session)}
+                  >
+                    Finalize session
+                  </button>
+                )}
+                {isConnected && (
+                  <div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary me-2"
+                      disabled={loginState?.session !== session || session.length === 0}
+                      onClick={() => setShowShareSession(!showShareSession)}
+                    >
+                      Share session
+                    </button>
+                  </div>
+                )}
+                {isConnected ? (
+                  <button type="button" className="btn btn-primary" disabled>
                     Connected
                   </button>
                 ) : (
                   <button
                     type="submit"
-                    className="btn btn-primary fs-4"
+                    className="btn btn-primary"
                     disabled={
-                      loginState?.session === sessionId ||
-                      sessionId.length === 0 ||
+                      loginState?.session === session ||
+                      session.length === 0 ||
                       password.length === 0
                     }
                     onClick={() => connect()}
@@ -130,21 +155,11 @@ export function SessionManager() {
                   </button>
                 )}
               </div>
-              <div>
+              {showShareSession && (
                 <div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary fs-4"
-                    disabled={loginState?.session !== sessionId || sessionId.length === 0}
-                    onClick={() => setShowShareSession(!showShareSession)}
-                  >
-                    Share session
-                  </button>
+                  <ShareSession session={session} password={password} />
                 </div>
-                <div>
-                  {showShareSession && <ShareSession session={sessionId} password={password} />}
-                </div>
-              </div>
+              )}
             </form>
           </div>
         </div>

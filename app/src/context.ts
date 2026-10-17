@@ -15,6 +15,7 @@ export type AppContextT = {
         dispatch: (a: SessionAction) => void;
         getBlob: (id: string) => Promise<Uint8Array<ArrayBuffer> | undefined>;
         writeBlob: (id: string, data: Uint8Array<ArrayBuffer>) => void;
+        finalize: (replacementActions: SessionAction[]) => Promise<void>;
       }
     | undefined;
   loading: boolean;
