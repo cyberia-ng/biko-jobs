@@ -11,7 +11,7 @@ const encoder = new Encoder();
 export const FinalizationData = z.object({
   events: z.array(z.instanceof(Uint8Array)),
   existingEventsHash: z.instanceof(Uint8Array),
-  blobsToKeep: z.set(z.string()),
+  blobsToKeep: z.array(z.string()),
 });
 export type FinalizationData = z.infer<typeof FinalizationData>;
 

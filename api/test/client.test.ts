@@ -2,7 +2,7 @@ import "temporal-polyfill/global";
 import { createApp } from "@biko-jobs/api/app.ts";
 import "mocha";
 import type { Server } from "node:http";
-import { ApiClient, listSessions } from "@biko-jobs/api-client";
+import { ApiClient, ClientError, listSessions, type ClientErrorInfo } from "@biko-jobs/api-client";
 import { expect } from "chai";
 import { mpEncoder, mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
 import {
@@ -110,6 +110,39 @@ describe("api client", () => {
         { session: "some session", finalized: false },
         { session: "some other session", finalized: false },
       ]);
+    });
+  });
+
+  describe("session finalization", () => {
+    function expectClientError(p: Promise<unknown>, type: ClientErrorInfo["type"]) {
+      return p
+        .then(() => {
+          throw new Error("expected promise rejection");
+        })
+        .catch((e) => {
+          if (!(e instanceof ClientError && e.info.type === type)) {
+            throw e;
+          }
+        });
+    }
+    test("makes session read-only", async () => {
+      await client.finalize([], [], []);
+      await expectClientError(client.postEvent([]), "session finalized");
+      await expectClientError(client.putBlob("some blob", new Uint8Array()), "session finalized");
+      await expectClientError(client.finalize([], [], []), "session finalized");
+    });
+
+    test("events mismatch", async () => {
+      await expectClientError(
+        client.finalize(["some event"], [], []),
+        "session finalization events mismatch",
+      );
+    });
+
+    test("keeps salt blob", async () => {
+      await client.finalize([], [], []);
+      const res = await fetch(`http://localhost:${port}/session/some session/blob/salt`);
+      expect(res.ok).to.equal(true);
     });
   });
 });

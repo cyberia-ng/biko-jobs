@@ -83,36 +83,40 @@ export function addRoutes(
     res.json(sessions.sessions());
   });
 
-  app.post("/session/:session/finalize", express.raw(), (req, res) => {
-    if (req.body === undefined) {
-      res.status(400).send();
-      return;
-    }
-    if (!(req.body instanceof Buffer)) {
-      throw new Error("unreachable: expected Buffer");
-    }
-    let finalizationData: FinalizationData;
-    try {
-      const decoded = mpDecoder.decode(req.body);
-      finalizationData = FinalizationData.parse(decoded);
-    } catch (_e) {
-      res.status(400).send();
-      return;
-    }
-    try {
-      sessions.finalize(req.params.session, finalizationData);
-      res.status(200).send();
-    } catch (e) {
-      switch (e) {
-        case "session finalized":
-          res.status(409).send();
-          break;
-        case "existing events hash mismatch":
-          res.status(422).send();
-          break;
-        default:
-          throw e;
+  app.post(
+    "/session/:session/finalize",
+    express.raw({ type: "application/vnd.msgpack" }),
+    (req, res) => {
+      if (req.body === undefined) {
+        res.status(400).send();
+        return;
       }
-    }
-  });
+      if (!(req.body instanceof Buffer)) {
+        throw new Error("unreachable: expected Buffer");
+      }
+      let finalizationData: FinalizationData;
+      try {
+        const decoded = mpDecoder.decode(req.body);
+        finalizationData = FinalizationData.parse(decoded);
+      } catch (_e) {
+        res.status(400).send();
+        return;
+      }
+      try {
+        sessions.finalize(req.params.session, finalizationData);
+        res.status(200).send();
+      } catch (e) {
+        switch (e) {
+          case "session finalized":
+            res.status(409).send();
+            break;
+          case "existing events hash mismatch":
+            res.status(422).send();
+            break;
+          default:
+            throw e;
+        }
+      }
+    },
+  );
 }

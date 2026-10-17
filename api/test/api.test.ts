@@ -305,7 +305,7 @@ describe("api", () => {
     function finalize(app: TestAgent, session: string, data: FinalizationData) {
       return app
         .post(`/session/${session}/finalize`)
-        .set("Content-Type", "application/octet-stream")
+        .set("Content-Type", "application/vnd.msgpack")
         .send(Buffer.from(mpEncoder.encode(data)));
     }
 
@@ -320,7 +320,7 @@ describe("api", () => {
       return {
         existingEventsHash: hash,
         events: [],
-        blobsToKeep: new Set(),
+        blobsToKeep: [],
       };
     }
 
@@ -389,7 +389,7 @@ describe("api", () => {
       await finalize(app, "some-session", {
         existingEventsHash: await hashEvents([]),
         events: [event1, event2],
-        blobsToKeep: new Set(),
+        blobsToKeep: [],
       });
       await app
         .get("/session/some-session/events")
@@ -414,7 +414,7 @@ describe("api", () => {
       await finalize(app, "some-session", {
         existingEventsHash: await hashEvents([]),
         events: [],
-        blobsToKeep: new Set(["blob1", "blob2"]),
+        blobsToKeep: ["blob1", "blob2"],
       });
       await app
         .get("/session/some-session/blob/blob-1")
@@ -491,7 +491,7 @@ describe("api", () => {
         const app = supertest(createApp());
         await app
           .post("/session/some-session/finalize")
-          .set("Content-Type", "application/octet-stream")
+          .set("Content-Type", "application/vnd.msgpack")
           .send(Buffer.from(mpEncoder.encode({})))
           .expect(400);
       });
