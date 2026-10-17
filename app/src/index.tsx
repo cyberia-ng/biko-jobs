@@ -21,7 +21,6 @@ import {
 import { EditJob } from "./screens/edit-job.tsx";
 import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT, type LoginState } from "./context.ts";
-import { SessionManager } from "./screens/session.tsx";
 import { Store as SessionStore } from "./session-state/store.ts";
 import { listSessions } from "@biko-jobs/api-client";
 import { enableMapSet, produce } from "immer";
@@ -29,6 +28,7 @@ import { assertNever } from "./assertNever.ts";
 import { Export } from "./screens/export.tsx";
 import { useHashLocation } from "./use-hash-location.ts";
 import type { State as NavigationState } from "./navigation-state.ts";
+import { SessionManager } from "./screens/session/index.tsx";
 
 enableMapSet();
 
