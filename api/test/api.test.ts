@@ -481,56 +481,6 @@ describe("api", () => {
       await finalize(app, "some-session", await emptyFinalizationData()).expect(422);
     });
 
-    test("adding an event while finalization is processing fails", async () => {
-      const hash = await hashEvents([]);
-      // deferred promise for crypto.subtle.digest
-      const realDigest = crypto.subtle.digest;
-      const onDigestCalledP = new Promise<() => void>((resOuter) => {
-        crypto.subtle.digest = (...args) =>
-          new Promise<void>((resInner) => {
-            resOuter(resInner);
-          }).then(() => realDigest.call(crypto.subtle, ...args));
-      });
-
-      // deferred promise for Sessions.addEvent
-      const realAddEvent = Sessions.prototype.addEvent;
-      const onAddEventCalledP = new Promise<void>((res) => {
-        Sessions.prototype.addEvent = function (...args) {
-          res();
-          return realAddEvent.call(this, ...args);
-        };
-      });
-      try {
-        const app = supertest(createApp());
-        let isFinalized = false;
-        const finalizeP = finalize(app, "some-session", await emptyFinalizationData(hash)).then(
-          () => {
-            isFinalized = true;
-          },
-        );
-        const resolveDigest = await onDigestCalledP;
-        // we are paused in finalize's critical section until we call resolveDigest()
-        const addEventP = app
-          .post("/session/some-session/events")
-          .set("Content-Type", "application/octet-stream")
-          .send(Buffer.from("hello world", "utf8"));
-        const wasFinalizedP = addEventP.then(() => isFinalized);
-        // wait until sessions.addEvent is called from the route handler
-        await onAddEventCalledP;
-        resolveDigest();
-        // we are out of finalize's critical section
-        await finalizeP;
-        const wasFinalized = await wasFinalizedP;
-        if (!wasFinalized) {
-          throw new Error("expected event addition not to complete until after finalization");
-        }
-        await addEventP.expect(405);
-      } finally {
-        crypto.subtle.digest = realDigest;
-        Sessions.prototype.addEvent = realAddEvent;
-      }
-    });
-
     describe("finalizing a session requires valid finalization data", () => {
       test("no data", async () => {
         const app = supertest(createApp());

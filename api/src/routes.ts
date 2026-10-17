@@ -20,7 +20,7 @@ export function addRoutes(
     res.send(response);
   });
 
-  app.post("/session/:session/events", express.raw(), (req, res, next) => {
+  app.post("/session/:session/events", express.raw(), (req, res) => {
     if (req.body === undefined) {
       res.status(400).send();
       return;
@@ -29,23 +29,20 @@ export function addRoutes(
       throw new Error("unreachable: expected Buffer");
     }
 
-    sessions
-      .addEvent(req.params.session, req.body)
-      .then(() => {
-        onEvent(req.params.session, req.body);
-        res.status(200).send();
-      })
-      .catch((e) => {
-        if (e === "session finalized") {
-          res.header("Allow", "GET, HEAD");
-          res.status(405).send();
-          return;
-        } else throw e;
-      })
-      .catch(next);
+    try {
+      sessions.addEvent(req.params.session, req.body);
+      onEvent(req.params.session, req.body);
+      res.status(200).send();
+    } catch (e) {
+      if (e === "session finalized") {
+        res.header("Allow", "GET, HEAD");
+        res.status(405).send();
+        return;
+      } else throw e;
+    }
   });
 
-  app.put("/session/:session/blob/:blob", express.raw({ limit: "10MB" }), (req, res, next) => {
+  app.put("/session/:session/blob/:blob", express.raw({ limit: "10MB" }), (req, res) => {
     if (req.body === undefined) {
       res.status(400).send();
       return;
@@ -53,22 +50,21 @@ export function addRoutes(
     if (!(req.body instanceof Buffer)) {
       throw new Error("unreachable: expected Buffer");
     }
-    sessions
-      .addBlob(req.params.session, req.params.blob, req.body)
-      .then(() => res.status(201).send())
-      .catch((e) => {
-        switch (e) {
-          case "conflict":
-            res.status(409).send();
-            return;
-          case "session finalized":
-            res.status(405).header("Allow", "GET, HEAD").send();
-            return;
-          default:
-            throw e;
-        }
-      })
-      .catch(next);
+    try {
+      sessions.addBlob(req.params.session, req.params.blob, req.body);
+      res.status(201).send();
+    } catch (e) {
+      switch (e) {
+        case "conflict":
+          res.status(409).send();
+          return;
+        case "session finalized":
+          res.status(405).header("Allow", "GET, HEAD").send();
+          return;
+        default:
+          throw e;
+      }
+    }
   });
 
   app.get("/session/:session/blob/:blob", (req, res) => {
@@ -87,7 +83,7 @@ export function addRoutes(
     res.json(sessions.sessions());
   });
 
-  app.post("/session/:session/finalize", express.raw(), (req, res, next) => {
+  app.post("/session/:session/finalize", express.raw(), (req, res) => {
     if (req.body === undefined) {
       res.status(400).send();
       return;
@@ -103,21 +99,20 @@ export function addRoutes(
       res.status(400).send();
       return;
     }
-    sessions
-      .finalize(req.params.session, finalizationData)
-      .then(() => res.status(200).send())
-      .catch((e) => {
-        switch (e) {
-          case "session finalized":
-            res.status(409).send();
-            break;
-          case "existing events hash mismatch":
-            res.status(422).send();
-            break;
-          default:
-            throw e;
-        }
-      })
-      .catch(next);
+    try {
+      sessions.finalize(req.params.session, finalizationData);
+      res.status(200).send();
+    } catch (e) {
+      switch (e) {
+        case "session finalized":
+          res.status(409).send();
+          break;
+        case "existing events hash mismatch":
+          res.status(422).send();
+          break;
+        default:
+          throw e;
+      }
+    }
   });
 }

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
 import { inspect } from "node:util";
 import * as z from "zod";
-import { Mutex } from "async-mutex";
+import { sha256 } from "@noble/hashes/sha2.js";
 
 const encoder = new Encoder();
 
@@ -28,10 +28,8 @@ export class Sessions {
     clearEvents: StatementSync;
     clearBlobsExcept: StatementSync;
   };
-  private sessionMutex: Mutex;
 
   constructor(sqlitePath: string) {
-    this.sessionMutex = new Mutex();
     this.db = new DatabaseSync(sqlitePath);
     this.db.exec("PRAGMA foreign_keys = on;");
     migrateDb(this.db);
@@ -60,10 +58,8 @@ export class Sessions {
     };
   }
 
-  async addEvent(session: string, event: Uint8Array) {
-    const row = await this.sessionMutex.runExclusive(async () =>
-      this.statements.getOrInsertSession.get(session)!,
-    );
+  addEvent(session: string, event: Uint8Array) {
+    const row = this.statements.getOrInsertSession.get(session)!;
     const id = row.id as number;
     const finalized = Boolean(row.finalized as number);
     if (finalized) throw "session finalized";
@@ -75,10 +71,8 @@ export class Sessions {
     return rows.map((row) => row.data as Uint8Array);
   }
 
-  async addBlob(session: string, blob: string, data: Uint8Array) {
-    const row = await this.sessionMutex.runExclusive(async () =>
-      this.statements.getOrInsertSession.get(session)!,
-    );
+  addBlob(session: string, blob: string, data: Uint8Array) {
+    const row = this.statements.getOrInsertSession.get(session)!;
     const id = row.id as number;
     const finalized = Boolean(row.finalized as number);
     if (finalized) {
@@ -109,32 +103,28 @@ export class Sessions {
     return Boolean(finalized);
   }
 
-  async finalize(session: string, data: FinalizationData) {
+  finalize(session: string, data: FinalizationData) {
     if (this.isFinalized(session)) throw "session finalized";
     const id = this.statements.getOrInsertSession.get(session)!.id as number;
-    await this.sessionMutex.runExclusive(async () => {
-      const events = this.events(session);
-      const serverExistingEventsHash = new Uint8Array(
-        await crypto.subtle.digest("SHA-256", encoder.encode(events)),
-      );
-      if (data.existingEventsHash.toHex() !== serverExistingEventsHash.toHex()) {
-        throw "existing events hash mismatch";
-      }
+    const events = this.events(session);
+    const serverExistingEventsHash = sha256(encoder.encode(events));
+    if (data.existingEventsHash.toHex() !== serverExistingEventsHash.toHex()) {
+      throw "existing events hash mismatch";
+    }
 
-      this.db.exec("BEGIN TRANSACTION;");
-      try {
-        this.statements.clearEvents.run(session);
-        this.statements.clearBlobsExcept.run(session, JSON.stringify(Array.from(data.blobsToKeep)));
-        for (const event of data.events) {
-          this.statements.addEvent.run(id, event);
-        }
-        this.statements.finalizeSession.run(session);
-        this.db.exec("COMMIT;");
-      } catch (e) {
-        this.db.exec("ROLLBACK;");
-        throw e;
+    this.db.exec("BEGIN TRANSACTION;");
+    try {
+      this.statements.clearEvents.run(session);
+      this.statements.clearBlobsExcept.run(session, JSON.stringify(Array.from(data.blobsToKeep)));
+      for (const event of data.events) {
+        this.statements.addEvent.run(id, event);
       }
-    });
+      this.statements.finalizeSession.run(session);
+      this.db.exec("COMMIT;");
+    } catch (e) {
+      this.db.exec("ROLLBACK;");
+      throw e;
+    }
   }
 }
 
