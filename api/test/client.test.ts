@@ -2,7 +2,13 @@ import "temporal-polyfill/global";
 import { createApp } from "@biko-jobs/api/app.ts";
 import "mocha";
 import type { Server } from "node:http";
-import { ApiClient, ClientError, listSessions, type ClientErrorInfo } from "@biko-jobs/api-client";
+import {
+  ApiClient,
+  ClientError,
+  listSessions,
+  type ClientErrorInfo,
+  type ClientEvent,
+} from "@biko-jobs/api-client";
 import { expect } from "chai";
 import { mpEncoder, mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
 import {
@@ -12,6 +18,10 @@ import {
 } from "@biko-jobs/api-client/session-sharing.ts";
 
 const test = it;
+
+function event(data: unknown = "hello world"): ClientEvent {
+  return { uuid: crypto.randomUUID(), data };
+}
 
 describe("api client", () => {
   let client: ApiClient;
@@ -43,10 +53,12 @@ describe("api client", () => {
   });
 
   test("event round trip", async () => {
-    await client.postEvent({ hello: "world" });
-    await client.postEvent({ hola: "mundo" });
+    const event1 = event("hello world");
+    const event2 = event("hola mundo");
+    await client.postEvent(event1);
+    await client.postEvent(event2);
     const events = await client.events();
-    expect(events).to.deep.equal([{ hello: "world" }, { hola: "mundo" }]);
+    expect(events).to.deep.equal([event1, event2]);
   });
 
   test("blob round trip", async () => {
@@ -66,51 +78,50 @@ describe("api client", () => {
     try {
       clientA = await ApiClient.open(`http://localhost:${port}`, "some session", "a password");
       clientB = await ApiClient.open(`http://localhost:${port}`, "some session", "a password");
-      await clientA.postEvent({ hello: "world" });
+      const event1 = event();
+      await clientA.postEvent(event1);
       const events = await clientB.events();
-      expect(events).to.deep.equal([{ hello: "world" }]);
+      expect(events).to.deep.equal([event1]);
     } finally {
       clientA?.closeWebSocket();
       clientB?.closeWebSocket();
     }
   });
 
-  describe("websocket subscribe", () => {
-    test("it works", (done) => {
-      let expectedEvents = [{ hello: "world" }, { hola: "mundo" }];
-      client.subscribeEvents((event) => {
-        const expected = expectedEvents.shift();
-        try {
-          expect(event).to.deep.equal(expected);
-        } catch (e) {
-          done(e);
-        }
-        if (expectedEvents.length === 0) {
-          done();
-        }
-      });
-      client.postEvent({ hello: "world" }).then(() => {
-        client.postEvent({ hola: "mundo" });
-      });
+  test("websocket subscribe", (done) => {
+    const event1 = event();
+    const event2 = event("hola mundo");
+    const expectedEvents = [event1, event2];
+    client.subscribeEvents((event) => {
+      const expected = expectedEvents.shift();
+      try {
+        expect(event).to.deep.equal(expected);
+      } catch (e) {
+        done(e);
+      }
+      if (expectedEvents.length === 0) {
+        done();
+      }
+    });
+    client.postEvent(event1).then(() => {
+      client.postEvent(event2);
     });
   });
 
-  describe("list sessions", () => {
-    test("works", async () => {
-      await client.putBlob("some-id", Buffer.from("hello world", "utf8"));
-      const clientB = await ApiClient.open(
-        `http://localhost:${port}`,
-        "some other session",
-        "a password",
-      );
-      await clientB.postEvent("hello");
-      clientB.closeWebSocket();
-      const receivedSessions = await listSessions(`http://localhost:${port}`);
-      expect(receivedSessions).to.deep.equal([
-        { session: "some session", finalized: false },
-        { session: "some other session", finalized: false },
-      ]);
-    });
+  test("list sessions", async () => {
+    await client.putBlob("some-id", Buffer.from("hello world", "utf8"));
+    const clientB = await ApiClient.open(
+      `http://localhost:${port}`,
+      "some other session",
+      "a password",
+    );
+    await clientB.postEvent(event());
+    clientB.closeWebSocket();
+    const receivedSessions = await listSessions(`http://localhost:${port}`);
+    expect(receivedSessions).to.deep.equal([
+      { session: "some session", finalized: false },
+      { session: "some other session", finalized: false },
+    ]);
   });
 
   describe("session finalization", () => {
@@ -126,22 +137,22 @@ describe("api client", () => {
         });
     }
 
-    test("succeeds when events match", async () => {
-      const event = "some event";
-      await client.postEvent(event);
-      await client.finalize([event], [], []);
+    test("succeeds when event uuids match", async () => {
+      const event1 = event();
+      await client.postEvent(event1);
+      await client.finalize([event1.uuid], [], []);
     });
 
     test("makes session read-only", async () => {
       await client.finalize([], [], []);
-      await expectClientError(client.postEvent([]), "session finalized");
+      await expectClientError(client.postEvent(event()), "session finalized");
       await expectClientError(client.putBlob("some blob", new Uint8Array()), "session finalized");
       await expectClientError(client.finalize([], [], []), "session finalized");
     });
 
     test("events mismatch", async () => {
       await expectClientError(
-        client.finalize(["some event"], [], []),
+        client.finalize([crypto.randomUUID()], [], []),
         "session finalization events mismatch",
       );
     });

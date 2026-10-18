@@ -5,16 +5,27 @@ import supertest from "supertest";
 import { decode } from "@msgpack/msgpack";
 import { expect } from "chai";
 import { mkdtempDisposableSync } from "node:fs";
-import { FinalizationData, Sessions } from "@biko-jobs/api/sessions.ts";
+import { Sessions } from "@biko-jobs/api/sessions.ts";
 import { join } from "node:path";
 import type { Server } from "node:http";
 import { inspect } from "node:util";
 import { mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 import type TestAgent from "supertest/lib/agent.js";
+import type { ApiEvent, FinalizationData } from "@biko-jobs/api-client/schemas.ts";
 
 const test = it;
 
 describe("api", () => {
+  function event(data?: unknown) {
+    const uuid = crypto.randomUUID();
+    const event: ApiEvent = {
+      uuid,
+      data: mpEncoder.encode(data ?? "hello world"),
+    };
+    const encoded = Buffer.from(mpEncoder.encode(event));
+    return { encoded, uuid, event };
+  }
+
   test("health endpoint", async () => {
     await supertest(createApp()).get("/health").expect(200);
   });
@@ -36,17 +47,17 @@ describe("api", () => {
       const testApp = supertest(createApp());
       await testApp
         .post("/session/some-id/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hello world", "utf8"))
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event().encoded)
         .expect(200);
     });
 
-    test("empty event", async () => {
+    test("empty event data", async () => {
       const testApp = supertest(createApp());
       await testApp.post("/session/some-id/events").expect(400);
     });
 
-    test("attempt to append non-buffer", async () => {
+    test("non-msgpack event data", async () => {
       const testApp = supertest(createApp());
       await testApp
         .post("/session/some-id/events")
@@ -55,16 +66,41 @@ describe("api", () => {
         .expect(400);
     });
 
-    test("read updated session", async () => {
+    test("events must have uuids", async () => {
       const testApp = supertest(createApp());
       await testApp
         .post("/session/some-id/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hello world", "utf8"));
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(Buffer.from(mpEncoder.encode({ data: new Uint8Array() })))
+        .expect(400);
+    });
+
+    test("duplicate uuids are rejected", async () => {
+      const event1 = event();
+      const testApp = supertest(createApp());
       await testApp
         .post("/session/some-id/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hola mundo", "utf8"));
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event1.encoded);
+      await testApp
+        .post("/session/some-id/events")
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event1.encoded)
+        .expect(409);
+    });
+
+    test("read updated session", async () => {
+      const event1 = event();
+      const event2 = event("hola mundo");
+      const testApp = supertest(createApp());
+      await testApp
+        .post("/session/some-id/events")
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event1.encoded);
+      await testApp
+        .post("/session/some-id/events")
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event2.encoded);
       await testApp
         .get("/session/some-id/events")
         .expect(200)
@@ -72,33 +108,29 @@ describe("api", () => {
         .expect("ETag", new RegExp(""))
         .responseType("blob")
         .expect((res) => {
-          expect(decode(res.body)).to.deep.equal([
-            Buffer.from("hello world", "utf8"),
-            Buffer.from("hola mundo", "utf8"),
-          ]);
+          expect(decode(res.body)).to.deep.equal([event1.event, event2.event]);
         });
     });
 
     test("spaces in url", async () => {
+      const event1 = event();
+      const event2 = event("hola mundo");
       const testApp = supertest(createApp());
       await testApp
         .post("/session/some id/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hello world", "utf8"));
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event1.encoded);
       await testApp
         .post("/session/some id/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hola mundo", "utf8"));
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event2.encoded);
       await testApp
         .get("/session/some id/events")
         .expect(200)
         .expect("Content-Type", "application/vnd.msgpack")
         .responseType("blob")
         .expect((res) => {
-          expect(decode(res.body)).to.deep.equal([
-            Buffer.from("hello world", "utf8"),
-            Buffer.from("hola mundo", "utf8"),
-          ]);
+          expect(decode(res.body)).to.deep.equal([event1.event, event2.event]);
         });
     });
   });
@@ -185,8 +217,8 @@ describe("api", () => {
       const testApp = supertest(createApp());
       await testApp
         .post("/session/some-id/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hello world", "utf8"));
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event().encoded);
       await testApp.get("/session").expect((res) => {
         expect(res.body).to.deep.equal([{ session: "some-id", finalized: false }]);
       });
@@ -196,8 +228,8 @@ describe("api", () => {
       const testApp = supertest(createApp());
       await testApp
         .post("/session/some id/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hello world", "utf8"));
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event().encoded);
       await testApp.get("/session").expect((res) => {
         expect(res.body).to.deep.equal([{ session: "some id", finalized: false }]);
       });
@@ -239,22 +271,25 @@ describe("api", () => {
         socket.addEventListener("open", () => done());
       });
 
-      test("receives events", (done) => {
+      test("receives events", async () => {
         const socket = new WebSocket(`http://localhost:${port}/session/some-session/events`);
         sockets.add(socket);
-        const data = Buffer.from("hello world", "utf8");
-        socket.addEventListener("message", (msg) => {
-          (msg.data as Blob)
-            .bytes()
-            .then((receivedData) => expect(receivedData).to.deep.equal(data))
-            .then(() => done())
-            .catch((e) => done(e));
+        const event1 = event();
+        const receivedP = new Promise((res, rej) => {
+          socket.addEventListener("message", (msg) => {
+            (msg.data as Blob)
+              .bytes()
+              .then((receivedData) => res(receivedData))
+              .catch((e) => rej(e));
+          });
         });
-        fetch(`http://localhost:${port}/session/some-session/events`, {
+        await fetch(`http://localhost:${port}/session/some-session/events`, {
           method: "POST",
-          body: data,
-          headers: { "Content-Type": "application/octet-stream" },
+          body: event1.encoded,
+          headers: { "Content-Type": "application/vnd.msgpack" },
         });
+        const received = await receivedP;
+        expect(received).to.deep.equal(event1.encoded);
       });
     });
 
@@ -309,40 +344,29 @@ describe("api", () => {
         .send(Buffer.from(mpEncoder.encode(data)));
     }
 
-    async function hashEvents(events: Array<Uint8Array>) {
-      return new Uint8Array(await crypto.subtle.digest("SHA-256", mpEncoder.encode(events)));
-    }
-
-    async function emptyFinalizationData(
-      existingEventsHash?: Uint8Array<ArrayBuffer>,
-    ): Promise<FinalizationData> {
-      const hash: Uint8Array<ArrayBuffer> = existingEventsHash ?? (await hashEvents([]));
-      return {
-        existingEventsHash: hash,
-        events: [],
-        blobsToKeep: [],
-      };
-    }
+    const emptyFinalizationData: FinalizationData = {
+      knownEventUUIDs: [],
+      events: [],
+      blobsToKeep: [],
+    };
 
     test("finalize new session", async () => {
-      await finalize(supertest(createApp()), "some-session", await emptyFinalizationData()).expect(
-        200,
-      );
+      await finalize(supertest(createApp()), "some-session", emptyFinalizationData).expect(200);
     });
 
     test("finalize existing session", async () => {
       const app = supertest(createApp());
       await app.put("/session/some-session/blob").send(Buffer.from("hello world", "utf8"));
-      await finalize(app, "some-session", await emptyFinalizationData()).expect(200);
+      await finalize(app, "some-session", emptyFinalizationData).expect(200);
     });
 
     test("finalized sessions cannot receive events (new session)", async () => {
       const app = supertest(createApp());
-      await finalize(app, "some-session", await emptyFinalizationData());
+      await finalize(app, "some-session", emptyFinalizationData);
       await app
         .post("/session/some-session/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hello world", "utf8"))
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event().encoded)
         .expect(405)
         .expect("Allow", "GET, HEAD");
     });
@@ -350,24 +374,24 @@ describe("api", () => {
     test("finalized sessions cannot receive events (existing session)", async () => {
       const app = supertest(createApp());
       await app.put("/session/some-session/blob").send(Buffer.from("hello world", "utf8"));
-      await finalize(app, "some-session", await emptyFinalizationData());
+      await finalize(app, "some-session", emptyFinalizationData);
       await app
         .post("/session/some-session/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from("hello world", "utf8"))
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event().encoded)
         .expect(405)
         .expect("Allow", "GET, HEAD");
     });
 
     test("trying to finalize an already finalized session fails", async () => {
       const app = supertest(createApp());
-      await finalize(app, "some-session", await emptyFinalizationData());
-      await finalize(app, "some-session", await emptyFinalizationData()).expect(409);
+      await finalize(app, "some-session", emptyFinalizationData);
+      await finalize(app, "some-session", emptyFinalizationData).expect(409);
     });
 
     test("finalized sessions cannot receive blobs", async () => {
       const app = supertest(createApp());
-      await finalize(app, "some-session", await emptyFinalizationData());
+      await finalize(app, "some-session", emptyFinalizationData);
       await app
         .put("/session/some-session/blob/some-blob")
         .set("Content-Type", "application/octet-stream")
@@ -378,24 +402,23 @@ describe("api", () => {
 
     test("finalized sessions appear in sessions list as finalized", async () => {
       const app = supertest(createApp());
-      await finalize(app, "some-session", await emptyFinalizationData());
+      await finalize(app, "some-session", emptyFinalizationData);
       await app.get("/session").expect([{ session: "some-session", finalized: true }]);
     });
 
     test("finalized sessions contain events from finalization data", async () => {
       const app = supertest(createApp());
-      const event1 = new Uint8Array(Buffer.from("hello world", "utf8"));
-      const event2 = new Uint8Array(Buffer.from("hola mundo", "utf8"));
+      const event1 = event();
+      const event2 = event("hola mundo");
       await finalize(app, "some-session", {
-        existingEventsHash: await hashEvents([]),
-        events: [event1, event2],
-        blobsToKeep: [],
+        ...emptyFinalizationData,
+        events: [event1.event, event2.event],
       });
       await app
         .get("/session/some-session/events")
         .responseType("blob")
         .expect((res) => {
-          expect(decode(res.body)).to.deep.equal([event1, event2]);
+          expect(decode(res.body)).to.deep.equal([event1.event, event2.event]);
         });
     });
 
@@ -412,8 +435,7 @@ describe("api", () => {
         .set("Content-Type", "application/octet-stream")
         .send(Buffer.from(blob2));
       await finalize(app, "some-session", {
-        existingEventsHash: await hashEvents([]),
-        events: [],
+        ...emptyFinalizationData,
         blobsToKeep: ["blob1", "blob2"],
       });
       await app
@@ -428,21 +450,20 @@ describe("api", () => {
 
     test("finalized sessions do not contain pre-finalization events", async () => {
       const app = supertest(createApp());
-      const event1 = new Uint8Array(Buffer.from("hello world", "utf8"));
-      const event2 = new Uint8Array(Buffer.from("hola mundo", "utf8"));
+      const event1 = event();
+      const event2 = event("hola mundo");
       await app
         .post("/session/some-session/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from(event1));
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event1.encoded);
       await app
         .post("/session/some-session/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from(event2));
-      await finalize(
-        app,
-        "some-session",
-        await emptyFinalizationData(await hashEvents([event1, event2])),
-      );
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event2.encoded);
+      await finalize(app, "some-session", {
+        ...emptyFinalizationData,
+        knownEventUUIDs: [event1.uuid, event2.uuid],
+      }).expect(200);
       await app
         .get("/session/some-session/events")
         .responseType("blob")
@@ -461,24 +482,27 @@ describe("api", () => {
         .put("/session/some-session/blob/blob-2")
         .set("Content-Type", "application/octet-stream")
         .send(Buffer.from("hola mundo", "utf8"));
-      await finalize(app, "some-session", await emptyFinalizationData());
+      await finalize(app, "some-session", emptyFinalizationData);
       await app.get("/session/some-session/blob/blob-1").expect(404);
       await app.get("/session/some-session/blob/blob-2").expect(404);
     });
 
     test("finalizing a session fails if hash of existing events does not match", async () => {
       const app = supertest(createApp());
-      const event1 = new Uint8Array(Buffer.from("hello world", "utf8"));
-      const event2 = new Uint8Array(Buffer.from("hola mundo", "utf8"));
+      const event1 = event();
+      const event2 = event("hola mundo");
       await app
         .post("/session/some-session/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from(event1));
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event1.encoded);
       await app
         .post("/session/some-session/events")
-        .set("Content-Type", "application/octet-stream")
-        .send(Buffer.from(event2));
-      await finalize(app, "some-session", await emptyFinalizationData()).expect(422);
+        .set("Content-Type", "application/vnd.msgpack")
+        .send(event2.encoded);
+      await finalize(app, "some-session", {
+        ...emptyFinalizationData,
+        knownEventUUIDs: [crypto.randomUUID(), crypto.randomUUID()],
+      }).expect(422);
     });
 
     describe("finalizing a session requires valid finalization data", () => {

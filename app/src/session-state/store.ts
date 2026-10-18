@@ -1,4 +1,4 @@
-import { ApiClient } from "@biko-jobs/api-client";
+import { ApiClient, type ClientEvent } from "@biko-jobs/api-client";
 import { reducer } from "./reducer.ts";
 import { initialState, type State } from "./state.ts";
 import type { Action, AnyVersionAction } from "./action.ts";
@@ -15,13 +15,13 @@ export class Store {
     this.state = state;
     this.subscribers = new Set();
     this.unsubscribe = this.client.subscribeEvents((event) => {
-      this.dispatch(migrateAction(event as AnyVersionAction));
+      this.dispatch(migrateAction(event.data as AnyVersionAction));
     });
   }
 
   static async connect(session: string, pass: string) {
     const client = await ApiClient.open("/api", session, pass);
-    const actions = (await client.events()) as AnyVersionAction[];
+    const actions = (await client.events()).map((e) => e.data as AnyVersionAction);
     const state = computeStateFromScratch(actions.map(migrateAction));
     return new Store(state, client);
   }
@@ -32,7 +32,7 @@ export class Store {
 
   async refreshState() {
     this.client.refreshWebSocket();
-    const actions = (await this.client.events()) as AnyVersionAction[];
+    const actions = (await this.client.events()).map((e) => e.data as AnyVersionAction);
     this.state = computeStateFromScratch(actions.map(migrateAction));
     this.callSubscribers();
   }
@@ -49,8 +49,12 @@ export class Store {
   }
 
   async postEvent(action: Action) {
+    const apiClientEvent: ClientEvent = {
+      uuid: action.uuid,
+      data: action,
+    };
     this.dispatch(action);
-    await this.client?.postEvent(action);
+    await this.client?.postEvent(apiClientEvent);
   }
 
   async writeBlob(id: string, data: Uint8Array<ArrayBuffer>) {
@@ -62,7 +66,11 @@ export class Store {
   }
 
   async finalize(replacementActions: Action[]) {
-    return this.client?.finalize(this.state.processedActions.list, replacementActions, []);
+    const apiClientEvents: ClientEvent[] = replacementActions.map((action) => ({
+      uuid: action.uuid,
+      data: action,
+    }));
+    return this.client?.finalize(Array.from(this.state.processedActions.ids), apiClientEvents, []);
   }
 
   private callSubscribers() {

@@ -56,8 +56,8 @@ async function main() {
       throw e;
     }
   }
-  await client.postEvent(newJob1);
-  await client.postEvent(newJob2);
+  await client.postEvent({ uuid: newJob1.uuid, data: newJob1 });
+  await client.postEvent({ uuid: newJob2.uuid, data: newJob2 });
   client.closeWebSocket();
 }
 

@@ -2,6 +2,10 @@ import { URL } from "node:url";
 import { WebSocketServer } from "ws";
 import type { WebSocket } from "ws";
 import type { Server } from "node:http";
+import type { ApiEvent } from "@biko-jobs/api-client/schemas.ts";
+import { Encoder } from "@msgpack/msgpack";
+
+const encoder = new Encoder();
 
 export class MapSet<K, V> {
   private map: Map<K, Set<V>>;
@@ -75,10 +79,10 @@ export class WrappedWebSocketServer {
     });
   }
 
-  notifyClientsForSession(id: string, event: Uint8Array<ArrayBuffer>) {
+  notifyClientsForSession(id: string, event: ApiEvent) {
     const connections = this.eventsConnections.get(id) ?? [];
     for (const ws of connections) {
-      ws.send(event, (err) => {
+      ws.send(encoder.encode(event), (err) => {
         if (err) {
           console.error("WebSocket error", id, err);
         }

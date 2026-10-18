@@ -1,12 +1,13 @@
 import { Encoder } from "@msgpack/msgpack";
-import { FinalizationData, type Sessions } from "./sessions.ts";
+import { type Sessions } from "./sessions.ts";
 import express from "express";
 import { mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
+import { ApiEvent, FinalizationData } from "@biko-jobs/api-client/schemas.ts";
 
 export function addRoutes(
   app: ReturnType<typeof express>,
   sessions: Sessions,
-  onEvent: (session: string, event: Uint8Array<ArrayBuffer>) => void,
+  onEvent: (session: string, event: ApiEvent) => void,
 ) {
   app.get("/health", (_, res) => {
     res.status(200).send();
@@ -20,27 +21,45 @@ export function addRoutes(
     res.send(response);
   });
 
-  app.post("/session/:session/events", express.raw(), (req, res) => {
-    if (req.body === undefined) {
-      res.status(400).send();
-      return;
-    }
-    if (!(req.body instanceof Buffer)) {
-      throw new Error("unreachable: expected Buffer");
-    }
-
-    try {
-      sessions.addEvent(req.params.session, req.body);
-      onEvent(req.params.session, req.body);
-      res.status(200).send();
-    } catch (e) {
-      if (e === "session finalized") {
-        res.header("Allow", "GET, HEAD");
-        res.status(405).send();
+  app.post(
+    "/session/:session/events",
+    express.raw({ type: "application/vnd.msgpack" }),
+    (req, res) => {
+      if (req.body === undefined) {
+        res.status(400).send();
         return;
-      } else throw e;
-    }
-  });
+      }
+      if (!(req.body instanceof Buffer)) {
+        throw new Error("unreachable: expected Buffer");
+      }
+      let event: ApiEvent;
+      try {
+        const decoded = mpDecoder.decode(req.body);
+        event = ApiEvent.parse(decoded);
+      } catch (_e) {
+        res.status(400).send();
+        return;
+      }
+
+      try {
+        sessions.addEvent(req.params.session, event);
+        onEvent(req.params.session, event);
+        res.status(200).send();
+      } catch (e) {
+        switch (e) {
+          case "session finalized":
+            res.header("Allow", "GET, HEAD");
+            res.status(405).send();
+            return;
+          case "conflict":
+            res.status(409).send();
+            return;
+          default:
+            throw e;
+        }
+      }
+    },
+  );
 
   app.put("/session/:session/blob/:blob", express.raw({ limit: "10MB" }), (req, res) => {
     if (req.body === undefined) {

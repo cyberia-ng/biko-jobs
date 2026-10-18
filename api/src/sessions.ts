@@ -1,19 +1,9 @@
-import { Encoder } from "@msgpack/msgpack";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
 import { inspect } from "node:util";
-import * as z from "zod";
-import { sha256 } from "@noble/hashes/sha2.js";
-
-const encoder = new Encoder();
-
-export const FinalizationData = z.object({
-  events: z.array(z.instanceof(Uint8Array)),
-  existingEventsHash: z.instanceof(Uint8Array),
-  blobsToKeep: z.array(z.string()),
-});
-export type FinalizationData = z.infer<typeof FinalizationData>;
+import zip from "lodash/zip.js";
+import type { FinalizationData, ApiEvent } from "@biko-jobs/api-client/schemas.ts";
 
 export class Sessions {
   private db: DatabaseSync;
@@ -37,9 +27,9 @@ export class Sessions {
       getOrInsertSession: this.db.prepare(
         "INSERT INTO sessions (name) VALUES (?) ON CONFLICT (name) DO UPDATE SET name = name RETURNING id, finalized;",
       ),
-      addEvent: this.db.prepare("INSERT INTO events (session, data) VALUES (?, ?);"),
+      addEvent: this.db.prepare("INSERT INTO events (session, uuid, data) VALUES (?, ?, ?);"),
       readEvents: this.db.prepare(
-        "SELECT data FROM events LEFT JOIN sessions ON events.session = sessions.id WHERE sessions.name = ? ORDER BY events.id;",
+        "SELECT uuid, data FROM events LEFT JOIN sessions ON events.session = sessions.id WHERE sessions.name = ? ORDER BY events.id;",
       ),
       addBlob: this.db.prepare("INSERT INTO blobs (session, name, data) VALUES (?, ?, ?);"),
       getBlob: this.db.prepare(
@@ -58,17 +48,26 @@ export class Sessions {
     };
   }
 
-  addEvent(session: string, event: Uint8Array) {
+  addEvent(session: string, event: ApiEvent) {
     const row = this.statements.getOrInsertSession.get(session)!;
     const id = row.id as number;
     const finalized = Boolean(row.finalized as number);
     if (finalized) throw "session finalized";
-    this.statements.addEvent.run(id, event);
+    try {
+      this.statements.addEvent.run(id, event.uuid, event.data);
+    } catch (e) {
+      if ((e as any).errstr === "constraint failed") {
+        throw "conflict";
+      } else throw e;
+    }
   }
 
-  events(session: string): Uint8Array[] {
+  events(session: string): ApiEvent[] {
     const rows = this.statements.readEvents.all(session);
-    return rows.map((row) => row.data as Uint8Array);
+    return rows.map((row) => ({
+      uuid: row.uuid as string,
+      data: row.data as Uint8Array<ArrayBuffer>,
+    }));
   }
 
   addBlob(session: string, blob: string, data: Uint8Array) {
@@ -107,9 +106,13 @@ export class Sessions {
     if (this.isFinalized(session)) throw "session finalized";
     const id = this.statements.getOrInsertSession.get(session)!.id as number;
     const events = this.events(session);
-    const serverExistingEventsHash = sha256(encoder.encode(events));
-    if (data.existingEventsHash.toHex() !== serverExistingEventsHash.toHex()) {
+    const existingUUIDs = events.map((e) => e.uuid).toSorted();
+    const expectedUUIDs = data.knownEventUUIDs.toSorted();
+    if (existingUUIDs.length !== expectedUUIDs.length) {
       throw "existing events hash mismatch";
+    }
+    for (const [existing, expected] of zip(existingUUIDs, expectedUUIDs)) {
+      if (existing !== expected) throw "existing events hash mismatch";
     }
 
     this.db.exec("BEGIN TRANSACTION;");
@@ -117,7 +120,7 @@ export class Sessions {
       this.statements.clearEvents.run(session);
       this.statements.clearBlobsExcept.run(session, JSON.stringify(Array.from(data.blobsToKeep)));
       for (const event of data.events) {
-        this.statements.addEvent.run(id, event);
+        this.statements.addEvent.run(id, event.uuid, event.data);
       }
       this.statements.finalizeSession.run(session);
       this.db.exec("COMMIT;");

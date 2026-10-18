@@ -1,6 +1,5 @@
-import type { FinalizationData } from "@biko-jobs/api/sessions.ts";
+import type { FinalizationData, ApiEvent } from "./schemas.ts";
 import { mpEncoder, mpDecoder } from "./messagepack.ts";
-import zip from "lodash/zip.js";
 
 export type ClientErrorInfo =
   | { type: "http error"; status: number }
@@ -34,6 +33,11 @@ export class ClientError extends Error {
   }
 }
 
+export type ClientEvent = {
+  uuid: string;
+  data: unknown;
+};
+
 function raiseForStatus(session: string | undefined, res: Response) {
   if (!res.ok) {
     throw new ClientError(session, { type: "http error", status: res.status });
@@ -45,8 +49,8 @@ export class ApiClient {
   private encodedSession: string;
   private key: CryptoKey;
   private ws?: WebSocket;
-  private subscribers: Set<(event: unknown) => void>;
-  private onWebSocketError: (error: ClientError) => void;
+  private subscribers: Set<(event: ClientEvent) => void>;
+  private webSocketErrorHandler: (event: Event) => void;
 
   private constructor(
     baseUrl: string,
@@ -57,8 +61,15 @@ export class ApiClient {
     this.baseUrl = baseUrl;
     this.encodedSession = encodedSession;
     this.key = key;
-    this.onWebSocketError = onWebSocketError;
     this.subscribers = new Set();
+    this.webSocketErrorHandler = ((event: Event) => {
+      onWebSocketError(
+        new ClientError(decodeURIComponent(this.encodedSession), {
+          type: "websocket error",
+          event,
+        }),
+      );
+    }).bind(this);
     this.refreshWebSocket();
   }
 
@@ -137,26 +148,23 @@ export class ApiClient {
     this.ws.addEventListener("message", (e) => {
       (e.data as Blob)
         .bytes()
-        .then((data) => this.decrypt(data))
-        .then((data) => mpDecoder.decode(data))
+        .then((data) => mpDecoder.decode(data) as ApiEvent)
+        .then(async (apiEvent): Promise<ClientEvent> => ({
+          uuid: apiEvent.uuid,
+          data: mpDecoder.decode(await this.decrypt(apiEvent.data)),
+        }))
         .then((event) => {
           for (const cb of this.subscribers) {
             cb(event);
           }
         });
     });
-    this.ws.addEventListener("error", (event) => {
-      this.onWebSocketError(
-        new ClientError(decodeURIComponent(this.encodedSession), {
-          type: "websocket error",
-          event,
-        }),
-      );
-    });
+    this.ws.addEventListener("error", this.webSocketErrorHandler);
     return this.ws;
   }
 
   closeWebSocket() {
+    this.ws?.removeEventListener("error", this.webSocketErrorHandler);
     this.ws?.close();
   }
 
@@ -176,37 +184,31 @@ export class ApiClient {
     );
   }
 
-  private async initializationVectors(): Promise<Uint8Array<ArrayBuffer>[]> {
+  async events(): Promise<ClientEvent[]> {
     const res = await fetch(`${this.baseUrl}/session/${this.encodedSession}/events`);
     this.raiseForStatus(res);
     const body = await res.bytes();
-    const rawEvents = mpDecoder.decode(body) as Uint8Array<ArrayBuffer>[];
-    const ivs = rawEvents
-      .map((data) => mpDecoder.decode(data) as [Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>])
-      .map(([iv]) => iv);
-    return ivs;
-  }
-
-  async events(): Promise<unknown[]> {
-    const res = await fetch(`${this.baseUrl}/session/${this.encodedSession}/events`);
-    this.raiseForStatus(res);
-    const body = await res.bytes();
-    const rawEvents = mpDecoder.decode(body) as Uint8Array<ArrayBuffer>[];
+    const apiEvents = mpDecoder.decode(body) as ApiEvent[];
     return Promise.all(
-      rawEvents.map(async (rawEvent) => {
-        const decrypted = new Uint8Array(await this.decrypt(rawEvent));
-        return mpDecoder.decode(decrypted);
+      apiEvents.map(async (apiEvent): Promise<ClientEvent> => {
+        const decrypted = new Uint8Array(await this.decrypt(apiEvent.data));
+        const decoded = mpDecoder.decode(decrypted);
+        return { uuid: apiEvent.uuid, data: decoded };
       }),
     );
   }
 
-  async postEvent(event: unknown): Promise<void> {
-    const encoded = mpEncoder.encode(event);
-    const encrypted = await this.encrypt(encoded);
+  async postEvent(event: ClientEvent): Promise<void> {
+    const encodedData = mpEncoder.encode(event.data);
+    const encryptedData = await this.encrypt(encodedData);
+    const packedEvent = mpEncoder.encode({
+      uuid: event.uuid,
+      data: encryptedData,
+    } satisfies ApiEvent);
     const res = await fetch(`${this.baseUrl}/session/${this.encodedSession}/events`, {
       method: "POST",
-      body: encrypted,
-      headers: { "Content-Type": "application/octet-stream" },
+      body: packedEvent,
+      headers: { "Content-Type": "application/vnd.msgpack" },
     });
     this.raiseForStatus(res, { 405: { type: "session finalized" } });
   }
@@ -232,30 +234,24 @@ export class ApiClient {
     return this.decrypt(encrypted);
   }
 
-  subscribeEvents(cb: (event: unknown) => void): () => void {
+  subscribeEvents(cb: (event: ClientEvent) => void): () => void {
     this.subscribers.add(cb);
     return () => {
       this.subscribers.delete(cb);
     };
   }
 
-  async finalize(existingEvents: unknown[], replacementEvents: unknown[], blobsToKeep: string[]) {
-    const existingIVs = await this.initializationVectors();
-    const existingEventsEncrypted = await Promise.all(
-      zip(existingIVs, existingEvents).map(async ([iv, event]) => {
-        const encoded = mpEncoder.encode(event);
-        const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, this.key, encoded);
-        return mpEncoder.encode([iv, new Uint8Array(encrypted)]);
-      }),
+  async finalize(knownEventUUIDs: string[], events: ClientEvent[], blobsToKeep: string[]) {
+    const encryptedEvents = await Promise.all(
+      events.map(async (clientEvent): Promise<ApiEvent> => ({
+        uuid: clientEvent.uuid,
+        data: await this.encrypt(mpEncoder.encode(clientEvent.data)),
+      })),
     );
-    const existingEventsHash = new Uint8Array(
-      await crypto.subtle.digest("SHA-256", mpEncoder.encode(existingEventsEncrypted)),
-    );
-    const events = replacementEvents.map((e) => mpEncoder.encode(e));
     const body: FinalizationData = {
-      events,
+      events: encryptedEvents,
       blobsToKeep: [...blobsToKeep, "salt"],
-      existingEventsHash,
+      knownEventUUIDs,
     };
     const res = await fetch(`${this.baseUrl}/session/${this.encodedSession}/finalize`, {
       method: "POST",
