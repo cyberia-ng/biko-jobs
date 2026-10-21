@@ -70,7 +70,7 @@ export class Database {
   constructor(sqlitePath?: string) {
     if (sqlitePath === undefined) {
       this.db = new DatabaseSync(":memory:");
-      migrateDb(this.db, {});
+      migrateDb(this.db, {}).catch(console.error);
     } else {
       this.db = new DatabaseSync(sqlitePath);
       if (!dbIsFullyMigrated(this.db)) {

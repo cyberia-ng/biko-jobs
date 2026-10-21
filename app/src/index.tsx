@@ -97,7 +97,7 @@ function App() {
     withLoading(
       `loading service store`,
       ServiceStore.openEphemeral(() => {}).then(setServiceStore),
-    );
+    ).catch(console.error);
   }, [loginState, withLoading]);
 
   const context: AppContextT = {

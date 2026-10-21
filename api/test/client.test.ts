@@ -111,7 +111,6 @@ describe("api client", () => {
       const job = await Job.generate(crypto.randomUUID());
       await client.addJob(job, [masterKey]);
       const event: JobEvent = { uuid: crypto.randomUUID(), data: "hello world", job };
-      console.log(client.addEvent);
       await client.addEvent(event);
     });
 
@@ -182,19 +181,22 @@ describe("api client", () => {
       const eventCollectionP = new Promise<void>((res) => {
         doneCollectingEvents = res;
       });
-      await client.subscribeEvents({
-        getJob: () => job,
-        onEvent: (event) => {
-          collectedEvents.push(event);
-          if (collectedEvents.length === expectedEvents.length) {
+      await new Promise<void>((res) =>
+        client.subscribeEvents({
+          getJob: () => job,
+          onEvent: (event) => {
+            collectedEvents.push(event);
+            if (collectedEvents.length === expectedEvents.length) {
+              doneCollectingEvents();
+            }
+          },
+          onConnect: () => res(),
+          onError: (e) => {
+            error = e;
             doneCollectingEvents();
-          }
-        },
-        onError: (e) => {
-          error = e;
-          doneCollectingEvents();
-        },
-      });
+          },
+        }),
+      );
       await client.addEvent(event1);
       await client.addEvent(event2);
       await eventCollectionP;

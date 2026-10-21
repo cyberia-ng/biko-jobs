@@ -23,15 +23,18 @@ export function ImageBlob({
     { type: "loading" | "not found" } | { type: "loaded"; url: string }
   >({ type: "loading" });
   useEffect(() => {
-    service?.getBlob(blobUUID, jobUUID).then((data) => {
-      if (data === undefined) {
-        setState({ type: "not found" });
-      } else {
-        const blob = new Blob([data], { type });
-        const url = URL.createObjectURL(blob);
-        setState({ type: "loaded", url });
-      }
-    });
+    service
+      ?.getBlob(blobUUID, jobUUID)
+      .then((data) => {
+        if (data === undefined) {
+          setState({ type: "not found" });
+        } else {
+          const blob = new Blob([data], { type });
+          const url = URL.createObjectURL(blob);
+          setState({ type: "loaded", url });
+        }
+      })
+      .catch(console.error);
   }, [service, setState, jobUUID, blobUUID, type]);
   useEffect(
     () => () => {

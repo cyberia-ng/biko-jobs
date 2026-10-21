@@ -46,7 +46,7 @@ export function EditJob(props: { new_?: boolean }) {
         setFormReset(!formReset);
       }
       setLoading(false);
-    })();
+    })().catch(console.error);
   }
   let content: ReactNode;
   let job: Job | undefined = undefined;

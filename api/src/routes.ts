@@ -19,7 +19,8 @@ import {
 
 function msgPackBody(schema: z.ZodType, limit?: number) {
   return (req: Request, res: Response, next: NextFunction) =>
-    express.raw({ type: "application/vnd.msgpack", limit })(req, res, (e) => {
+    express.raw({ type: "application/vnd.msgpack", limit })(req, res, (e: unknown) => {
+      // oxlint-disable-next-line typescript/strict-boolean-expressions
       if (e) return next(e);
       try {
         const decoded = mpDecoder.decode(req.body);

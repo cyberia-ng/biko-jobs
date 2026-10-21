@@ -4,20 +4,24 @@
   "categories": {
     "correctness": "error"
   },
+  "options": {
+    "typeAware": true
+  },
   "rules": {
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
     "eslint/curly": ["error", "multi-line"],
     "typescript/strict-boolean-expressions": [
       "error",
-      { "allowString": false, "allowNullableObject": false }
+      { "allowString": false, "allowNullableBoolean": true }
     ],
     "eslint/no-unused-vars": [
       "error",
       {
         "caughtErrorsIgnorePattern": "^_.*"
       }
-    ]
+    ],
+    "typescript/no-floating-promises": "error"
   },
   "env": {
     "builtin": true

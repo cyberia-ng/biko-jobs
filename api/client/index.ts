@@ -99,6 +99,7 @@ async function apiFetch(
 
 type WebSocketSubscriber = {
   getJob: (uuid: string) => Job | undefined;
+  onConnect: () => void;
   onEvent: (event: JobEvent) => void;
   onError: (error: unknown) => void;
 };
@@ -111,7 +112,6 @@ export class ApiClient {
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
     this.subscribers = new Set();
-    this.eventsSocketErrorHandler = this.eventsSocketErrorHandler.bind(this);
   }
 
   async listMasterKeys(): Promise<MasterKeyPublic[]> {
@@ -244,28 +244,24 @@ export class ApiClient {
     }
   }
 
-  private eventsSocketErrorHandler(event: Event) {
-    for (const subscriber of this.subscribers) {
-      subscriber.onError(new ClientError({ type: "websocket error", event }));
-    }
-  }
-
   private connectEventsSocket() {
     return new Promise<void>((res, rej) => {
       const ws = new WebSocket(`${this.baseUrl}/events`);
-      ws.addEventListener("message", (msgEvent: MessageEvent<Blob>) =>
+      ws.onmessage = (msgEvent: MessageEvent<Blob>) =>
         this.eventsSocketMessageHandler(msgEvent).catch((error: unknown) => {
           for (const subscriber of this.subscribers) {
             subscriber.onError(error);
           }
-        }),
-      );
-      ws.addEventListener("error", rej);
-      ws.addEventListener("open", () => {
-        ws.addEventListener("error", this.eventsSocketErrorHandler);
-        ws.removeEventListener("error", rej);
+        });
+      ws.onerror = rej;
+      ws.onopen = () => {
+        ws.onerror = (event: Event) => {
+          for (const subscriber of this.subscribers) {
+            subscriber.onError(new ClientError({ type: "websocket error", event }));
+          }
+        };
         res();
-      });
+      };
       this.ws = ws;
     });
   }
@@ -274,9 +270,9 @@ export class ApiClient {
     return new Promise<void>((res) => {
       if (this.ws === undefined) res();
       else {
-        this.ws.removeEventListener("error", this.eventsSocketErrorHandler);
+        this.ws.onerror = null;
+        this.ws.onclose = () => res();
         this.ws.close();
-        this.ws.addEventListener("close", () => res());
         this.ws = undefined;
       }
     });
@@ -298,6 +294,7 @@ export class ApiClient {
     (async () => {
       if (this.subscribers.size === 0) {
         await this.connectEventsSocket();
+        subscriber.onConnect();
       }
       this.subscribers.add(subscriber);
     })().catch(subscriber.onError);

@@ -70,6 +70,7 @@ export class Store {
           this.reduce(event);
           this.callSubscribers();
         },
+        onConnect: () => {},
         onError: this.onAsyncError.bind(this),
       });
     }
