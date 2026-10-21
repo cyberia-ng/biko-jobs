@@ -9,33 +9,30 @@ export function Spinner() {
   );
 }
 
-export function ImageBlob(props: {
+export function ImageBlob({
+  jobUUID,
+  blobUUID,
+  type,
+}: {
   jobUUID: string;
   blobUUID: string;
   type: string;
-  onError?: (e: unknown) => void;
 }) {
-  const { service: session } = useContext(AppContext);
+  const { service } = useContext(AppContext);
   const [state, setState] = useState<
-    { type: "loading" | "error" | "not found" } | { type: "loaded"; url: string }
+    { type: "loading" | "not found" } | { type: "loaded"; url: string }
   >({ type: "loading" });
   useEffect(() => {
-    session
-      ?.getBlob(props.blobUUID, props.jobUUID)
-      .then((data) => {
-        if (data === undefined) {
-          setState({ type: "not found" });
-        } else {
-          const blob = new Blob([data], { type: props.type });
-          const url = URL.createObjectURL(blob);
-          setState({ type: "loaded", url });
-        }
-      })
-      .catch((err) => {
-        setState({ type: "error" });
-        props.onError?.(err);
-      });
-  }, [session, props]);
+    service?.getBlob(blobUUID, jobUUID).then((data) => {
+      if (data === undefined) {
+        setState({ type: "not found" });
+      } else {
+        const blob = new Blob([data], { type });
+        const url = URL.createObjectURL(blob);
+        setState({ type: "loaded", url });
+      }
+    });
+  }, [service, setState, jobUUID, blobUUID, type]);
   useEffect(
     () => () => {
       if (state.type === "loaded") URL.revokeObjectURL(state.url);
@@ -51,7 +48,6 @@ export function ImageBlob(props: {
           </div>
         </div>
       );
-    case "error":
     case "not found":
       return (
         <div className="h-100 d-flex">

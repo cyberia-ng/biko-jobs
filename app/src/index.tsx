@@ -103,26 +103,32 @@ function App() {
   const context: AppContextT = {
     loginState,
     setLoginState,
-    service:
-      serviceState === undefined || serviceStore === undefined
-        ? undefined
-        : {
-            state: serviceState,
-            createJob: (uuid: string) =>
-              withLoading(`creating job ${uuid}`, serviceStore.createJob(uuid)),
-            dispatch: (action) =>
-              withLoading(`dispatching event: ${action.event.type}`, serviceStore.dispatch(action)),
-            getBlob: (blobUUID: string, jobUUID: string) =>
-              withLoading(
-                `getting blob: ${blobUUID} in job ${jobUUID}`,
-                serviceStore.getBlob(blobUUID, jobUUID),
-              ),
-            putBlob: (blobUUID, jobUUID, data) =>
-              withLoading(
-                `writing blob: ${blobUUID} in job ${jobUUID}`,
-                serviceStore.putBlob(blobUUID, jobUUID, data),
-              ),
-          },
+    service: useMemo(
+      () =>
+        serviceState === undefined || serviceStore === undefined
+          ? undefined
+          : {
+              state: serviceState,
+              createJob: (uuid: string) =>
+                withLoading(`creating job ${uuid}`, serviceStore.createJob(uuid)),
+              dispatch: (action) =>
+                withLoading(
+                  `dispatching event: ${action.event.type}`,
+                  serviceStore.dispatch(action),
+                ),
+              getBlob: (blobUUID: string, jobUUID: string) =>
+                withLoading(
+                  `getting blob: ${blobUUID} in job ${jobUUID}`,
+                  serviceStore.getBlob(blobUUID, jobUUID),
+                ),
+              putBlob: (blobUUID, jobUUID, data) =>
+                withLoading(
+                  `writing blob: ${blobUUID} in job ${jobUUID}`,
+                  serviceStore.putBlob(blobUUID, jobUUID, data),
+                ),
+            },
+      [serviceState, serviceStore, withLoading],
+    ),
     loading: loadingIds.size !== 0,
     navigationState,
     navigate,
