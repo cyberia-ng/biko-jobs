@@ -17,9 +17,9 @@ import {
   JobBlob,
 } from "@biko-jobs/api-client/schemas.ts";
 
-function msgPackBody(schema: z.ZodType) {
+function msgPackBody(schema: z.ZodType, limit?: number) {
   return (req: Request, res: Response, next: NextFunction) =>
-    express.raw({ type: "application/vnd.msgpack" })(req, res, (e) => {
+    express.raw({ type: "application/vnd.msgpack", limit })(req, res, (e) => {
       if (e) return next(e);
       try {
         const decoded = mpDecoder.decode(req.body);
@@ -112,7 +112,7 @@ export function addRoutes(
     }
   });
 
-  app.post("/blobs", msgPackBody(JobBlob), (req, res) => {
+  app.post("/blobs", msgPackBody(JobBlob, 15 * 1024 * 1024), (req, res) => {
     try {
       db.addBlob(req.body as JobBlob);
       res.status(201).send();
