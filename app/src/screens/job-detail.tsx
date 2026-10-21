@@ -37,7 +37,7 @@ export function JobDetail() {
     return <></>;
   }
   return (
-    <>
+    <div className="fs-4">
       {modalState === "delete job" && (
         <Modal
           onDismiss={() => setModalState(null)}
@@ -101,12 +101,11 @@ export function JobDetail() {
             <Status job={job} />
           </div>
           <hr />
-          <div className="job-detail-tags">
+          <div className="job-detail-tags fs-4">
             <Tags
               tags={job.tags}
               onAddTag={(tag) => session?.dispatch(addJobTag({ uuid: job.uuid, tag }))}
               onDeleteTag={(tag) => session?.dispatch(removeJobTag({ uuid: job.uuid, tag }))}
-              dropdownClassAll="fs-4"
             />
           </div>
           <hr />
@@ -120,7 +119,7 @@ export function JobDetail() {
           ))}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

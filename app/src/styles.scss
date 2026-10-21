@@ -32,3 +32,13 @@ $bootstrap-icons-font-dir: "bootstrap-icons/font/fonts";
 .edit-job-tags .dropdown-menu {
   min-width: 12rem;
 }
+
+.btn,
+.dropdown-menu,
+.form-control {
+  font-size: inherit;
+}
+
+.modal-title > * {
+  margin-bottom: 0;
+}

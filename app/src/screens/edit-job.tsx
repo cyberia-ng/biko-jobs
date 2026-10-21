@@ -14,7 +14,8 @@ type JobAction = Omit<Extract<Action["event"], { type: "upsert job" }>, "type" |
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
   const { service: service_, navigate, navigationState } = useContext(AppContext);
-  const [loading, setLoading] = useState<boolean | Error>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [formReset, setFormReset] = useState(false);
   if (service_ === undefined) {
     return <>not connected</>;
   }
@@ -41,13 +42,23 @@ export function EditJob(props: { new_?: boolean }) {
       }
       const action: Action = upsertJob({ ...omit(jobAction, "images"), images });
       service.dispatch(action);
+      if (isNew) {
+        setFormReset(!formReset);
+      }
       setLoading(false);
-    })().catch((e: Error) => setLoading(e));
+    })();
   }
   let content: ReactNode;
   let job: Job | undefined = undefined;
   if (isNew) {
-    content = <EditJobForm key={undefined} onSubmit={submit} disabled={loading === true} />;
+    content = (
+      <EditJobForm
+        key={formReset ? "" : " "}
+        onSubmit={submit}
+        disabled={loading}
+        onReset={() => setFormReset(!formReset)}
+      />
+    );
   } else {
     if (navigationState.screen !== "edit job") {
       throw new Error("unreachable");
@@ -56,9 +67,7 @@ export function EditJob(props: { new_?: boolean }) {
     if (job === undefined) {
       content = "Job does not exist";
     } else {
-      content = (
-        <EditJobForm key={job.uuid} job={job} onSubmit={submit} disabled={loading === true} />
-      );
+      content = <EditJobForm key={job.uuid} job={job} onSubmit={submit} disabled={loading} />;
     }
   }
   return (
@@ -79,9 +88,12 @@ export function EditJob(props: { new_?: boolean }) {
 function EditJobForm({
   job,
   onSubmit,
+  onReset,
+  disabled,
 }: {
   job?: Job;
   onSubmit: (job: JobAction) => void;
+  onReset?: () => void;
   disabled: boolean;
 }) {
   const [customerName, setCustomerName] = useState<string>(job?.customerName ?? "");
@@ -97,12 +109,6 @@ function EditJobForm({
   const [photos, setPhotos] = useState<PhotosT>(
     job?.images.map((image) => ({ type: "existing", image, job: job.uuid })) ?? [],
   );
-  function reset() {
-    setCustomerName("");
-    setCustomerPhoneNumber("");
-    setDescription("");
-    setPhotos([]);
-  }
   function submit() {
     const jobAction: JobAction = {
       uuid: job?.uuid ?? crypto.randomUUID(),
@@ -126,6 +132,7 @@ function EditJobForm({
             className="form-control"
             id="customerName"
             value={customerName}
+            disabled={disabled}
             onChange={(e) => setCustomerName(e.target.value)}
           />
         </div>
@@ -138,6 +145,7 @@ function EditJobForm({
             className="form-control"
             id="customerPhoneNumber"
             value={customerPhoneNumber}
+            disabled={disabled}
             onChange={(e) => setCustomerPhoneNumber(e.target.value)}
           />
         </div>
@@ -150,6 +158,7 @@ function EditJobForm({
             className="form-control"
             rows={5}
             value={description}
+            disabled={disabled}
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
@@ -158,15 +167,26 @@ function EditJobForm({
             tags={tags}
             onAddTag={(tag) => dispatchTags([true, tag])}
             onDeleteTag={(tag) => dispatchTags([false, tag])}
+            disabled={disabled}
           />
         </div>
         <Photos photos={photos} onChange={setPhotos} />
         <div className="mb-3">
-          <button type="submit" className="btn btn-primary me-3" onClick={() => submit()}>
+          <button
+            type="submit"
+            className="btn btn-primary me-3"
+            onClick={() => submit()}
+            disabled={disabled}
+          >
             {job === undefined ? "Submit" : "Save"}
           </button>
           {job === undefined && (
-            <button type="button" className="btn btn-danger" onClick={reset}>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => onReset?.()}
+              disabled={disabled}
+            >
               Reset
             </button>
           )}

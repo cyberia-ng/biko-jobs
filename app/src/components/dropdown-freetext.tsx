@@ -4,7 +4,7 @@ export function DropdownFreeText(props: {
   select: string;
   options: string[];
   onSelect: (value: string) => void;
-  classAll?: string | undefined;
+  disabled?: boolean | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [freeText, setFreeText] = useState("");
@@ -30,8 +30,9 @@ export function DropdownFreeText(props: {
       <button
         type="button"
         ref={btnRef}
-        className={`btn btn-secondary dropdown-toggle ${props.classAll ?? ""}`}
+        className={"btn btn-secondary dropdown-toggle"}
         onClick={() => setExpanded(!expanded)}
+        disabled={props.disabled}
       >
         {props.select}
       </button>
@@ -41,17 +42,19 @@ export function DropdownFreeText(props: {
             <div className="d-flex">
               <input
                 type="text"
-                className={`form-control rounded-end-0 ${props.classAll ?? ""}`}
+                className={"form-control rounded-end-0"}
                 onChange={(e) => setFreeText(e.target.value)}
+                disabled={props.disabled}
               />
               <button
                 type="button"
-                className={`btn btn-success rounded-start-0 ${props.classAll ?? ""}`}
+                className={"btn btn-success rounded-start-0"}
                 onClick={() => {
                   setExpanded(false);
                   props.onSelect(freeText);
                   setFreeText("");
                 }}
+                disabled={props.disabled}
               >
                 <i className="bi bi-check" />
               </button>
@@ -61,10 +64,11 @@ export function DropdownFreeText(props: {
         {props.options.map((option) => (
           <li key={option}>
             <a
-              className={`dropdown-item ${props.classAll ?? ""}`}
+              className={"dropdown-item"}
               href="#"
               onClick={(e) => {
                 e.preventDefault();
+                if (props.disabled) return;
                 setExpanded(false);
                 props.onSelect(option);
               }}

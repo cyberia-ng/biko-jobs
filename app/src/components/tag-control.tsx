@@ -8,12 +8,12 @@ export function Tags({
   tags,
   onDeleteTag,
   onAddTag,
-  dropdownClassAll,
+  disabled,
 }: {
   tags: Set<string>;
   onDeleteTag: (tag: string) => void;
   onAddTag: (tag: string) => void;
-  dropdownClassAll?: string | undefined;
+  disabled?: boolean;
 }) {
   const { service: session } = useContext(AppContext);
   const knownTags =
@@ -28,7 +28,7 @@ export function Tags({
           select="Add tag"
           options={Array.from(knownTags.union(alwaysSuggestedTags))}
           onSelect={(value) => onAddTag(value)}
-          classAll={dropdownClassAll}
+          disabled={disabled}
         />
       </div>
       <div className="d-flex flex-wrap gap-1">
@@ -44,7 +44,7 @@ export function Tags({
                 className="text-danger"
                 onClick={(e) => {
                   e.preventDefault();
-                  onDeleteTag(tag);
+                  if (!disabled) onDeleteTag(tag);
                 }}
               >
                 <i className="bi bi-x fs-4" />
