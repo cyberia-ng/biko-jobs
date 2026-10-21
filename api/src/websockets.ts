@@ -2,6 +2,8 @@ import { URL } from "node:url";
 import { WebSocketServer } from "ws";
 import type { WebSocket } from "ws";
 import type { Server } from "node:http";
+import { mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
+import type { JobEvent } from "@biko-jobs/api-client/schemas.ts";
 
 export class MapSet<K, V> {
   private map: Map<K, Set<V>>;
@@ -35,11 +37,11 @@ export class MapSet<K, V> {
 }
 
 export class WrappedWebSocketServer {
-  private eventsConnections: MapSet<string, WebSocket>;
+  private eventsConnections: Set<WebSocket>;
   private channels: MapSet<string, WebSocket>;
 
   constructor(server: Server) {
-    this.eventsConnections = new MapSet();
+    this.eventsConnections = new Set();
     this.channels = new MapSet();
     const wss = new WebSocketServer({ server });
     wss.on("error", (err) => console.error("WSS error:", err));
@@ -54,9 +56,9 @@ export class WrappedWebSocketServer {
           ws.close(1002, "Unsupported path");
           return;
         }
-        case "session events": {
-          this.eventsConnections.add(parsedUrl.session, ws);
-          ws.on("close", () => this.eventsConnections.remove(parsedUrl.session, ws));
+        case "events": {
+          this.eventsConnections.add(ws);
+          ws.on("close", () => this.eventsConnections.delete(ws));
           return;
         }
         case "channel": {
@@ -75,12 +77,11 @@ export class WrappedWebSocketServer {
     });
   }
 
-  notifyClientsForSession(id: string, event: Uint8Array<ArrayBuffer>) {
-    const connections = this.eventsConnections.get(id) ?? [];
-    for (const ws of connections) {
-      ws.send(event, (err) => {
+  notifyClients(event: JobEvent) {
+    for (const ws of this.eventsConnections) {
+      ws.send(mpEncoder.encode(event), (err) => {
         if (err) {
-          console.error("WebSocket error", id, err);
+          console.error("WebSocket error", err);
         }
       });
     }
@@ -89,13 +90,11 @@ export class WrappedWebSocketServer {
 
 function wsUrlParse(
   urlSuffix: string,
-): { type: "session events"; session: string } | { type: "channel"; channel: string } | undefined {
+): { type: "events" } | { type: "channel"; channel: string } | undefined {
   const url = new URL(urlSuffix, "http://localhost");
 
-  const sessionEventsMatch = url.pathname.match(/^\/session\/([^/]+)\/events/);
-  if (sessionEventsMatch !== null) {
-    const session = decodeURIComponent(sessionEventsMatch[1]!);
-    return { type: "session events", session };
+  if (url.pathname === "/events") {
+    return { type: "events" };
   }
 
   const channelMatch = url.pathname.match(/^\/channel\/([^/]+)/);

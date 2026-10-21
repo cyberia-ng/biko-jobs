@@ -1,7 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
-import { inspect } from "node:util";
 
 export class Sessions {
   private db: DatabaseSync;
@@ -14,10 +11,9 @@ export class Sessions {
     listSessions: StatementSync;
   };
 
-  constructor(sqlitePath: string) {
-    this.db = new DatabaseSync(sqlitePath);
+  constructor(db: DatabaseSync) {
+    this.db = db;
     this.db.exec("PRAGMA foreign_keys = on;");
-    migrateDb(this.db);
     this.statements = {
       getOrInsertSession: this.db.prepare(
         "INSERT INTO sessions (name) VALUES (?) ON CONFLICT (name) DO UPDATE SET name = name RETURNING id;",
@@ -63,34 +59,5 @@ export class Sessions {
 
   sessionNames(): string[] {
     return this.statements.listSessions.all().map((row) => row.name as string);
-  }
-}
-
-function migrateDb(db: DatabaseSync) {
-  const migrationsDir = join(import.meta.dirname, "..", "db-migrations");
-  const migrationsFilenames = readdirSync(migrationsDir);
-  const migrations = migrationsFilenames
-    .map((filename) => {
-      const match = filename.match(/^(\d+)(-.*)?\.sql$/);
-      if (match === null) {
-        throw new Error("migration had unexpected filename");
-      }
-      const num = parseInt(match[1]!, 10);
-      return { migration: readFileSync(join(migrationsDir, filename), "utf8"), filename, num };
-    })
-    .toSorted(({ num: numA }, { num: numB }) => numA - numB);
-  const getPragmaStmt = db.prepare("PRAGMA user_version;");
-  const version = (getPragmaStmt.get()!.user_version as number | undefined) ?? 0;
-  for (const migration of migrations) {
-    if (migration.num <= version) continue;
-    db.exec("BEGIN TRANSACTION;");
-    try {
-      db.exec(migration.migration);
-      db.exec(`PRAGMA user_version = ${migration.num};`);
-      db.exec("COMMIT;");
-    } catch (e) {
-      db.exec("ROLLBACK;");
-      throw new Error(`migration failed: ${migration.filename}; ${inspect(e)}`);
-    }
   }
 }

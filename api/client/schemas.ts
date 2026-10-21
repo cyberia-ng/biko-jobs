@@ -1,0 +1,56 @@
+import { z } from "zod";
+
+export const Bytes = z.instanceof(Uint8Array);
+export type Bytes = z.infer<typeof Bytes>;
+
+export const MasterKey = z.object({
+  uuid: z.uuidv4(),
+  name: z.string(),
+  salt: Bytes,
+  publicKey: Bytes,
+  encryptedPrivateKey: Bytes,
+});
+export type MasterKey = z.infer<typeof MasterKey>;
+
+export const Job = z.object({
+  uuid: z.uuidv4(),
+  keys: z.map(z.uuidv4(), Bytes),
+});
+export type Job = z.infer<typeof Job>;
+
+export const JobList = z.array(Job);
+export type JobList = z.infer<typeof JobList>;
+
+export const JobEvent = z.object({
+  job: z.uuidv4(),
+  uuid: z.uuidv4(),
+  data: Bytes,
+});
+export type JobEvent = z.infer<typeof JobEvent>;
+
+export const JobEvents = z.array(JobEvent);
+export type JobEvents = z.infer<typeof JobEvents>;
+
+export const JobUUIDs = z.set(z.uuidv4());
+export type JobUUIDs = z.infer<typeof JobUUIDs>;
+
+export const JobBlob = z.object({
+  job: z.uuidv4(),
+  uuid: z.uuidv4(),
+  data: Bytes,
+});
+export type JobBlob = z.infer<typeof JobBlob>;
+
+export const EventStreamMessage = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("job event"),
+    event: JobEvent,
+  }),
+  z.object({
+    type: z.literal("job creation"),
+    job: Job,
+  }),
+  z.object({
+    type: z.literal("master key creation"),
+  }),
+]);

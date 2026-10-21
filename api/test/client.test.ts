@@ -1,235 +1,205 @@
-import "temporal-polyfill/global";
-import { createApp } from "@biko-jobs/api/app.ts";
-import "mocha";
-import type { Server } from "node:http";
-import { ApiClient, listSessions } from "@biko-jobs/api-client";
-import { expect } from "chai";
-import { mpEncoder, mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
 import {
-  SessionSharingChannel,
-  SessionSharingReceiver,
-  type SessionSharingError,
-} from "@biko-jobs/api-client/session-sharing.ts";
-
-const test = it;
+  ApiClient,
+  ClientError,
+  type JobBlob,
+  type JobEvent,
+  MasterKeyPair,
+  type Bytes,
+  Job,
+} from "@biko-jobs/api-client";
+import { createApp } from "@biko-jobs/api/app.ts";
+import { expect, test, describe, beforeAll, beforeEach, afterEach } from "vitest";
+import type { Server } from "node:http";
 
 describe("api client", () => {
+  let masterKey: MasterKeyPair;
   let client: ApiClient;
   let listener: Server;
   let port: number;
 
-  beforeEach((done) => {
+  beforeAll(async () => {
+    masterKey = await MasterKeyPair.generate("some name", "some password");
+  });
+
+  beforeEach(async () => {
     const app = createApp();
     port = Math.round(Math.random() * (65535 - 1024) + 1024);
-    listener = app.listen(port, () => {
-      ApiClient.open(`http://localhost:${port}`, "some session", "a password").then((theClient) => {
-        client = theClient;
-        done();
-      });
+    listener = await new Promise((res) => {
+      const server = app.listen(port, () => res(server));
     });
+    client = new ApiClient(`http://localhost:${port}`);
+    await client.addMasterKeyPair(masterKey);
   });
 
-  afterEach((done) => {
-    listener.close(() => {
-      done();
-    });
+  afterEach(async () => {
+    await client.closeEventsSocket();
+    await new Promise<void>((res) => listener.close(() => res()));
     listener.closeAllConnections();
-    client.closeWebSocket();
   });
 
-  test("new session", async () => {
-    const events = await client.events();
-    expect(events).to.deep.equal([]);
-  });
+  function utf8(s: string): Bytes {
+    return new Uint8Array(Buffer.from(s, "utf8"));
+  }
 
-  test("event round trip", async () => {
-    await client.postEvent({ hello: "world" });
-    await client.postEvent({ hola: "mundo" });
-    const events = await client.events();
-    expect(events).to.deep.equal([{ hello: "world" }, { hola: "mundo" }]);
-  });
-
-  test("blob round trip", async () => {
-    await client.putBlob("blob-id", Buffer.from("hello world", "utf8"));
-    const received = await client.getBlob("blob-id");
-    expect(received).to.deep.equal(Buffer.from("hello world", "utf8"));
-  });
-
-  test("non-existent blob", async () => {
-    const received = await client.getBlob("blob-id");
-    expect(received).to.deep.equal(undefined);
-  });
-
-  test("clients with same parameters can read each other's data", async () => {
-    let clientA: ApiClient | undefined = undefined;
-    let clientB: ApiClient | undefined = undefined;
-    try {
-      clientA = await ApiClient.open(`http://localhost:${port}`, "some session", "a password");
-      clientB = await ApiClient.open(`http://localhost:${port}`, "some session", "a password");
-      await clientA.postEvent({ hello: "world" });
-      const events = await clientB.events();
-      expect(events).to.deep.equal([{ hello: "world" }]);
-    } finally {
-      clientA?.closeWebSocket();
-      clientB?.closeWebSocket();
-    }
-  });
-
-  describe("websocket subscribe", () => {
-    test("it works", (done) => {
-      let expectedEvents = [{ hello: "world" }, { hola: "mundo" }];
-      client.subscribeEvents((event) => {
-        const expected = expectedEvents.shift();
-        try {
-          expect(event).to.deep.equal(expected);
-        } catch (e) {
-          done(e);
-        }
-        if (expectedEvents.length === 0) {
-          done();
-        }
-      });
-      client.postEvent({ hello: "world" }).then(() => {
-        client.postEvent({ hola: "mundo" });
-      });
+  describe("master keys", () => {
+    test("add master key", async () => {
+      const key = await MasterKeyPair.generate("some other name", "some password");
+      await client.addMasterKeyPair(key);
     });
-  });
 
-  describe("list sessions", () => {
-    test("works", async () => {
-      await client.putBlob("some-id", Buffer.from("hello world", "utf8"));
-      const clientB = await ApiClient.open(
-        `http://localhost:${port}`,
-        "some other session",
-        "a password",
+    test("list master keys", async () => {
+      const keys = await client.listMasterKeys();
+      expect(keys).toHaveLength(1);
+      const mk = keys[0]!;
+      expect(mk.publicKey.fingerprint).to.equal(masterKey.publicKey.fingerprint);
+      const encrypted = await mk.publicKey.encrypt({
+        type: "plaintext",
+        data: utf8("hello world"),
+      });
+      const decrypted = await masterKey.privateKey.decrypt(encrypted);
+      expect(decrypted.data).to.deep.equal(utf8("hello world"));
+    });
+
+    test("add fails for duplicate name", async () => {
+      const key1 = await MasterKeyPair.generate("duplicate name", "some password");
+      const key2 = await MasterKeyPair.generate("duplicate name", "some other password");
+      await client.addMasterKeyPair(key1);
+      await expect(client.addMasterKeyPair(key2)).rejects.toThrow(
+        new ClientError({ type: "master key post conflict", name: key2.name, uuid: key2.uuid }),
       );
-      await clientB.postEvent("hello");
-      clientB.closeWebSocket();
-      const receivedSessions = await listSessions(`http://localhost:${port}`);
-      expect(receivedSessions).to.deep.equal(["some session", "some other session"]);
     });
-  });
-});
 
-describe("key exchange", () => {
-  let listener: Server;
-  let port: number;
-  let sessionSharingChannel: SessionSharingChannel | undefined = undefined;
-  let sessionSharingReceiver: SessionSharingReceiver | undefined = undefined;
+    test("adding fails for duplicate uuid", async () => {
+      const key = await MasterKeyPair.generate("duplicate name", "some password");
+      await client.addMasterKeyPair(key);
+      await expect(client.addMasterKeyPair(key)).rejects.toThrow(
+        new ClientError({ type: "master key post conflict", name: key.name, uuid: key.uuid }),
+      );
+    });
 
-  beforeEach((done) => {
-    const app = createApp();
-    port = Math.round(Math.random() * (65535 - 1024) + 1024);
-    listener = app.listen(port, () => done());
+    test("adding new master key requires new encrypted job keys");
   });
 
-  afterEach((done) => {
-    sessionSharingChannel?.close();
-    sessionSharingReceiver?.close();
-    listener.close(() => {
-      done();
+  describe("jobs", () => {
+    test("get jobs", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey]);
+      const jobs = await client.getJobs(masterKey);
+      expect(jobs).to.deep.equal([job]);
     });
-    listener.closeAllConnections();
+
+    test("create fails for duplicate jobs", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey]);
+      await expect(client.addJob(job, [masterKey])).rejects.toThrow(
+        new ClientError({ type: "job put conflict", uuid: job.uuid }),
+      );
+    });
+
+    test("create fails without encryption by all known master keys", async () => {
+      const otherMasterKey = await MasterKeyPair.generate("some other name", "some password");
+      await client.addMasterKeyPair(otherMasterKey);
+      const job = await Job.generate(crypto.randomUUID());
+      await expect(client.addJob(job, [masterKey])).rejects.toThrow(
+        new ClientError({ type: "job keys incomplete" }),
+      );
+    });
   });
 
-  it("works", async () => {
-    const confirm = async (receivedClientPubKey: Uint8Array) =>
-      sessionSharingReceiver !== undefined &&
-      Buffer.compare(sessionSharingReceiver.publicKey, receivedClientPubKey) === 0;
-    let exchangedClientPubKey: Uint8Array | undefined = undefined;
-    let sharingError: SessionSharingError | undefined = undefined;
-    sessionSharingChannel = await SessionSharingChannel.open({
-      baseUrl: `http://localhost:${port}`,
-      session: "some-session",
-      password: "some-password",
-      approve: confirm,
-      onKeyExchange: (clientPubKey) => {
-        exchangedClientPubKey = clientPubKey;
-      },
-      onError: (error) => {
-        sharingError = error;
-      },
+  describe("job events", () => {
+    test("add an event", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey]);
+      const event: JobEvent = { uuid: crypto.randomUUID(), data: "hello world", job };
+      console.log(client.addEvent);
+      await client.addEvent(event);
     });
 
-    let receivingError: Event | undefined = undefined;
-    sessionSharingReceiver = await SessionSharingReceiver.open({
-      baseUrl: `http://localhost:${port}`,
-      session: "some-session",
-      serverPublicKey: sessionSharingChannel.publicKey,
-      onWebSocketError: (event) => {
-        receivingError = event;
-      },
+    test("duplicate UUID fails", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey]);
+      const event = { uuid: crypto.randomUUID(), data: "hello world", job };
+      await client.addEvent(event);
+      await expect(client.addEvent(event)).rejects.toThrow(
+        new ClientError({ type: "duplicate event", uuid: event.uuid }),
+      );
     });
-    const receiveResult = await sessionSharingReceiver.receivePassword();
-    expect(sharingError).to.equal(undefined);
-    expect(receivingError).to.equal(undefined);
-    expect(exchangedClientPubKey).to.deep.equal(sessionSharingReceiver.publicKey);
-    expect(receiveResult.type).to.not.equal("rejected");
-    expect(
-      (receiveResult as Extract<typeof receiveResult, { type: "accepted" }>).password,
-    ).to.deep.equal("some-password");
+
+    test("get events for all jobs for which we know the key", async () => {
+      const job1 = await Job.generate(crypto.randomUUID());
+      const job2 = await Job.generate(crypto.randomUUID());
+      await client.addJob(job1, [masterKey]);
+      await client.addJob(job2, [masterKey]);
+      const event1 = { uuid: crypto.randomUUID(), data: "hello world", job: job1 };
+      const event2 = { uuid: crypto.randomUUID(), data: "hola mundo", job: job2 };
+      await client.addEvent(event1);
+      await client.addEvent(event2);
+      const events = await client.getEventsByJobs([job1]);
+      expect(events.size).to.equal(1);
+      expect(events).to.have.key(job1.uuid);
+      expect(events.get(job1.uuid)).to.deep.equal([event1]);
+    });
   });
 
-  it("handles rejection", async () => {
-    sessionSharingChannel = await SessionSharingChannel.open({
-      baseUrl: `http://localhost:${port}`,
-      session: "some-session",
-      password: "some-password",
-      approve: () => Promise.resolve(false),
-      onKeyExchange: () => {},
-      onError: () => {},
+  describe("blobs", () => {
+    test("put and read a blob", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey]);
+      const blob: JobBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), job };
+      await client.putBlob(blob);
+      const received = await client.getBlob(blob.uuid, job);
+      expect(received).to.deep.equal(blob);
     });
-    sessionSharingReceiver = await SessionSharingReceiver.open({
-      baseUrl: `http://localhost:${port}`,
-      session: "some-session",
-      serverPublicKey: sessionSharingChannel.publicKey,
-      onWebSocketError: () => {},
+
+    test("duplicate UUID fails", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey]);
+      const blob: JobBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), job };
+      await client.putBlob(blob);
+      await expect(client.putBlob(blob)).rejects.toThrow(
+        new ClientError({ type: "blob put conflict", uuid: blob.uuid }),
+      );
     });
-    const receiveResult = await sessionSharingReceiver.receivePassword();
-    expect(receiveResult.type).to.equal("rejected");
+
+    test("read non-existent blob", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey]);
+      const received = await client.getBlob(crypto.randomUUID(), job);
+      expect(received).to.equal(undefined);
+    });
   });
-});
 
-describe("messagepack codec", () => {
-  describe("temporal handling", () => {
-    test("date before 1970", () => {
-      const instant = Temporal.Instant.from("1969-07-20T20:17:40Z");
-      expect(
-        Temporal.Instant.compare(
-          instant,
-          mpDecoder.decode(mpEncoder.encode(instant)) as Temporal.Instant,
-        ),
-      ).to.equal(0);
-    });
-
-    test("date after 1970", () => {
-      const instant = Temporal.Instant.from("2000-01-01T00:00:00Z");
-      expect(
-        Temporal.Instant.compare(
-          instant,
-          mpDecoder.decode(mpEncoder.encode(instant)) as Temporal.Instant,
-        ),
-      ).to.equal(0);
-    });
-
-    test("epoch -1 nanosecond", () => {
-      const instant = Temporal.Instant.fromEpochNanoseconds(-1n);
-      expect(
-        Temporal.Instant.compare(
-          instant,
-          mpDecoder.decode(mpEncoder.encode(instant)) as Temporal.Instant,
-        ),
-      ).to.equal(0);
-    });
-
-    test("epoch +1 nanosecond", () => {
-      const instant = Temporal.Instant.fromEpochNanoseconds(1n);
-      expect(
-        Temporal.Instant.compare(
-          instant,
-          mpDecoder.decode(mpEncoder.encode(instant)) as Temporal.Instant,
-        ),
-      ).to.equal(0);
+  describe("websocket events", () => {
+    test("receives events", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey]);
+      const event1: JobEvent = { uuid: crypto.randomUUID(), data: "hello world", job };
+      const event2: JobEvent = { uuid: crypto.randomUUID(), data: "hola mundo", job };
+      const expectedEvents = [event1, event2];
+      let collectedEvents: JobEvent[] = [];
+      let error: unknown = undefined;
+      let doneCollectingEvents: () => void;
+      const eventCollectionP = new Promise<void>((res) => {
+        doneCollectingEvents = res;
+      });
+      await client.subscribeEvents({
+        getJob: () => job,
+        onEvent: (event) => {
+          collectedEvents.push(event);
+          if (collectedEvents.length === expectedEvents.length) {
+            doneCollectingEvents();
+          }
+        },
+        onError: (e) => {
+          error = e;
+          doneCollectingEvents();
+        },
+      });
+      await client.addEvent(event1);
+      await client.addEvent(event2);
+      await eventCollectionP;
+      expect(error).to.equal(undefined);
+      expect(collectedEvents).to.deep.equal(expectedEvents);
     });
   });
 });

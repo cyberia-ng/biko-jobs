@@ -1,14 +1,14 @@
 import express from "express";
 import { createServer } from "node:http";
-import { Sessions } from "./sessions.ts";
 import { addRoutes } from "./routes.ts";
 import { WrappedWebSocketServer } from "./websockets.ts";
+import { Database } from "./database.ts";
 
 export function createApp(sqlitePath?: string) {
   const app = express();
-  const sessions = new Sessions(sqlitePath ?? ":memory:");
+  const db = new Database(sqlitePath);
   const server = createServer(app);
   const wss = new WrappedWebSocketServer(server);
-  addRoutes(app, sessions, wss.notifyClientsForSession.bind(wss));
+  addRoutes(app, db, wss.notifyClients.bind(wss));
   return server;
 }

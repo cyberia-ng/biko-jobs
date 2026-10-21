@@ -15,7 +15,7 @@
   "main": "index.js",
   "scripts": {
     "prepare": "husky",
-    "test-api": "npx --workspace api/test mocha",
+    "test-api": "npx --workspace api/test vitest run",
     "serve-api": "node --watch-path api api/src/index.ts",
     "serve-app": "cd app && npx vite",
     "dev": "npx concurrently -n 'api,app' 'npm run serve-api' 'npm run serve-app'",

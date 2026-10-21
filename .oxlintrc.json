@@ -7,7 +7,17 @@
   "rules": {
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
-    "eslint/curly": ["error", "multi-line"]
+    "eslint/curly": ["error", "multi-line"],
+    "typescript/strict-boolean-expressions": [
+      "error",
+      { "allowString": false, "allowNullableObject": false }
+    ],
+    "eslint/no-unused-vars": [
+      "error",
+      {
+        "caughtErrorsIgnorePattern": "^_.*"
+      }
+    ]
   },
   "env": {
     "builtin": true
