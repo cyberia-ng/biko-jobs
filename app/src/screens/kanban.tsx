@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { ImageBlob } from "../components/blob-loader.tsx";
 import { TimeAgo } from "../components/time-ago.tsx";
 import { AppContext } from "../context.ts";
-import type { Job } from "../session-state/state.ts";
+import type { Job } from "../service-state/state.ts";
 import { jobDetail } from "../navigation-state.ts";
 
 export function Kanban() {
@@ -18,7 +18,7 @@ export function Kanban() {
 }
 
 function Column(props: { title: string; statuses: Job["status"][] }) {
-  const { session, navigate } = useContext(AppContext);
+  const { service: session, navigate } = useContext(AppContext);
   const jobs = Array.from(session?.state.jobs.values() ?? []).filter((job) =>
     props.statuses.includes(job.status),
   );
@@ -43,7 +43,11 @@ function Column(props: { title: string; statuses: Job["status"][] }) {
             <div className="row gx-2 mx-1 mb-2 border rounded overflow-hidden">
               <div className="col-4 ps-0">
                 {job.images.length > 0 && (
-                  <ImageBlob blobId={job.images[0]!.blobId} type={job.images[0]!.type} />
+                  <ImageBlob
+                    jobUUID={job.uuid}
+                    blobUUID={job.images[0]!.blobId}
+                    type={job.images[0]!.type}
+                  />
                 )}
               </div>
               <div className="col d-flex flex-column">

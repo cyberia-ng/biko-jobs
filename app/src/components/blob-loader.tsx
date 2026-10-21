@@ -9,14 +9,19 @@ export function Spinner() {
   );
 }
 
-export function ImageBlob(props: { blobId: string; type: string; onError?: (e: unknown) => void }) {
-  const { session } = useContext(AppContext);
+export function ImageBlob(props: {
+  jobUUID: string;
+  blobUUID: string;
+  type: string;
+  onError?: (e: unknown) => void;
+}) {
+  const { service: session } = useContext(AppContext);
   const [state, setState] = useState<
     { type: "loading" | "error" | "not found" } | { type: "loaded"; url: string }
   >({ type: "loading" });
   useEffect(() => {
     session
-      ?.getBlob(props.blobId)
+      ?.getBlob(props.blobUUID, props.jobUUID)
       .then((data) => {
         if (data === undefined) {
           setState({ type: "not found" });
@@ -26,7 +31,10 @@ export function ImageBlob(props: { blobId: string; type: string; onError?: (e: u
           setState({ type: "loaded", url });
         }
       })
-      .catch((err) => props.onError?.(err));
+      .catch((err) => {
+        setState({ type: "error" });
+        props.onError?.(err);
+      });
   }, [session, props]);
   useEffect(
     () => () => {

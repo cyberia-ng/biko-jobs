@@ -3,11 +3,10 @@ import { AppContext } from "../context.ts";
 import { unparse } from "papaparse";
 
 export function Export() {
-  const { session, loginState } = useContext(AppContext);
-  const sessionId = loginState?.session;
+  const { service } = useContext(AppContext);
   function generatePseudonymised() {
     const jobs = Array.from(
-      session?.state.jobs.values().map(({ uuid, number, description, status, timestamps }) => ({
+      service?.state.jobs.values().map(({ uuid, number, description, status, timestamps }) => ({
         uuid,
         number,
         description,
@@ -34,7 +33,7 @@ export function Export() {
         <ExportRow
           text="Export pseudonymised CSV"
           generate={generatePseudonymised}
-          filename={(sessionId ?? "") + ".pseudonymised.csv"}
+          filename={"biko-jobs.pseudonymised.csv"}
         />
       </div>
     </div>

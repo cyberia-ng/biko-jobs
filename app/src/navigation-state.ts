@@ -4,15 +4,15 @@ export type State =
   | {
       screen: "kanban" | "new job" | "export";
     }
-  | {
-      screen: "session manager";
-      keyExchange:
-        | {
-            session: string;
-            serverPublicKey: Uint8Array<ArrayBuffer>;
-          }
-        | undefined;
-    }
+  // | {
+  //     screen: "session manager";
+  //     keyExchange:
+  //       | {
+  //           session: string;
+  //           serverPublicKey: Uint8Array<ArrayBuffer>;
+  //         }
+  //       | undefined;
+  //   }
   | { screen: "job detail"; uuid: string }
   | { screen: "edit job"; uuid: string };
 
@@ -22,13 +22,12 @@ export const basicScreen = (screen: "kanban" | "new job" | "export"): State => (
 
 export const jobDetail = (uuid: string): State => ({ screen: "job detail", uuid });
 export const editJob = (uuid: string): State => ({ screen: "edit job", uuid });
-export const sessionManager = (
-  keyExchange?: Extract<State, { screen: "session manager" }>["keyExchange"],
-): State => ({ screen: "session manager", keyExchange });
+// export const sessionManager = (
+//   keyExchange?: Extract<State, { screen: "session manager" }>["keyExchange"],
+// ): State => ({ screen: "session manager", keyExchange });
 
 export const initialState: State = {
-  screen: "session manager",
-  keyExchange: undefined,
+  screen: "kanban",
 };
 
 export function deserialize(hash: string): State | undefined {
@@ -43,18 +42,18 @@ export function deserialize(hash: string): State | undefined {
       return basicScreen("new job");
     case "export":
       return basicScreen("export");
-    case "session-manager": {
-      const session = components.shift();
-      const serverPublicKeyB64 = components.shift();
-      if (session !== undefined && serverPublicKeyB64 !== undefined) {
-        return sessionManager({
-          session,
-          serverPublicKey: Uint8Array.fromBase64(serverPublicKeyB64, { alphabet: "base64url" }),
-        });
-      } else {
-        return sessionManager();
-      }
-    }
+    // case "session-manager": {
+    //   const session = components.shift();
+    //   const serverPublicKeyB64 = components.shift();
+    //   if (session !== undefined && serverPublicKeyB64 !== undefined) {
+    //     return sessionManager({
+    //       session,
+    //       serverPublicKey: Uint8Array.fromBase64(serverPublicKeyB64, { alphabet: "base64url" }),
+    //     });
+    //   } else {
+    //     return sessionManager();
+    //   }
+    // }
     case "job-detail": {
       const uuid = components.shift();
       if (uuid === undefined) return undefined;
@@ -82,14 +81,14 @@ export function serialize(state: State): string {
     case "export":
       components.push("export");
       break;
-    case "session manager": {
-      components.push("session-manager");
-      if (state.keyExchange !== undefined) {
-        components.push(state.keyExchange.session);
-        components.push(state.keyExchange.serverPublicKey.toBase64({ alphabet: "base64url" }));
-      }
-      break;
-    }
+    // case "session manager": {
+    //   components.push("session-manager");
+    //   if (state.keyExchange !== undefined) {
+    //     components.push(state.keyExchange.session);
+    //     components.push(state.keyExchange.serverPublicKey.toBase64({ alphabet: "base64url" }));
+    //   }
+    //   break;
+    // }
     case "job detail":
       components.push("job-detail");
       components.push(state.uuid);

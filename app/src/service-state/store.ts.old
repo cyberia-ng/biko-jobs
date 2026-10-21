@@ -31,7 +31,7 @@ export class Store {
   }
 
   async refreshState() {
-    this.client.refreshWebSocket();
+    this.client.refreshEventsSocket();
     const actions = (await this.client.events()) as AnyVersionAction[];
     this.state = computeStateFromScratch(actions.map(migrateAction));
     this.callSubscribers();
@@ -50,7 +50,7 @@ export class Store {
 
   async postEvent(action: Action) {
     this.dispatch(action);
-    await this.client?.postEvent(action);
+    await this.client?.addEvent(action);
   }
 
   async writeBlob(id: string, data: Uint8Array<ArrayBuffer>) {

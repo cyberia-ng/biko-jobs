@@ -19,14 +19,14 @@ import {
   changeJobStatus,
   deleteJob,
   removeJobTag,
-} from "../session-state/action.ts";
-import type { Job } from "../session-state/state.ts";
+} from "../service-state/action.ts";
+import type { Job } from "../service-state/state.ts";
 import { basicScreen, editJob } from "../navigation-state.ts";
 
 type ModalState = null | "delete job";
 
 export function JobDetail() {
-  const { session, navigationState, navigate } = useContext(AppContext);
+  const { service: session, navigationState, navigate } = useContext(AppContext);
   const [modalState, setModalState] = useState<ModalState>(null);
   if (navigationState.screen !== "job detail") {
     return <></>;
@@ -115,7 +115,7 @@ export function JobDetail() {
         <div className="col-12 col-md-6 border-start">
           {job.images.map((image) => (
             <div key={image.blobId} className="mb-2 bg-white p-2 rounded shadow-sm">
-              <ImageBlob blobId={image.blobId} type={image.type} />
+              <ImageBlob jobUUID={job.uuid} blobUUID={image.blobId} type={image.type} />
             </div>
           ))}
         </div>
@@ -125,7 +125,7 @@ export function JobDetail() {
 }
 
 function Status(props: { job: Job }) {
-  const { session } = useContext(AppContext);
+  const { service: session } = useContext(AppContext);
   return (
     <select
       value={props.job.status}

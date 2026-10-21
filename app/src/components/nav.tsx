@@ -1,9 +1,9 @@
 import { useContext, type ReactNode } from "react";
 import { AppContext } from "../context.ts";
-import { basicScreen, sessionManager } from "../navigation-state.ts";
+import { basicScreen } from "../navigation-state.ts";
 
 export function Nav() {
-  const { session, loading, navigationState, navigate, refresh } = useContext(AppContext);
+  const { service: session, loading, navigationState, navigate, refresh } = useContext(AppContext);
   return (
     <div className="h-100">
       <div className="shadow h-100 bg-dark nav nav-pills d-flex flex-row flex-sm-column">
@@ -36,13 +36,6 @@ export function Nav() {
             </div>
           </NavItem>
         )}
-        <NavItem
-          end
-          active={navigationState.screen === "session manager"}
-          onClick={() => navigate(sessionManager())}
-        >
-          <i className="bi bi-journal-text fs-1" />
-        </NavItem>
         <NavItem end onClick={() => refresh()}>
           <i className="bi bi-arrow-clockwise fs-1" />
         </NavItem>

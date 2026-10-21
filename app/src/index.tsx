@@ -21,9 +21,7 @@ import {
 import { EditJob } from "./screens/edit-job.tsx";
 import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT, type LoginState } from "./context.ts";
-import { SessionManager } from "./screens/session.tsx";
-import { Store as SessionStore } from "./session-state/store.ts";
-import { listSessions } from "@biko-jobs/api-client";
+import { Store as ServiceStore } from "./service-state/store.ts";
 import { enableMapSet, produce } from "immer";
 import { assertNever } from "./assertNever.ts";
 import { Export } from "./screens/export.tsx";
@@ -64,73 +62,66 @@ function App() {
     new Set(),
   );
   const withLoading = useCallback(
-    (description: string, p: Promise<void> | undefined) => {
+    async <T,>(description: string, p: Promise<T>): Promise<T | undefined> => {
       if (p === undefined) return;
       const id = crypto.randomUUID();
       dispatchLoading([true, id]);
-      p.catch((e: unknown) => console.error("loading promise rejection", description, e)); // TODO error surfacing
-      p.finally(() => dispatchLoading([false, id]));
+      try {
+        return await p;
+      } catch (e) {
+        console.error("loading promise rejection", description, e); // TODO error surfacing
+      } finally {
+        dispatchLoading([false, id]);
+      }
     },
     [dispatchLoading],
   );
 
-  const [sessionStore, setSessionStore] = useState<SessionStore | undefined>(undefined);
-  const sessionState = useSyncExternalStore(
+  const [serviceStore, setServiceStore] = useState<ServiceStore | undefined>(undefined);
+  const serviceState = useSyncExternalStore(
     useCallback(
-      (cb) => (sessionStore === undefined ? () => () => undefined : sessionStore.subscribe(cb)),
-      [sessionStore],
+      (cb) => (serviceStore === undefined ? () => () => undefined : serviceStore.subscribe(cb)),
+      [serviceStore],
     ),
     useCallback(
-      () => (sessionStore === undefined ? undefined : sessionStore.getSnapshot()),
-      [sessionStore],
+      () => (serviceStore === undefined ? undefined : serviceStore.getSnapshot()),
+      [serviceStore],
     ),
   );
-  useEffect(() => () => sessionStore?.cleanup(), [sessionStore]);
-  const refreshSessionState = useCallback(
-    () => withLoading("refreshing session state", sessionStore?.refreshState()),
-    [sessionStore, withLoading],
+  const refresh = useCallback(
+    () => withLoading("refreshing service store", serviceStore?.refresh() ?? Promise.resolve()),
+    [serviceStore, withLoading],
   );
-
-  const [sessionsList, setSessionsList] = useState<string[]>([]);
-  const refreshSessionsList = useCallback(
-    () => withLoading("refreshing session list", listSessions("/api").then(setSessionsList)),
-    [withLoading],
-  );
-  const refresh = useCallback(() => {
-    refreshSessionsList();
-    refreshSessionState();
-  }, [refreshSessionState, refreshSessionsList]);
 
   useEffect(() => {
-    if (loginState === undefined) {
-      return;
-    }
-    if (window.localStorage.getItem(`session passwords/${loginState.session}`) === null) {
-      window.localStorage.setItem(`session passwords/${loginState.session}`, loginState.password);
-    }
     withLoading(
-      `connecting to session: ${loginState.session}`,
-      SessionStore.connect(loginState.session, loginState.password)
-        .then(setSessionStore)
-        .then(refreshSessionsList),
+      `loading service store`,
+      ServiceStore.openEphemeral(() => {}).then(setServiceStore),
     );
-  }, [loginState, withLoading, refreshSessionsList]);
-  useEffect(() => refreshSessionsList(), [refreshSessionsList]);
+  }, [loginState, withLoading]);
 
   const context: AppContextT = {
-    sessionsList,
     loginState,
     setLoginState,
-    session:
-      sessionState === undefined || sessionStore === undefined
+    service:
+      serviceState === undefined || serviceStore === undefined
         ? undefined
         : {
-            state: sessionState,
+            state: serviceState,
+            createJob: (uuid: string) =>
+              withLoading(`creating job ${uuid}`, serviceStore.createJob(uuid)),
             dispatch: (action) =>
-              withLoading(`posting event: ${action.event.type}`, sessionStore.postEvent(action)),
-            getBlob: sessionStore.getBlob.bind(sessionStore),
-            writeBlob: (id, data) =>
-              withLoading(`writing blob: ${id}`, sessionStore.writeBlob(id, data)),
+              withLoading(`dispatching event: ${action.event.type}`, serviceStore.dispatch(action)),
+            getBlob: (blobUUID: string, jobUUID: string) =>
+              withLoading(
+                `getting blob: ${blobUUID} in job ${jobUUID}`,
+                serviceStore.getBlob(blobUUID, jobUUID),
+              ),
+            putBlob: (blobUUID, jobUUID, data) =>
+              withLoading(
+                `writing blob: ${blobUUID} in job ${jobUUID}`,
+                serviceStore.putBlob(blobUUID, jobUUID, data),
+              ),
           },
     loading: loadingIds.size !== 0,
     navigationState,
@@ -140,9 +131,6 @@ function App() {
 
   let screen: ReactNode;
   switch (navigationState.screen) {
-    case "session manager":
-      screen = <SessionManager key={JSON.stringify(loginState)} />;
-      break;
     case "kanban":
       screen = <Kanban />;
       break;

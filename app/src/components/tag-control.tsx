@@ -15,7 +15,7 @@ export function Tags({
   onAddTag: (tag: string) => void;
   dropdownClassAll?: string | undefined;
 }) {
-  const { session } = useContext(AppContext);
+  const { service: session } = useContext(AppContext);
   const knownTags =
     session?.state.jobs
       .values()
