@@ -137,7 +137,7 @@ export class ApiClient {
     raiseForStatus(res);
   }
 
-  async addJob(job: Job, access: MasterKeyPublic[]): Promise<void> {
+  async addJob(job: Job, access: MasterKeyPublic[]): Promise<number> {
     const encryptedJobKeysArrayP = access.map(
       async (mkp) => [mkp.uuid, (await job.key.encryptKey(mkp.publicKey)).data] as const,
     );
@@ -157,6 +157,7 @@ export class ApiClient {
         throw new ClientError({ type: "job keys incomplete" });
     }
     raiseForStatus(res);
+    return z.number().parse(res.body);
   }
 
   async getJobs(masterKey: MasterKeyPair): Promise<Job[]> {
@@ -252,7 +253,7 @@ export class ApiClient {
             }
             if (jobKey === undefined) continue;
             const job = new Job(socketEvent.job.uuid, jobKey);
-            subscriber.onEvent({ type: "new job", job });
+            subscriber.onEvent({ type: "new job", job, number: socketEvent.number });
           }
           break;
         case "job event":
@@ -434,6 +435,7 @@ export type SubscriptionEvent =
   | {
       type: "new job";
       job: Job;
+      number: number;
     }
   | {
       type: "job event";

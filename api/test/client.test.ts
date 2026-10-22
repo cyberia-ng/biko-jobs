@@ -123,6 +123,12 @@ describe("api client", () => {
         new ClientError({ type: "job keys incomplete" }),
       );
     });
+
+    test.only("create returns job number", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      const jobNumber = await client.addJob(job, [masterKey]);
+      expect(jobNumber).to.equal(1);
+    });
   });
 
   describe("job events", () => {

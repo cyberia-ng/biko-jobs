@@ -108,7 +108,7 @@ export class Database {
     }));
   }
 
-  addJob(job: Job) {
+  addJob(job: Job): number {
     this.db.exec("BEGIN TRANSACTION;");
     try {
       const jobId = this.statements.insertJob.get(job.uuid)!.id as number;
@@ -127,6 +127,7 @@ export class Database {
         this.statements.insertJobKey.run(jobId, masterKey.id, jobKey);
       }
       this.db.exec("COMMIT;");
+      return jobId;
     } catch (e) {
       this.db.exec("ROLLBACK;");
       if ((e as any).errstr === "constraint failed") {
