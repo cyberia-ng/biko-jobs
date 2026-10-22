@@ -77,9 +77,9 @@ export function addRoutes(
   app.put("/jobs/:uuid", msgPackBody(Job), (req, res) => {
     try {
       const job = req.body as Job;
-      db.addJob(job);
-      onEvent({ type: "new job", job });
-      res.status(201).send();
+      const jobId = db.addJob(job);
+      onEvent({ type: "new job", job, number: jobId } satisfies SocketEvent);
+      res.status(201).send(jobId);
     } catch (e) {
       switch (e) {
         case "already exists":

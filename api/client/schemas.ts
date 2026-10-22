@@ -29,7 +29,7 @@ export const JobEvent = z.object({
 export type JobEvent = z.infer<typeof JobEvent>;
 
 export const SocketEvent = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("new job"), job: Job }),
+  z.object({ type: z.literal("new job"), job: Job, number: z.number() }),
   z.object({ type: z.literal("job event"), event: JobEvent }),
 ]);
 export type SocketEvent = z.infer<typeof SocketEvent>;
