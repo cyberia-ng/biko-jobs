@@ -160,19 +160,19 @@ export class ApiClient {
     return z.number().parse(res.body);
   }
 
-  async getJobs(masterKey: MasterKeyPair): Promise<Job[]> {
+  async getJobs(masterKey: MasterKeyPair): Promise<Array<NumberedJob>> {
     const res = await apiFetch(this.baseUrl, ["jobs"], {
       method: "GET",
     });
     raiseForStatus(res);
     const body = schemas.JobList.parse(res.body);
-    const jobsP = body.map(async ({ uuid, keys }) => {
+    const jobsP = body.map(async ({ uuid, keys, number }) => {
       const encryptedKey = keys.get(masterKey.uuid)!;
       const key = await AESKey.decryptKey(masterKey.privateKey, {
         type: "ciphertext",
         data: encryptedKey,
       });
-      return new Job(uuid, key);
+      return new NumberedJob(uuid, key, number);
     });
     return Promise.all(jobsP);
   }
@@ -253,7 +253,7 @@ export class ApiClient {
             }
             if (jobKey === undefined) continue;
             const job = new Job(socketEvent.job.uuid, jobKey);
-            subscriber.onEvent({ type: "new job", job, number: socketEvent.number });
+            subscriber.onEvent({ type: "new job", job, jobNumber: socketEvent.number });
           }
           break;
         case "job event":
@@ -431,11 +431,19 @@ export class Job {
   }
 }
 
+export class NumberedJob extends Job {
+  number: number;
+  constructor(uuid: string, key: AESKey, number: number) {
+    super(uuid, key);
+    this.number = number;
+  }
+}
+
 export type SubscriptionEvent =
   | {
       type: "new job";
       job: Job;
-      number: number;
+      jobNumber: number;
     }
   | {
       type: "job event";

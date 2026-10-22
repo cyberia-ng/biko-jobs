@@ -1,22 +1,39 @@
 import { produce } from "immer";
-import type { Action } from "./action.ts";
+import type { Action, JobAction } from "./action.ts";
 import type { State } from "./state.ts";
 import pick from "lodash/pick.js";
 import { assertNever } from "../assertNever.ts";
 
 export function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "job action":
+      return reduceJobAction(state, action.action);
+    case "create job": {
+      return produce(state, (state) => {
+        state.pendingJobNumbers.set(action.uuid, action.number);
+      });
+    }
+  }
+}
+
+function reduceJobAction(state: State, action: JobAction): State {
   return produce(state, (state) => {
-    if (state.processedActionIDs.has(action.uuid)) {
+    if (state.processedJobActions.has(action.uuid)) {
       return;
     }
-    state.processedActionIDs.add(action.uuid);
+    state.processedJobActions.add(action.uuid);
     const { event } = action;
     switch (event.type) {
       case "upsert job":
         const existing = state.jobs.get(event.uuid);
+        const jobNumber = state.pendingJobNumbers.get(event.uuid) ?? existing?.number;
+        state.pendingJobNumbers.delete(event.uuid);
+        if (jobNumber === undefined) {
+          return state;
+        }
         state.jobs.set(event.uuid, {
           uuid: event.uuid,
-          number: existing?.number ?? state.nextJobNumber,
+          number: jobNumber,
           status: existing?.status ?? "triaged",
           timestamps: {
             creation: existing?.timestamps.creation ?? action.timestamp,
@@ -27,7 +44,6 @@ export function reducer(state: State, action: Action): State {
           },
           ...pick(event, ["customerName", "customerPhoneNumber", "description", "tags", "images"]),
         });
-        if (existing === undefined) state.nextJobNumber++;
         break;
       case "add job tag":
         state.jobs.get(event.uuid)?.tags.add(event.tag);

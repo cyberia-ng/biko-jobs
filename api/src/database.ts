@@ -34,6 +34,7 @@ function statements(db: DatabaseSync) {
     ),
     getJobs: db.prepare(
       `SELECT
+        jobs.id AS job_number,
         jobs.uuid AS uuid,
         job_keys.encrypted_job_key AS encrypted_job_key,
         master_keys.uuid AS master_key_uuid
@@ -146,18 +147,18 @@ export class Database {
   }
 
   getJobs(): JobList {
-    const jobs = new Map<string, Map<string, Bytes>>();
+    const jobs = new Map<string, { number: number; keys: Map<string, Bytes> }>();
     const rows = this.statements.getJobs.all();
     for (const row of rows) {
       const uuid = row.uuid as string;
-      let jobKeys = jobs.get(uuid);
-      if (jobKeys === undefined) {
-        jobKeys = new Map();
-        jobs.set(uuid, jobKeys);
+      let jobData = jobs.get(uuid);
+      if (jobData === undefined) {
+        jobData = { number: row.job_number as number, keys: new Map() };
+        jobs.set(uuid, jobData);
       }
-      jobKeys.set(row.master_key_uuid as string, row.encrypted_job_key as Bytes);
+      jobData.keys.set(row.master_key_uuid as string, row.encrypted_job_key as Bytes);
     }
-    return Array.from(jobs.entries().map(([uuid, keys]) => ({ uuid, keys })));
+    return Array.from(jobs.entries().map(([uuid, { number, keys }]) => ({ number, uuid, keys })));
   }
 
   addEvent(event: JobEvent) {

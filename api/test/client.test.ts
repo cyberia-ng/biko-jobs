@@ -6,6 +6,7 @@ import {
   MasterKeyPair,
   type Bytes,
   Job,
+  NumberedJob,
 } from "@biko-jobs/api-client";
 import { createApp } from "@biko-jobs/api/app.ts";
 import { expect, test, describe, beforeAll, beforeEach, afterEach } from "vitest";
@@ -100,7 +101,7 @@ describe("api client", () => {
       const job = await Job.generate(crypto.randomUUID());
       await client.addJob(job, [masterKey]);
       const jobs = await client.getJobs(masterKey);
-      expect(jobs).to.deep.equal([job]);
+      expect(jobs).to.deep.equal([new NumberedJob(job.uuid, job.key, 1)]);
     });
 
     test("create fails for duplicate jobs", async () => {
@@ -124,7 +125,7 @@ describe("api client", () => {
       );
     });
 
-    test.only("create returns job number", async () => {
+    test("create returns job number", async () => {
       const job = await Job.generate(crypto.randomUUID());
       const jobNumber = await client.addJob(job, [masterKey]);
       expect(jobNumber).to.equal(1);

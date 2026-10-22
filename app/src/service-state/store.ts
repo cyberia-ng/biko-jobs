@@ -1,5 +1,5 @@
-import type { Action, AnyVersionAction } from "./action.ts";
-import { migrateAction } from "./actions/migrate.ts";
+import type { Action, AnyVersionJobAction, JobAction } from "./action.ts";
+import { migrateAction } from "./job-actions/migrate.ts";
 import { reducer } from "./reducer.ts";
 import { initialState, type State } from "./state.ts";
 import { type State as LoginState } from "../login-state.ts";
@@ -37,6 +37,7 @@ export class Store {
       const jobs = await this.client.getJobs(this.masterKeyPair);
       for (const job of jobs) {
         this.jobs.set(job.uuid, job);
+        this.reduce({ type: "create job", uuid: job.uuid, number: job.number });
       }
       this.callSubscribers();
     }
@@ -44,15 +45,22 @@ export class Store {
 
   private async getJobEvents() {
     const events = await this.client.getEventsByJobs(Array.from(this.jobs.values()));
-    this.state = initialState;
     for (const jobEvents of events.values()) {
       for (const event of jobEvents) {
-        const action = event.data as AnyVersionAction;
-        const migrated = migrateAction(action);
-        this.reduce(migrated);
+        const jobAction = event.data as AnyVersionJobAction;
+        this.reduceJobAction(jobAction);
       }
     }
     this.callSubscribers();
+  }
+
+  private reduceJobAction(jobAction: AnyVersionJobAction) {
+    const migrated = migrateAction(jobAction);
+    const action: Action = {
+      type: "job action",
+      action: migrated,
+    };
+    this.reduce(action);
   }
 
   private reduce(action: Action) {
@@ -81,13 +89,13 @@ export class Store {
           switch (event.type) {
             case "new job":
               this.jobs.set(event.job.uuid, event.job);
+              this.reduce({ type: "create job", uuid: event.job.uuid, number: event.jobNumber });
               break;
             case "job event":
-              const action = event.event.data as AnyVersionAction;
-              const migrated = migrateAction(action);
-              this.reduce(migrated);
-              this.callSubscribers();
+              const action = event.event.data as AnyVersionJobAction;
+              this.reduceJobAction(action);
           }
+          this.callSubscribers();
         },
         onConnect: () => {},
         onError: this.onAsyncError.bind(this),
@@ -113,17 +121,18 @@ export class Store {
     this.masterKeyPair =
       loginState.login?.type === "master key" ? loginState.login.masterKey : undefined;
     await this.client.syncSocketState();
+    this.state = initialState;
     await this.getJobs();
     await this.getJobEvents();
     this.callSubscribers();
   }
 
-  async dispatch(action: Action) {
+  async dispatch(action: JobAction) {
     let job = this.jobs.get(action.event.uuid);
     if (job === undefined) {
       throw new Error("attempted to dispatch an action for a job that does not exist");
     }
-    this.reduce(action);
+    this.reduce({ type: "job action", action });
     this.callSubscribers();
     await this.client.addEvent({ uuid: action.uuid, data: action, job });
   }
