@@ -13,13 +13,13 @@ export async function dataMigration3(db: DatabaseSync) {
     const masterKey = await generateRSAKeyPair();
     const masterKeyEncrypted = await masterKey.privateKey.export(masterKeyPassword);
     const insertMasterKey = db.prepare(
-      `INSERT INTO master_keys (name, fingerprint, salt, public_key, encrypted_private_key)
+      `INSERT INTO master_keys (name, uuid, salt, public_key, encrypted_private_key)
        VALUES (?, ?, ?, ?, ?)
        RETURNING id;`,
     );
     const masterKeyId = insertMasterKey.get(
       masterKeyName,
-      masterKey.publicKey.fingerprint,
+      crypto.randomUUID(),
       masterKeyEncrypted.salt.data,
       await masterKey.publicKey.export(),
       masterKeyEncrypted.key.data,
