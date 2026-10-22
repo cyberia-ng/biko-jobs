@@ -18,7 +18,7 @@ export const Job = z.object({
 });
 export type Job = z.infer<typeof Job>;
 
-export const JobList = z.array(Job);
+export const JobList = z.array(Job.extend({ number: z.number() }));
 export type JobList = z.infer<typeof JobList>;
 
 export const JobEvent = z.object({

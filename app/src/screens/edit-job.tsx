@@ -1,14 +1,17 @@
 import { useContext, useReducer, useState, type ReactNode } from "react";
 import { ImageBlob } from "../components/blob-loader.tsx";
 import { AppContext } from "../context.ts";
-import { upsertJob, type Action, type Image } from "../service-state/action.ts";
+import { upsertJob, type Image, type JobAction } from "../service-state/action.ts";
 import { Tags } from "../components/tag-control.tsx";
 import type { Job } from "../service-state/state.ts";
 import omit from "lodash/omit.js";
 import { jobDetail } from "../navigation-state.ts";
 import { Page } from "../components/page.tsx";
 
-type JobAction = Omit<Extract<Action["event"], { type: "upsert job" }>, "type" | "images"> & {
+type EditJobAction = Omit<
+  Extract<JobAction["event"], { type: "upsert job" }>,
+  "type" | "images"
+> & {
   images: PhotosT;
 };
 
@@ -21,7 +24,7 @@ export function EditJob(props: { new_?: boolean }) {
     return <Page>not connected</Page>;
   }
   const service = service_;
-  function submit(jobAction: JobAction) {
+  function submit(jobAction: EditJobAction) {
     (async () => {
       setLoading(true);
       if (isNew) {
@@ -41,7 +44,7 @@ export function EditJob(props: { new_?: boolean }) {
             break;
         }
       }
-      const action: Action = upsertJob({ ...omit(jobAction, "images"), images });
+      const action: JobAction = upsertJob({ ...omit(jobAction, "images"), images });
       service.dispatch(action);
       if (isNew) {
         setFormReset(!formReset);
@@ -93,7 +96,7 @@ function EditJobForm({
   disabled,
 }: {
   job?: Job;
-  onSubmit: (job: JobAction) => void;
+  onSubmit: (job: EditJobAction) => void;
   onReset?: () => void;
   disabled: boolean;
 }) {
@@ -111,7 +114,7 @@ function EditJobForm({
     job?.images.map((image) => ({ type: "existing", image, job: job.uuid })) ?? [],
   );
   function submit() {
-    const jobAction: JobAction = {
+    const jobAction: EditJobAction = {
       uuid: job?.uuid ?? crypto.randomUUID(),
       tags,
       customerName,

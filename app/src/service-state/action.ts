@@ -1,21 +1,25 @@
-import type { ActionV1, ImageV1 } from "./actions/v1.ts";
-import { allStatusesV2 } from "./actions/v2.ts";
-import type { ActionV2 } from "./actions/v2.ts";
+import type { ActionV1 as JobActionV1, ImageV1 } from "./job-actions/v1.ts";
+import { allStatusesV2 } from "./job-actions/v2.ts";
+import type { ActionV2 as JobActionV2 } from "./job-actions/v2.ts";
 
-export type AnyVersionAction = ActionV1 | ActionV2;
+export type AnyVersionJobAction = JobActionV1 | JobActionV2;
 
-export type Action = ActionV2;
+export type JobAction = JobActionV2;
+
+export type Action =
+  | { type: "create job"; uuid: string; number: number }
+  | { type: "job action"; action: JobAction };
 export type Image = ImageV1;
 export const allStatuses = allStatusesV2;
 
-const withNow = (event: Action["event"]): Action => ({
+const withNow = (event: JobAction["event"]): JobAction => ({
   version: 2,
   uuid: crypto.randomUUID(),
   timestamp: Temporal.Now.instant(),
   event,
 });
 
-type Event<T extends string> = Omit<Extract<Action["event"], { type: T }>, "type">;
+type Event<T extends string> = Omit<Extract<JobAction["event"], { type: T }>, "type">;
 
 export const upsertJob = (f: Event<"upsert job">) => withNow({ type: "upsert job", ...f });
 

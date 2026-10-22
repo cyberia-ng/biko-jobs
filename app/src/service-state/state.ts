@@ -1,9 +1,9 @@
 import type { allStatuses, Image } from "./action.ts";
 
 export type State = {
-  processedActionIDs: Set<string>;
+  processedJobActions: Set<string>;
   jobs: Map<string, Job>;
-  nextJobNumber: number;
+  pendingJobNumbers: Map<string, number>;
 };
 
 export type Job = {
@@ -25,7 +25,7 @@ export type Job = {
 };
 
 export const initialState: State = {
-  processedActionIDs: new Set(),
+  processedJobActions: new Set(),
   jobs: new Map(),
-  nextJobNumber: 1,
+  pendingJobNumbers: new Map(),
 };
