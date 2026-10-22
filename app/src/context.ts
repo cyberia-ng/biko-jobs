@@ -8,15 +8,13 @@ import type { Action as LoginAction, State as LoginState } from "./login-state.t
 export type AppContextT = {
   loginState: LoginState;
   login: (a: LoginAction) => void;
-  service:
-    | {
-        state: ServiceState;
-        dispatch: (a: ServiceAction) => void;
-        getBlob: (blobUUID: string, jobUUID: string) => Promise<Bytes | undefined>;
-        putBlob: (blobUUID: string, jobUUID: string, data: Bytes) => Promise<void>;
-        createJob: (uuid: string) => Promise<void>;
-      }
-    | undefined;
+  service: {
+    state: ServiceState;
+    dispatch: (a: ServiceAction) => void;
+    getBlob: (blobUUID: string, jobUUID: string) => Promise<Bytes | undefined>;
+    putBlob: (blobUUID: string, jobUUID: string, data: Bytes) => Promise<void>;
+    createJob: (uuid: string) => Promise<void>;
+  };
   loading: boolean;
   navigationState: NavigationState;
   navigate: (state: NavigationState) => void;

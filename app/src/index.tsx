@@ -6,7 +6,6 @@ import {
   useEffect,
   useMemo,
   useReducer,
-  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -81,16 +80,17 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     [dispatchLoading],
   );
 
-  const [serviceStore, setServiceStore] = useState<ServiceStore | undefined>(undefined);
+  const serviceStore = useMemo(() => {
+    return new ServiceStore(
+      apiClient,
+      loginState.masterKeys ?? [],
+      loginState.login?.type === "master key" ? loginState.login.masterKey : undefined,
+      console.error.bind(console),
+    );
+  }, [apiClient, loginState]);
   const serviceState = useSyncExternalStore(
-    useCallback(
-      (cb) => (serviceStore === undefined ? () => () => undefined : serviceStore.subscribe(cb)),
-      [serviceStore],
-    ),
-    useCallback(
-      () => (serviceStore === undefined ? undefined : serviceStore.getSnapshot()),
-      [serviceStore],
-    ),
+    useCallback((cb) => serviceStore.subscribe(cb), [serviceStore]),
+    useCallback(() => serviceStore.getSnapshot(), [serviceStore]),
   );
   const refreshMasterKeys = useCallback(() => {
     withLoading(
@@ -115,44 +115,27 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     }
   }, [loginState, refreshMasterKeys]);
 
-  useEffect(() => {
-    if (loginState.masterKeys !== undefined) {
-      withLoading(
-        `loading service store`,
-        ServiceStore.openEphemeral(apiClient, loginState.masterKeys, () => {}).then(
-          setServiceStore,
-        ),
-      ).catch(console.error);
-    }
-  }, [apiClient, loginState, withLoading]);
-
   const context: AppContextT = {
     loginState,
     login: dispatchLoginState,
     service: useMemo(
-      () =>
-        serviceState === undefined || serviceStore === undefined
-          ? undefined
-          : {
-              state: serviceState,
-              createJob: (uuid: string) =>
-                withLoading(`creating job ${uuid}`, serviceStore.createJob(uuid)),
-              dispatch: (action) =>
-                withLoading(
-                  `dispatching event: ${action.event.type}`,
-                  serviceStore.dispatch(action),
-                ),
-              getBlob: (blobUUID: string, jobUUID: string) =>
-                withLoading(
-                  `getting blob: ${blobUUID} in job ${jobUUID}`,
-                  serviceStore.getBlob(blobUUID, jobUUID),
-                ),
-              putBlob: (blobUUID, jobUUID, data) =>
-                withLoading(
-                  `writing blob: ${blobUUID} in job ${jobUUID}`,
-                  serviceStore.putBlob(blobUUID, jobUUID, data),
-                ),
-            },
+      () => ({
+        state: serviceState,
+        createJob: (uuid: string) =>
+          withLoading(`creating job ${uuid}`, serviceStore.createJob(uuid)),
+        dispatch: (action) =>
+          withLoading(`dispatching event: ${action.event.type}`, serviceStore.dispatch(action)),
+        getBlob: (blobUUID: string, jobUUID: string) =>
+          withLoading(
+            `getting blob: ${blobUUID} in job ${jobUUID}`,
+            serviceStore.getBlob(blobUUID, jobUUID),
+          ),
+        putBlob: (blobUUID, jobUUID, data) =>
+          withLoading(
+            `writing blob: ${blobUUID} in job ${jobUUID}`,
+            serviceStore.putBlob(blobUUID, jobUUID, data),
+          ),
+      }),
       [serviceState, serviceStore, withLoading],
     ),
     loading: loadingIds.size !== 0,

@@ -3,7 +3,7 @@ import { WebSocketServer } from "ws";
 import type { WebSocket } from "ws";
 import type { Server } from "node:http";
 import { mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
-import type { JobEvent } from "@biko-jobs/api-client/schemas.ts";
+import type { SocketEvent } from "@biko-jobs/api-client/schemas.ts";
 
 export class MapSet<K, V> {
   private map: Map<K, Set<V>>;
@@ -77,7 +77,7 @@ export class WrappedWebSocketServer {
     });
   }
 
-  notifyClients(event: JobEvent) {
+  notifyClients(event: SocketEvent) {
     for (const ws of this.eventsConnections) {
       ws.send(mpEncoder.encode(event), (err) => {
         if (err) {

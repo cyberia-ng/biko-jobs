@@ -184,8 +184,10 @@ describe("api client", () => {
       await new Promise<void>((res) =>
         client.subscribeEvents({
           getJob: () => job,
+          getMasterKey: () => masterKey,
           onEvent: (event) => {
-            collectedEvents.push(event);
+            if (event.type !== "job event") return;
+            collectedEvents.push(event.event);
             if (collectedEvents.length === expectedEvents.length) {
               doneCollectingEvents();
             }

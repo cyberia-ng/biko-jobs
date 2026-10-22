@@ -99,8 +99,9 @@ async function apiFetch(
 
 type WebSocketSubscriber = {
   getJob: (uuid: string) => Job | undefined;
+  getMasterKey: (uuid: string) => MasterKeyPair | undefined;
   onConnect: () => void;
-  onEvent: (event: JobEvent) => void;
+  onEvent: (event: SubscriptionEvent) => void;
   onError: (error: unknown) => void;
 };
 
@@ -234,13 +235,44 @@ export class ApiClient {
   private async eventsSocketMessageHandler(msgEvent: MessageEvent<Blob>) {
     const data = await msgEvent.data.bytes();
     const decoded = mpDecoder.decode(data);
-    const jobEvent = schemas.JobEvent.parse(decoded);
+    const socketEvent = schemas.SocketEvent.parse(decoded);
     for (const subscriber of this.subscribers) {
-      const job = subscriber.getJob(jobEvent.job);
-      if (job === undefined) continue;
-      const decrypted = await job.key.decrypt({ type: "ciphertext", data: jobEvent.data });
-      const decoded = mpDecoder.decode(decrypted.data);
-      subscriber.onEvent({ uuid: jobEvent.uuid, data: decoded, job });
+      switch (socketEvent.type) {
+        case "new job":
+          {
+            let jobKey: AESKey | undefined = undefined;
+            for (const [masterKeyUUID, encryptedJobKey] of socketEvent.job.keys.entries()) {
+              const mk = subscriber.getMasterKey(masterKeyUUID);
+              if (mk === undefined) continue;
+              jobKey = await AESKey.decryptKey(mk.privateKey, {
+                type: "ciphertext",
+                data: encryptedJobKey,
+              });
+              break;
+            }
+            if (jobKey === undefined) continue;
+            const job = new Job(socketEvent.job.uuid, jobKey);
+            subscriber.onEvent({ type: "new job", job });
+          }
+          break;
+        case "job event":
+          {
+            const job = subscriber.getJob(socketEvent.event.job);
+            if (job === undefined) continue;
+            const decrypted = await job.key.decrypt({
+              type: "ciphertext",
+              data: socketEvent.event.data,
+            });
+            const decoded = mpDecoder.decode(decrypted.data);
+            subscriber.onEvent({
+              type: "job event",
+              event: { uuid: socketEvent.event.uuid, data: decoded, job },
+            });
+          }
+          break;
+        default:
+          assertNever(socketEvent);
+      }
     }
   }
 
@@ -267,7 +299,6 @@ export class ApiClient {
   }
 
   private disconnectEventsSocket() {
-    console.log("disconnecting");
     return new Promise<void>((res) => {
       if (this.ws === undefined) res();
       else {
@@ -409,6 +440,16 @@ export class Job {
     return new Job(uuid, jobKey);
   }
 }
+
+export type SubscriptionEvent =
+  | {
+      type: "new job";
+      job: Job;
+    }
+  | {
+      type: "job event";
+      event: JobEvent;
+    };
 
 export type JobEvent = {
   uuid: string;

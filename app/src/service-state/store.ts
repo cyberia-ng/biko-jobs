@@ -34,15 +34,33 @@ export class Store {
     this.state = initialState;
     this.jobs = new Map();
     this.subscribers = new Set();
+
+    this.getJobs()
+      .then(() => this.getJobEvents())
+      .catch(onAsyncError);
   }
 
-  static async openEphemeral(
-    client: ApiClient,
-    masterKeys: MasterKeyPublic[],
-    onAsyncError: (e: unknown) => void,
-  ) {
-    const store = new Store(client, masterKeys, undefined, onAsyncError);
-    return store;
+  private async getJobs() {
+    if (this.masterKeyPair !== undefined) {
+      const jobs = await this.client.getJobs(this.masterKeyPair);
+      for (const job of jobs) {
+        this.jobs.set(job.uuid, job);
+      }
+      this.callSubscribers();
+    }
+  }
+
+  private async getJobEvents() {
+    const events = await this.client.getEventsByJobs(Array.from(this.jobs.values()));
+    this.state = initialState;
+    for (const jobEvents of events.values()) {
+      for (const event of jobEvents) {
+        const action = event.data as AnyVersionAction;
+        const migrated = migrateAction(action);
+        this.reduce(migrated);
+      }
+    }
+    this.callSubscribers();
   }
 
   private reduce(action: Action) {
@@ -65,11 +83,19 @@ export class Store {
     if (this.subscribers.size === 0) {
       this.unsubscribe = this.client.subscribeEvents({
         getJob: (uuid) => this.jobs.get(uuid),
+        getMasterKey: (uuid) =>
+          this.masterKeyPair?.uuid === uuid ? this.masterKeyPair : undefined,
         onEvent: (event) => {
-          const action = event.data as AnyVersionAction;
-          const migrated = migrateAction(action);
-          this.reduce(migrated);
-          this.callSubscribers();
+          switch (event.type) {
+            case "new job":
+              this.jobs.set(event.job.uuid, event.job);
+              break;
+            case "job event":
+              const action = event.event.data as AnyVersionAction;
+              const migrated = migrateAction(action);
+              this.reduce(migrated);
+              this.callSubscribers();
+          }
         },
         onConnect: () => {},
         onError: this.onAsyncError.bind(this),
@@ -89,6 +115,8 @@ export class Store {
   async refresh() {
     this.masterKeys = await this.client.listMasterKeys();
     await this.client.refreshEventsSocket();
+    await this.getJobs();
+    await this.getJobEvents();
   }
 
   async dispatch(action: Action) {

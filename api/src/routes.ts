@@ -15,6 +15,7 @@ import {
   MasterKey,
   JobEvents,
   JobBlob,
+  SocketEvent,
 } from "@biko-jobs/api-client/schemas.ts";
 
 function msgPackBody(schema: z.ZodType, limit?: number) {
@@ -36,7 +37,7 @@ function msgPackBody(schema: z.ZodType, limit?: number) {
 export function addRoutes(
   app: ReturnType<typeof express>,
   db: Database,
-  onEvent: (event: JobEvent) => void,
+  onEvent: (event: SocketEvent) => void,
 ) {
   app.use((req, res, next) => {
     const originalSend = res.send.bind(res);
@@ -75,7 +76,9 @@ export function addRoutes(
 
   app.put("/jobs/:uuid", msgPackBody(Job), (req, res) => {
     try {
-      db.addJob(req.body as Job);
+      const job = req.body as Job;
+      db.addJob(job);
+      onEvent({ type: "new job", job });
       res.status(201).send();
     } catch (e) {
       switch (e) {
@@ -105,7 +108,7 @@ export function addRoutes(
     const event = req.body as JobEvent;
     try {
       db.addEvent(event);
-      onEvent(event);
+      onEvent({ type: "job event", event });
       res.status(200).send();
     } catch (e) {
       if (e === "already exists") res.status(409).send();
