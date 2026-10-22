@@ -81,39 +81,28 @@ function App({ apiClient }: { apiClient: ApiClient }) {
   );
 
   const serviceStore = useMemo(() => {
-    return new ServiceStore(
-      apiClient,
-      loginState.masterKeys ?? [],
-      loginState.login?.type === "master key" ? loginState.login.masterKey : undefined,
-      console.error.bind(console),
-    );
-  }, [apiClient, loginState]);
+    return new ServiceStore(apiClient, console.error.bind(console));
+  }, [apiClient]);
   const serviceState = useSyncExternalStore(
     useCallback((cb) => serviceStore.subscribe(cb), [serviceStore]),
     useCallback(() => serviceStore.getSnapshot(), [serviceStore]),
   );
-  const refreshMasterKeys = useCallback(() => {
-    withLoading(
-      "refreshing master keys",
-      apiClient
-        .listMasterKeys()
-        .then((keys) => dispatchLoginState({ type: "update master keys list", masterKeys: keys })),
-    ).catch(console.error);
-  }, [apiClient, withLoading]);
-  const refreshStore = useCallback(() => {
-    withLoading("refreshing service store", serviceStore?.refresh() ?? Promise.resolve()).catch(
-      console.error,
-    );
-  }, [withLoading, serviceStore]);
   const refresh = useCallback(() => {
-    refreshMasterKeys();
-    refreshStore();
-  }, [refreshMasterKeys, refreshStore]);
+    withLoading(
+      "refresh",
+      (async () => {
+        const mks = await apiClient.listMasterKeys();
+        dispatchLoginState({ type: "update master keys list", masterKeys: mks });
+      })(),
+    ).catch(console.error);
+  }, [withLoading, apiClient, dispatchLoginState]);
   useEffect(() => {
-    if (loginState.masterKeys === undefined) {
-      refreshMasterKeys();
-    }
-  }, [loginState, refreshMasterKeys]);
+    withLoading("refresh store", serviceStore.refresh(loginState)).catch(console.error);
+  }, [serviceStore, loginState, withLoading]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const context: AppContextT = {
     loginState,

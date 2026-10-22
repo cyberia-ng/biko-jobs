@@ -276,66 +276,55 @@ export class ApiClient {
     }
   }
 
-  private connectEventsSocket() {
-    return new Promise<void>((res, rej) => {
-      const ws = new WebSocket(`${this.baseUrl}/events`);
-      ws.onmessage = (msgEvent: MessageEvent<Blob>) =>
-        this.eventsSocketMessageHandler(msgEvent).catch((error: unknown) => {
-          for (const subscriber of this.subscribers) {
-            subscriber.onError(error);
-          }
-        });
-      ws.onerror = rej;
-      ws.onopen = () => {
-        ws.onerror = (event: Event) => {
-          for (const subscriber of this.subscribers) {
-            subscriber.onError(new ClientError({ type: "websocket error", event }));
-          }
-        };
-        res();
-      };
-      this.ws = ws;
-    });
-  }
-
-  private disconnectEventsSocket() {
-    return new Promise<void>((res) => {
-      if (this.ws === undefined) res();
-      else {
-        this.ws.onerror = null;
-        this.ws.onclose = () => res();
-        this.ws.close();
+  syncSocketState() {
+    if (this.subscribers.size === 0) {
+      if (this.ws === undefined || this.ws.readyState === WebSocket.CLOSED) {
         this.ws = undefined;
+        return Promise.resolve();
       }
-    });
-  }
-
-  async refreshEventsSocket() {
-    await this.disconnectEventsSocket();
-    if (this.subscribers.size !== 0) {
-      await this.connectEventsSocket();
+      const ws = this.ws;
+      this.ws = undefined;
+      return new Promise<void>((res) => {
+        ws.onerror = null;
+        ws.onclose = () => res();
+        ws.close();
+      });
+    } else {
+      if (this.ws !== undefined && this.ws.readyState !== WebSocket.CLOSED) {
+        return Promise.resolve();
+      }
+      return new Promise<void>((res, rej) => {
+        const ws = new WebSocket(`${this.baseUrl}/events`);
+        ws.onmessage = (msgEvent: MessageEvent<Blob>) =>
+          this.eventsSocketMessageHandler(msgEvent).catch((error: unknown) => {
+            for (const subscriber of this.subscribers) {
+              subscriber.onError(error);
+            }
+          });
+        ws.onerror = rej;
+        ws.onopen = () => {
+          ws.onerror = (event: Event) => {
+            for (const subscriber of this.subscribers) {
+              subscriber.onError(new ClientError({ type: "websocket error", event }));
+            }
+          };
+          res();
+        };
+        this.ws = ws;
+      });
     }
-  }
-
-  async closeEventsSocket() {
-    this.subscribers = new Set();
-    await this.disconnectEventsSocket();
   }
 
   subscribeEvents(subscriber: WebSocketSubscriber): () => void {
     (async () => {
-      if (this.subscribers.size === 0) {
-        await this.connectEventsSocket();
-        subscriber.onConnect();
-      }
       this.subscribers.add(subscriber);
+      await this.syncSocketState();
+      subscriber.onConnect();
     })().catch(subscriber.onError);
     return () => {
       (async () => {
         this.subscribers.delete(subscriber);
-        if (this.subscribers.size === 0) {
-          await this.disconnectEventsSocket();
-        }
+        await this.syncSocketState();
       })().catch(subscriber.onError);
     };
   }

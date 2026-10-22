@@ -2,6 +2,7 @@ import type { Action, AnyVersionAction } from "./action.ts";
 import { migrateAction } from "./actions/migrate.ts";
 import { reducer } from "./reducer.ts";
 import { initialState, type State } from "./state.ts";
+import { type State as LoginState } from "../login-state.ts";
 import {
   ApiClient,
   Job,
@@ -21,23 +22,14 @@ export class Store {
   private unsubscribe: (() => void) | undefined;
   private onAsyncError: (e: unknown) => void;
 
-  constructor(
-    client: ApiClient,
-    masterKeys: MasterKeyPublic[],
-    masterKeyPair: MasterKeyPair | undefined,
-    onAsyncError: (e: unknown) => void,
-  ) {
+  constructor(client: ApiClient, onAsyncError: (e: unknown) => void) {
     this.client = client;
-    this.masterKeys = masterKeys;
-    this.masterKeyPair = masterKeyPair;
+    this.masterKeys = [];
+    this.masterKeyPair = undefined;
     this.onAsyncError = onAsyncError;
     this.state = initialState;
     this.jobs = new Map();
     this.subscribers = new Set();
-
-    this.getJobs()
-      .then(() => this.getJobEvents())
-      .catch(onAsyncError);
   }
 
   private async getJobs() {
@@ -104,7 +96,11 @@ export class Store {
     this.subscribers.add(cb);
     return () => {
       this.subscribers.delete(cb);
-      this.unsubscribe?.();
+      setTimeout(() => {
+        if (this.subscribers.size === 0) {
+          this.unsubscribe?.();
+        }
+      }, 1000);
     };
   }
 
@@ -112,11 +108,14 @@ export class Store {
     return this.state;
   }
 
-  async refresh() {
-    this.masterKeys = await this.client.listMasterKeys();
-    await this.client.refreshEventsSocket();
+  async refresh(loginState: LoginState) {
+    this.masterKeys = loginState.masterKeys ?? [];
+    this.masterKeyPair =
+      loginState.login?.type === "master key" ? loginState.login.masterKey : undefined;
+    await this.client.syncSocketState();
     await this.getJobs();
     await this.getJobEvents();
+    this.callSubscribers();
   }
 
   async dispatch(action: Action) {

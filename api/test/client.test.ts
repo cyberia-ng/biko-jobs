@@ -32,7 +32,7 @@ describe("api client", () => {
   });
 
   afterEach(async () => {
-    await client.closeEventsSocket();
+    // await client.closeEventsSocket();
     await new Promise<void>((res) => listener.close(() => res()));
     listener.closeAllConnections();
   });
@@ -181,29 +181,34 @@ describe("api client", () => {
       const eventCollectionP = new Promise<void>((res) => {
         doneCollectingEvents = res;
       });
-      await new Promise<void>((res) =>
-        client.subscribeEvents({
-          getJob: () => job,
-          getMasterKey: () => masterKey,
-          onEvent: (event) => {
-            if (event.type !== "job event") return;
-            collectedEvents.push(event.event);
-            if (collectedEvents.length === expectedEvents.length) {
+      let unsubscribe: (() => void) | undefined = undefined;
+      try {
+        await new Promise<void>((res) => {
+          unsubscribe = client.subscribeEvents({
+            getJob: () => job,
+            getMasterKey: () => masterKey,
+            onEvent: (event) => {
+              if (event.type !== "job event") return;
+              collectedEvents.push(event.event);
+              if (collectedEvents.length === expectedEvents.length) {
+                doneCollectingEvents();
+              }
+            },
+            onConnect: () => res(),
+            onError: (e) => {
+              error = e;
               doneCollectingEvents();
-            }
-          },
-          onConnect: () => res(),
-          onError: (e) => {
-            error = e;
-            doneCollectingEvents();
-          },
-        }),
-      );
-      await client.addEvent(event1);
-      await client.addEvent(event2);
-      await eventCollectionP;
-      expect(error).to.equal(undefined);
-      expect(collectedEvents).to.deep.equal(expectedEvents);
+            },
+          });
+        });
+        await client.addEvent(event1);
+        await client.addEvent(event2);
+        await eventCollectionP;
+        expect(error).to.equal(undefined);
+        expect(collectedEvents).to.deep.equal(expectedEvents);
+      } finally {
+        (unsubscribe as (() => void) | undefined)?.();
+      }
     });
   });
 });
