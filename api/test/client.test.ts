@@ -48,20 +48,20 @@ describe("api client", () => {
         "some other name",
         "some password",
       );
-      await client.addMasterKeyPair(key);
+      await expect(client.addMasterKeyPair(key)).resolves.not.toThrow();
     });
 
     test("list master keys", async () => {
       const keys = await client.listMasterKeys();
       expect(keys).toHaveLength(1);
       const mk = keys[0]!;
-      expect(mk.publicKey.fingerprint).to.equal(masterKey.publicKey.fingerprint);
+      expect(mk.publicKey.fingerprint).toBe(masterKey.publicKey.fingerprint);
       const encrypted = await mk.publicKey.encrypt({
         type: "plaintext",
         data: utf8("hello world"),
       });
       const decrypted = await masterKey.privateKey.decrypt(encrypted);
-      expect(decrypted.data).to.deep.equal(utf8("hello world"));
+      expect(decrypted.data).toStrictEqual(utf8("hello world"));
     });
 
     test("add fails for duplicate name", async () => {
@@ -93,6 +93,7 @@ describe("api client", () => {
       );
     });
 
+    // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
     test("adding new master key requires new encrypted job keys");
   });
 
@@ -101,7 +102,7 @@ describe("api client", () => {
       const job = await Job.generate(crypto.randomUUID());
       await client.addJob(job, [masterKey]);
       const jobs = await client.getJobs(masterKey);
-      expect(jobs).to.deep.equal([new NumberedJob(job.uuid, job.key, 1)]);
+      expect(jobs).toStrictEqual([new NumberedJob(job.uuid, job.key, 1)]);
     });
 
     test("create fails for duplicate jobs", async () => {
@@ -128,7 +129,7 @@ describe("api client", () => {
     test("create returns job number", async () => {
       const job = await Job.generate(crypto.randomUUID());
       const jobNumber = await client.addJob(job, [masterKey]);
-      expect(jobNumber).to.equal(1);
+      expect(jobNumber).toBe(1);
     });
   });
 
@@ -137,7 +138,7 @@ describe("api client", () => {
       const job = await Job.generate(crypto.randomUUID());
       await client.addJob(job, [masterKey]);
       const event: JobEvent = { uuid: crypto.randomUUID(), data: "hello world", job };
-      await client.addEvent(event);
+      await expect(client.addEvent(event)).resolves.not.toThrow();
     });
 
     test("duplicate UUID fails", async () => {
@@ -160,9 +161,8 @@ describe("api client", () => {
       await client.addEvent(event1);
       await client.addEvent(event2);
       const events = await client.getEventsByJobs([job1]);
-      expect(events.size).to.equal(1);
-      expect(events).to.have.key(job1.uuid);
-      expect(events.get(job1.uuid)).to.deep.equal([event1]);
+      expect(events.size).toBe(1);
+      expect(events.get(job1.uuid)).toStrictEqual([event1]);
     });
   });
 
@@ -173,7 +173,7 @@ describe("api client", () => {
       const blob: JobBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), job };
       await client.putBlob(blob);
       const received = await client.getBlob(blob.uuid, job);
-      expect(received).to.deep.equal(blob);
+      expect(received).toStrictEqual(blob);
     });
 
     test("duplicate UUID fails", async () => {
@@ -190,7 +190,7 @@ describe("api client", () => {
       const job = await Job.generate(crypto.randomUUID());
       await client.addJob(job, [masterKey]);
       const received = await client.getBlob(crypto.randomUUID(), job);
-      expect(received).to.equal(undefined);
+      expect(received).toBe(undefined);
     });
   });
 
@@ -230,8 +230,8 @@ describe("api client", () => {
         await client.addEvent(event1);
         await client.addEvent(event2);
         await eventCollectionP;
-        expect(error).to.equal(undefined);
-        expect(collectedEvents).to.deep.equal(expectedEvents);
+        expect(error).toBe(undefined);
+        expect(collectedEvents).toStrictEqual(expectedEvents);
       } finally {
         (unsubscribe as (() => void) | undefined)?.();
       }
