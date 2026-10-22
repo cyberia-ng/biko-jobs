@@ -15,7 +15,8 @@ export type State = {
 
 export type Action =
   | { type: "update master keys list"; masterKeys: MasterKeyPublic[] }
-  | { type: "log in with key pair"; masterKey: MasterKeyPair };
+  | { type: "log in with key pair"; masterKey: MasterKeyPair }
+  | { type: "log in to ephemeral session" };
 
 export function reducer(state: State, action: Action): State {
   return produce(state, (state) => {
@@ -29,6 +30,9 @@ export function reducer(state: State, action: Action): State {
         break;
       case "log in with key pair":
         state.login = { type: "master key", masterKey: action.masterKey };
+        break;
+      case "log in to ephemeral session":
+        state.login = { type: "ephemeral" };
         break;
       default:
         assertNever(action);

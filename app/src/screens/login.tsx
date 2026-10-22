@@ -1,6 +1,6 @@
 import { useContext, useState } from "react";
 import { AppContext } from "../context.ts";
-import type { MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
+import { MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
 import { Page } from "../components/page.tsx";
 import { Spinner } from "../components/blob-loader.tsx";
 
@@ -34,12 +34,28 @@ export function Login() {
       .then(() => setLoginResult("ready"))
       .catch(() => setLoginResult("wrong password"));
   }
+  function ephemeral() {
+    login({ type: "log in to ephemeral session" });
+  }
+  let connected: MasterKeyPair | "ephemeral" | undefined;
+  switch (loginState.login?.type) {
+    case undefined:
+      connected = undefined;
+      break;
+    case "ephemeral":
+      connected = "ephemeral";
+      break;
+    case "master key":
+      connected = loginState.login.masterKey;
+      break;
+  }
   return (
     <LoginForm
       masterKeys={loginState.masterKeys}
       onSubmit={submit}
+      onEphemeral={ephemeral}
       savedCredentials={savedCredentials}
-      connected={loginState.login?.type === "master key" ? loginState.login.masterKey : undefined}
+      connected={connected}
       loginResult={loginResult}
     />
   );
@@ -48,14 +64,16 @@ export function Login() {
 export function LoginForm({
   masterKeys,
   onSubmit,
+  onEphemeral,
   savedCredentials,
   connected,
   loginResult,
 }: {
   masterKeys: MasterKeyPublic[];
   onSubmit: (key: MasterKeyPublic, password: string) => void;
+  onEphemeral: () => void;
   savedCredentials: Map<string, string>;
-  connected: MasterKeyPair | undefined;
+  connected: MasterKeyPair | "ephemeral" | undefined;
   loginResult: LoginResult;
 }) {
   const [selectedKey, setSelectedKey] = useState<MasterKeyPublic | undefined>(undefined);
@@ -75,6 +93,7 @@ export function LoginForm({
           selected={selectedKey}
           connected={connected}
           onSelect={setSelectedKey}
+          onEphemeral={onEphemeral}
         />
       </div>
       {selectedKey !== undefined && (
@@ -83,7 +102,7 @@ export function LoginForm({
             key={selectedKey?.uuid}
             savedPassword={savedCredentials.get(selectedKey.uuid)}
             onSubmit={submit}
-            connected={connected !== undefined && connected.uuid === selectedKey.uuid}
+            connected={connected instanceof MasterKeyPair && connected.uuid === selectedKey.uuid}
             loginResult={loginResult}
           />
         </div>
@@ -97,15 +116,17 @@ export function KeyList({
   selected,
   connected,
   onSelect,
+  onEphemeral,
 }: {
   keys: MasterKeyPublic[];
-  selected: MasterKeyPublic | undefined;
-  connected: MasterKeyPublic | undefined;
+  selected: MasterKeyPublic | "ephemeral" | undefined;
+  connected: MasterKeyPublic | "ephemeral" | undefined;
   onSelect: (key: MasterKeyPublic) => void;
+  onEphemeral: () => void;
 }) {
   return (
     <>
-      {keys.length === 0 && <>No logins available</>}
+      {keys.length === 0 && <div className="mb-2">No master keys available</div>}
       <div className="list-group">
         {keys.map((key) => (
           <a
@@ -117,7 +138,7 @@ export function KeyList({
               onSelect(key);
             }}
           >
-            {connected?.uuid === key.uuid && (
+            {connected instanceof MasterKeyPublic && connected.uuid === key.uuid && (
               <div>
                 <i className="bi bi-link-45deg me-2" />
               </div>
@@ -128,6 +149,24 @@ export function KeyList({
             </div>
           </a>
         ))}
+        <a
+          href="#"
+          className={"list-group-item p-2 d-flex" + (selected === "ephemeral" ? " active" : "")}
+          onClick={(e) => {
+            e.preventDefault();
+            onEphemeral();
+          }}
+        >
+          {connected === "ephemeral" && (
+            <div>
+              <i className="bi bi-link-45deg me-2" />
+            </div>
+          )}
+          <div className="flex-grow-1">Ephemeral session</div>
+          <div>
+            <i className="bi bi-chevron-right" />
+          </div>
+        </a>
       </div>
     </>
   );
