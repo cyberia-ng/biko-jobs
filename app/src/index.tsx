@@ -104,6 +104,20 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     refresh();
   }, [refresh]);
 
+  if (import.meta.env.DEV) {
+    useEffect(() => {
+      if (loginState.login !== undefined) return;
+      const masterKey = loginState.masterKeys?.find((mk) => mk.name === "some name");
+      if (masterKey === undefined) return;
+      withLoading(
+        "dev autologin",
+        masterKey
+          .toKeyPair("some password")
+          .then((mk) => dispatchLoginState({ type: "log in with key pair", masterKey: mk })),
+      ).catch(console.error);
+    }, [loginState, withLoading]);
+  }
+
   const context: AppContextT = {
     loginState,
     login: dispatchLoginState,
