@@ -23,7 +23,6 @@ function statements(db: DatabaseSync) {
       `SELECT id, name, uuid, salt, public_key, encrypted_private_key
       FROM master_keys;`,
     ),
-    getMasterKey: db.prepare(`SELECT id, uuid FROM master_keys WHERE uuid = ?;`),
     insertJob: db.prepare(
       `INSERT INTO jobs (uuid)
       VALUES (?) RETURNING id;`,
