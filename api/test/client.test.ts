@@ -18,7 +18,7 @@ describe("api client", () => {
   let port: number;
 
   beforeAll(async () => {
-    masterKey = await MasterKeyPair.generate("some name", "some password");
+    masterKey = await MasterKeyPair.generate(crypto.randomUUID(), "some name", "some password");
   });
 
   beforeEach(async () => {
@@ -32,7 +32,6 @@ describe("api client", () => {
   });
 
   afterEach(async () => {
-    // await client.closeEventsSocket();
     await new Promise<void>((res) => listener.close(() => res()));
     listener.closeAllConnections();
   });
@@ -43,7 +42,11 @@ describe("api client", () => {
 
   describe("master keys", () => {
     test("add master key", async () => {
-      const key = await MasterKeyPair.generate("some other name", "some password");
+      const key = await MasterKeyPair.generate(
+        crypto.randomUUID(),
+        "some other name",
+        "some password",
+      );
       await client.addMasterKeyPair(key);
     });
 
@@ -61,8 +64,16 @@ describe("api client", () => {
     });
 
     test("add fails for duplicate name", async () => {
-      const key1 = await MasterKeyPair.generate("duplicate name", "some password");
-      const key2 = await MasterKeyPair.generate("duplicate name", "some other password");
+      const key1 = await MasterKeyPair.generate(
+        crypto.randomUUID(),
+        "duplicate name",
+        "some password",
+      );
+      const key2 = await MasterKeyPair.generate(
+        crypto.randomUUID(),
+        "duplicate name",
+        "some other password",
+      );
       await client.addMasterKeyPair(key1);
       await expect(client.addMasterKeyPair(key2)).rejects.toThrow(
         new ClientError({ type: "master key post conflict", name: key2.name, uuid: key2.uuid }),
@@ -70,7 +81,11 @@ describe("api client", () => {
     });
 
     test("adding fails for duplicate uuid", async () => {
-      const key = await MasterKeyPair.generate("duplicate name", "some password");
+      const key = await MasterKeyPair.generate(
+        crypto.randomUUID(),
+        "duplicate name",
+        "some password",
+      );
       await client.addMasterKeyPair(key);
       await expect(client.addMasterKeyPair(key)).rejects.toThrow(
         new ClientError({ type: "master key post conflict", name: key.name, uuid: key.uuid }),
@@ -97,7 +112,11 @@ describe("api client", () => {
     });
 
     test("create fails without encryption by all known master keys", async () => {
-      const otherMasterKey = await MasterKeyPair.generate("some other name", "some password");
+      const otherMasterKey = await MasterKeyPair.generate(
+        crypto.randomUUID(),
+        "some other name",
+        "some password",
+      );
       await client.addMasterKeyPair(otherMasterKey);
       const job = await Job.generate(crypto.randomUUID());
       await expect(client.addJob(job, [masterKey])).rejects.toThrow(

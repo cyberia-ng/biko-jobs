@@ -4,13 +4,28 @@ import { upsertJob } from "../../src/service-state/action.ts";
 import { join } from "node:path";
 import { ApiClient, Job, MasterKeyPair, type JobBlob, type JobEvent } from "@biko-jobs/api-client";
 
-const img1 = readFileSync(join(import.meta.dirname, "img1.jpg"));
-const img2 = readFileSync(join(import.meta.dirname, "img2.jpg"));
-const img3 = readFileSync(join(import.meta.dirname, "img3.jpg"));
-const img4 = readFileSync(join(import.meta.dirname, "img4.jpg"));
-const img5 = readFileSync(join(import.meta.dirname, "img5.jpg"));
+const img1 = {
+  uuid: "10000000-0000-4000-8000-000000000001",
+  data: readFileSync(join(import.meta.dirname, "img1.jpg")),
+};
+const img2 = {
+  uuid: "10000000-0000-4000-8000-000000000002",
+  data: readFileSync(join(import.meta.dirname, "img2.jpg")),
+};
+const img3 = {
+  uuid: "10000000-0000-4000-8000-000000000003",
+  data: readFileSync(join(import.meta.dirname, "img3.jpg")),
+};
+const img4 = {
+  uuid: "10000000-0000-4000-8000-000000000004",
+  data: readFileSync(join(import.meta.dirname, "img4.jpg")),
+};
+const img5 = {
+  uuid: "10000000-0000-4000-8000-000000000005",
+  data: readFileSync(join(import.meta.dirname, "img5.jpg")),
+};
 const upsertJob1 = (job: Job, imgs: JobBlob[]): JobEvent => ({
-  uuid: crypto.randomUUID(),
+  uuid: "30000000-0000-4000-8000-000000000000",
   job,
   data: upsertJob({
     uuid: job.uuid,
@@ -30,10 +45,10 @@ Bottom text`,
 
 const upsertJob2 = (job: Job, imgs: JobBlob[]): JobEvent => {
   const event = {
-    uuid: crypto.randomUUID(),
+    uuid: "30000000-0000-4000-8000-000000000001",
     job,
     data: upsertJob({
-      uuid: "46bc5898-12de-4721-b9ed-deecd548699b",
+      uuid: job.uuid,
       customerName: "Jim Jimson",
       customerPhoneNumber: "",
       description: `Rear mech issues `,
@@ -47,20 +62,24 @@ const upsertJob2 = (job: Job, imgs: JobBlob[]): JobEvent => {
 
 async function main() {
   const client = new ApiClient("http://localhost:3000");
-  const mk = await MasterKeyPair.generate("some name", "some password");
+  const mk = await MasterKeyPair.generate(
+    "20000000-0000-4000-8000-000000000000",
+    "some name",
+    "some password",
+  );
   await client.addMasterKeyPair(mk);
-  const job1 = await Job.generate(crypto.randomUUID());
-  const job2 = await Job.generate(crypto.randomUUID());
+  const job1 = await Job.generate("00000000-0000-4000-8000-000000000000");
+  const job2 = await Job.generate("00000000-0000-4000-8000-000000000001");
   await client.addJob(job1, [mk]);
   await client.addJob(job2, [mk]);
   const job1Blobs = [img1, img2, img3].map((img) => ({
-    uuid: crypto.randomUUID(),
-    data: img,
+    uuid: img.uuid,
+    data: img.data,
     job: job1,
   }));
   const job2Blobs = [img4, img5].map((img) => ({
-    uuid: crypto.randomUUID(),
-    data: img,
+    uuid: img.uuid,
+    data: img.data,
     job: job2,
   }));
   await Promise.all([...job1Blobs, ...job2Blobs].map((blob) => client.putBlob(blob)));

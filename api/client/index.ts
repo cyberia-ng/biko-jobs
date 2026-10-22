@@ -391,13 +391,13 @@ export class MasterKeyPair extends MasterKeyPublic {
     this.password = opts.password;
   }
 
-  static async generate(name: string, password: string) {
+  static async generate(uuid: string, name: string, password: string) {
     const keyPair = await generateRSAKeyPair();
     const kdfPassword = await KeyDerivationPassword.import(password);
     const encryptedPrivateKey = await keyPair.privateKey.export(kdfPassword);
     return new MasterKeyPair({
       name,
-      uuid: crypto.randomUUID(),
+      uuid,
       publicKey: keyPair.publicKey,
       privateKey: keyPair.privateKey,
       password,
