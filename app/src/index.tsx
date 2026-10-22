@@ -20,13 +20,16 @@ import {
 } from "./navigation-state.ts";
 import { EditJob } from "./screens/edit-job.tsx";
 import { JobDetail } from "./screens/job-detail.tsx";
-import { AppContext, type AppContextT, type LoginState } from "./context.ts";
+import { AppContext, type AppContextT } from "./context.ts";
 import { Store as ServiceStore } from "./service-state/store.ts";
 import { enableMapSet, produce } from "immer";
 import { assertNever } from "./assertNever.ts";
 import { Export } from "./screens/export.tsx";
 import { useHashLocation } from "./use-hash-location.ts";
 import type { State as NavigationState } from "./navigation-state.ts";
+import { ApiClient } from "@biko-jobs/api-client";
+import { initialState as initialLoginState, reducer as loginReducer } from "./login-state.ts";
+import { Login } from "./screens/login.tsx";
 
 enableMapSet();
 
@@ -38,20 +41,21 @@ window.onload = () => {
       document.title = document.title + ` (${import.meta.env.MODE})`;
     }
   }
+  const apiClient = new ApiClient("/api");
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App />
+      <App apiClient={apiClient} />
     </StrictMode>,
   );
 };
 
-function App() {
+function App({ apiClient }: { apiClient: ApiClient }) {
   const [hash, navigateHash] = useHashLocation();
   const navigationState = useMemo(() => deserialize(hash) ?? initialNavigationState, [hash]);
   function navigate(state: NavigationState) {
     navigateHash(serialize(state));
   }
-  const [loginState, setLoginState] = useState<LoginState>(undefined);
+  const [loginState, dispatchLoginState] = useReducer(loginReducer, initialLoginState);
 
   const [loadingIds, dispatchLoading] = useReducer(
     (state: Set<string>, [add, id]: [boolean, string]) =>
@@ -88,21 +92,43 @@ function App() {
       [serviceStore],
     ),
   );
-  const refresh = useCallback(
-    () => withLoading("refreshing service store", serviceStore?.refresh() ?? Promise.resolve()),
-    [serviceStore, withLoading],
-  );
+  const refreshMasterKeys = useCallback(() => {
+    withLoading(
+      "refreshing master keys",
+      apiClient
+        .listMasterKeys()
+        .then((keys) => dispatchLoginState({ type: "update master keys list", masterKeys: keys })),
+    ).catch(console.error);
+  }, [apiClient, withLoading]);
+  const refreshStore = useCallback(() => {
+    withLoading("refreshing service store", serviceStore?.refresh() ?? Promise.resolve()).catch(
+      console.error,
+    );
+  }, [withLoading, serviceStore]);
+  const refresh = useCallback(() => {
+    refreshMasterKeys();
+    refreshStore();
+  }, [refreshMasterKeys, refreshStore]);
+  useEffect(() => {
+    if (loginState.masterKeys === undefined) {
+      refreshMasterKeys();
+    }
+  }, [loginState, refreshMasterKeys]);
 
   useEffect(() => {
-    withLoading(
-      `loading service store`,
-      ServiceStore.openEphemeral(() => {}).then(setServiceStore),
-    ).catch(console.error);
-  }, [loginState, withLoading]);
+    if (loginState.masterKeys !== undefined) {
+      withLoading(
+        `loading service store`,
+        ServiceStore.openEphemeral(apiClient, loginState.masterKeys, () => {}).then(
+          setServiceStore,
+        ),
+      ).catch(console.error);
+    }
+  }, [apiClient, loginState, withLoading]);
 
   const context: AppContextT = {
     loginState,
-    setLoginState,
+    login: dispatchLoginState,
     service: useMemo(
       () =>
         serviceState === undefined || serviceStore === undefined
@@ -151,6 +177,9 @@ function App() {
       break;
     case "export":
       screen = <Export />;
+      break;
+    case "login":
+      screen = <Login />;
       break;
     default:
       assertNever(navigationState);

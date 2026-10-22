@@ -7,7 +7,6 @@ import {
   Job,
   type Bytes,
   type JobBlob,
-  type JobEvent,
   type MasterKeyPair,
   type MasterKeyPublic,
 } from "@biko-jobs/api-client";
@@ -22,7 +21,7 @@ export class Store {
   private unsubscribe: (() => void) | undefined;
   private onAsyncError: (e: unknown) => void;
 
-  private constructor(
+  constructor(
     client: ApiClient,
     masterKeys: MasterKeyPublic[],
     masterKeyPair: MasterKeyPair | undefined,
@@ -37,17 +36,17 @@ export class Store {
     this.subscribers = new Set();
   }
 
-  static async openEphemeral(onAsyncError: (e: unknown) => void) {
-    const client = new ApiClient("/api");
-    const mks = await client.listMasterKeys();
-    const store = new Store(client, mks, undefined, onAsyncError);
+  static async openEphemeral(
+    client: ApiClient,
+    masterKeys: MasterKeyPublic[],
+    onAsyncError: (e: unknown) => void,
+  ) {
+    const store = new Store(client, masterKeys, undefined, onAsyncError);
     return store;
   }
 
-  private reduce(event: JobEvent) {
-    const action = event.data as AnyVersionAction;
-    const migrated = migrateAction(action);
-    this.state = reducer(this.state, migrated);
+  private reduce(action: Action) {
+    this.state = reducer(this.state, action);
   }
 
   private callSubscribers() {
@@ -67,7 +66,9 @@ export class Store {
       this.unsubscribe = this.client.subscribeEvents({
         getJob: (uuid) => this.jobs.get(uuid),
         onEvent: (event) => {
-          this.reduce(event);
+          const action = event.data as AnyVersionAction;
+          const migrated = migrateAction(action);
+          this.reduce(migrated);
           this.callSubscribers();
         },
         onConnect: () => {},
@@ -77,9 +78,7 @@ export class Store {
     this.subscribers.add(cb);
     return () => {
       this.subscribers.delete(cb);
-      if (this.subscribers.size === 0) {
-        this.unsubscribe?.();
-      }
+      this.unsubscribe?.();
     };
   }
 
@@ -97,10 +96,9 @@ export class Store {
     if (job === undefined) {
       throw new Error("attempted to dispatch an action for a job that does not exist");
     }
-    const event: JobEvent = { uuid: action.uuid, data: action, job };
-    this.reduce(event);
+    this.reduce(action);
     this.callSubscribers();
-    await this.client.addEvent(event);
+    await this.client.addEvent({ uuid: action.uuid, data: action, job });
   }
 
   async getBlob(blobUUID: string, jobUUID: string): Promise<Bytes | undefined> {

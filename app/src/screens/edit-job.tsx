@@ -6,6 +6,7 @@ import { Tags } from "../components/tag-control.tsx";
 import type { Job } from "../service-state/state.ts";
 import omit from "lodash/omit.js";
 import { jobDetail } from "../navigation-state.ts";
+import { Page } from "../components/page.tsx";
 
 type JobAction = Omit<Extract<Action["event"], { type: "upsert job" }>, "type" | "images"> & {
   images: PhotosT;
@@ -17,7 +18,7 @@ export function EditJob(props: { new_?: boolean }) {
   const [loading, setLoading] = useState<boolean>(false);
   const [formReset, setFormReset] = useState(false);
   if (service_ === undefined) {
-    return <>not connected</>;
+    return <Page>not connected</Page>;
   }
   const service = service_;
   function submit(jobAction: JobAction) {
@@ -71,7 +72,7 @@ export function EditJob(props: { new_?: boolean }) {
     }
   }
   return (
-    <div className="bg-white m-2 p-2 rounded shadow-sm">
+    <Page>
       {job !== undefined && (
         <div className="mb-2">
           <button className="btn btn-primary" onClick={() => navigate(jobDetail(job.uuid))}>
@@ -81,7 +82,7 @@ export function EditJob(props: { new_?: boolean }) {
         </div>
       )}
       {content}
-    </div>
+    </Page>
   );
 }
 

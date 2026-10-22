@@ -3,12 +3,11 @@ import type { State as ServiceState } from "./service-state/state.ts";
 import type { Action as ServiceAction } from "./service-state/action.ts";
 import type { State as NavigationState } from "./navigation-state.ts";
 import type { Bytes } from "@biko-jobs/api-client";
-
-export type LoginState = { masterKey: { uuid: string; password: string } } | undefined;
+import type { Action as LoginAction, State as LoginState } from "./login-state.ts";
 
 export type AppContextT = {
   loginState: LoginState;
-  setLoginState: (state: LoginState) => void;
+  login: (a: LoginAction) => void;
   service:
     | {
         state: ServiceState;

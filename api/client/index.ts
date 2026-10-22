@@ -267,6 +267,7 @@ export class ApiClient {
   }
 
   private disconnectEventsSocket() {
+    console.log("disconnecting");
     return new Promise<void>((res) => {
       if (this.ws === undefined) res();
       else {

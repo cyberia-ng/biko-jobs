@@ -3,26 +3,26 @@ import { AppContext } from "../context.ts";
 import { basicScreen } from "../navigation-state.ts";
 
 export function Nav() {
-  const { service: session, loading, navigationState, navigate, refresh } = useContext(AppContext);
+  const { loginState, loading, navigationState, navigate, refresh } = useContext(AppContext);
   return (
     <div className="h-100">
       <div className="shadow h-100 bg-dark nav nav-pills d-flex flex-row flex-sm-column">
         <NavItem
-          disabled={session === undefined}
+          disabled={loginState?.login === undefined}
           active={navigationState.screen === "kanban"}
           onClick={() => navigate(basicScreen("kanban"))}
         >
           <i className="bi bi-layout-three-columns fs-1" />
         </NavItem>
         <NavItem
-          disabled={session === undefined}
+          disabled={loginState?.login === undefined}
           active={navigationState.screen === "new job"}
           onClick={() => navigate(basicScreen("new job"))}
         >
           <i className="bi bi-plus-circle fs-1" />
         </NavItem>
         <NavItem
-          disabled={session === undefined}
+          disabled={loginState?.login === undefined}
           active={navigationState.screen === "export"}
           onClick={() => navigate(basicScreen("export"))}
         >
@@ -36,6 +36,9 @@ export function Nav() {
             </div>
           </NavItem>
         )}
+        <NavItem end onClick={() => navigate(basicScreen("login"))}>
+          <i className="bi bi-key fs-1" />
+        </NavItem>
         <NavItem end onClick={() => refresh()}>
           <i className="bi bi-arrow-clockwise fs-1" />
         </NavItem>
