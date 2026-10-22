@@ -11,8 +11,7 @@ create unique index master_keys_name on master_keys (name);
 
 create table jobs (
   id integer primary key asc,
-  uuid text unique,
-  key_fingerprint text unique
+  uuid text unique
 );
 create unique index jobs_uuid on jobs (uuid);
 
