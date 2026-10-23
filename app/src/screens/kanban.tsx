@@ -7,11 +7,13 @@ import { jobDetail } from "../navigation-state.ts";
 
 export function Kanban() {
   return (
-    <div className="m-2">
-      <div className="row g-2 h-100">
-        <Column title="Triaged" statuses={["triaged"]} />
-        <Column title="Working" statuses={["working"]} />
-        <Column title="Done" statuses={["complete", "cancelled"]} />
+    <div>
+      <div className="m-2">
+        <div className="row g-2 h-100">
+          <Column title="Triaged" statuses={["triaged"]} />
+          <Column title="Working" statuses={["working"]} />
+          <Column title="Done" statuses={["complete", "cancelled"]} />
+        </div>
       </div>
     </div>
   );
@@ -19,8 +21,8 @@ export function Kanban() {
 
 function Column(props: { title: string; statuses: Job["status"][] }) {
   const { service: session, navigate } = useContext(AppContext);
-  const jobs = Array.from(session?.state.jobs.values() ?? []).filter((job) =>
-    props.statuses.includes(job.status),
+  const jobs = Array.from(session?.state.jobs.values() ?? []).filter(
+    (job) => !job.archived && props.statuses.includes(job.status),
   );
   return (
     <div className="col-12 col-lg-4 fs-5">

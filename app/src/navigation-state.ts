@@ -2,12 +2,14 @@ import { assertNever } from "./assertNever.ts";
 
 export type State =
   | {
-      screen: "kanban" | "new job" | "export" | "login";
+      screen: "kanban" | "new job" | "export" | "login" | "archive";
     }
   | { screen: "job detail"; uuid: string }
   | { screen: "edit job"; uuid: string };
 
-export const basicScreen = (screen: "kanban" | "new job" | "export" | "login"): State => ({
+export const basicScreen = (
+  screen: "kanban" | "new job" | "export" | "login" | "archive",
+): State => ({
   screen,
 });
 
@@ -32,6 +34,8 @@ export function deserialize(hash: string): State | undefined {
       return basicScreen("export");
     case "login":
       return basicScreen("login");
+    case "archive":
+      return basicScreen("archive");
     case "job-detail": {
       const uuid = components.shift();
       if (uuid === undefined) return undefined;
@@ -61,6 +65,9 @@ export function serialize(state: State): string {
       break;
     case "login":
       components.push("login");
+      break;
+    case "archive":
+      components.push("archive");
       break;
     case "job detail":
       components.push("job-detail");

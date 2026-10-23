@@ -22,6 +22,13 @@ export function Nav() {
           <i className="bi bi-plus-circle fs-1" />
         </NavItem>
         <NavItem
+          disabled={loginState?.login?.type !== "master key"}
+          active={navigationState.screen === "archive"}
+          onClick={() => navigate(basicScreen("archive"))}
+        >
+          <i className="bi bi-archive fs-1" />
+        </NavItem>
+        <NavItem
           disabled={loginState?.login === undefined}
           active={navigationState.screen === "export"}
           onClick={() => navigate(basicScreen("export"))}

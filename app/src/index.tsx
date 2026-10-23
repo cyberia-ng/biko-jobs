@@ -29,6 +29,7 @@ import type { State as NavigationState } from "./navigation-state.ts";
 import { ApiClient } from "@biko-jobs/api-client";
 import { initialState as initialLoginState, reducer as loginReducer } from "./login-state.ts";
 import { Login } from "./screens/login.tsx";
+import { Archive } from "./screens/archive.tsx";
 
 enableMapSet();
 
@@ -166,6 +167,9 @@ function App({ apiClient }: { apiClient: ApiClient }) {
       break;
     case "login":
       screen = <Login />;
+      break;
+    case "archive":
+      screen = <Archive />;
       break;
     default:
       assertNever(navigationState);
