@@ -6,9 +6,16 @@ export type Bytes = z.infer<typeof Bytes>;
 export const MasterKey = z.object({
   uuid: z.uuidv4(),
   name: z.string(),
-  salt: Bytes,
-  publicKey: Bytes,
-  encryptedPrivateKey: Bytes,
+  encryptionKey: z.object({
+    public: Bytes,
+    privateEncrypted: Bytes,
+    salt: Bytes,
+  }),
+  signingKey: z.object({
+    public: Bytes,
+    privateEncrypted: Bytes,
+    salt: Bytes,
+  }),
 });
 export type MasterKey = z.infer<typeof MasterKey>;
 

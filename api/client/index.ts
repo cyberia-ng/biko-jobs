@@ -1,11 +1,15 @@
 import { assertNever } from "@biko-jobs/api-client/assertNever.ts";
 import {
   AESKey,
+  ECDSAPrivateKey,
+  ECDSAPublicKey,
+  generateECDSAKeyPair,
   generateRSAKeyPair,
   KeyDerivationPassword,
   RSAPrivateKey,
   RSAPublicKey,
-  type EncryptedPrivateKey,
+  type EncryptedECDSAPrivateKey,
+  type EncryptedRSAPrivateKey,
 } from "@biko-jobs/api-client/crypto.ts";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 import type { Bytes } from "@biko-jobs/api-client/schemas.ts";
@@ -139,7 +143,7 @@ export class ApiClient {
 
   async addJob(job: Job, access: MasterKeyPublic[]): Promise<number> {
     const encryptedJobKeysArrayP = access.map(
-      async (mkp) => [mkp.uuid, (await job.key.encryptKey(mkp.publicKey)).data] as const,
+      async (mkp) => [mkp.uuid, (await job.key.encryptKey(mkp.encryptionPublicKey)).data] as const,
     );
     const encryptedJobKeys = new Map(await Promise.all(encryptedJobKeysArrayP));
     const body: schemas.Job = {
@@ -168,7 +172,7 @@ export class ApiClient {
     const body = schemas.JobList.parse(res.body);
     const jobsP = body.map(async ({ uuid, keys, number }) => {
       const encryptedKey = keys.get(masterKey.uuid)!;
-      const key = await AESKey.decryptKey(masterKey.privateKey, {
+      const key = await AESKey.decryptKey(masterKey.encryptionPrivateKey, {
         type: "ciphertext",
         data: encryptedKey,
       });
@@ -245,7 +249,7 @@ export class ApiClient {
             for (const [masterKeyUUID, encryptedJobKey] of socketEvent.job.keys.entries()) {
               const mk = subscriber.getMasterKey(masterKeyUUID);
               if (mk === undefined) continue;
-              jobKey = await AESKey.decryptKey(mk.privateKey, {
+              jobKey = await AESKey.decryptKey(mk.encryptionPrivateKey, {
                 type: "ciphertext",
                 data: encryptedJobKey,
               });
@@ -334,75 +338,126 @@ export class ApiClient {
 export class MasterKeyPublic {
   name: string;
   uuid: string;
-  publicKey: RSAPublicKey;
-  protected encryptedPrivateKey: EncryptedPrivateKey;
+  encryptionPublicKey: RSAPublicKey;
+  protected encryptionPrivateKeyEncrypted: EncryptedRSAPrivateKey;
+  signingPublicKey: ECDSAPublicKey;
+  protected signingPrivateKeyEncrypted: EncryptedECDSAPrivateKey;
   constructor(opts: {
     name: string;
     uuid: string;
-    publicKey: RSAPublicKey;
-    encryptedPrivateKey: EncryptedPrivateKey;
+    encryptionKey: {
+      public: RSAPublicKey;
+      privateEncrypted: EncryptedRSAPrivateKey;
+    };
+    signingKey: {
+      public: ECDSAPublicKey;
+      privateEncrypted: EncryptedECDSAPrivateKey;
+    };
   }) {
     this.name = opts.name;
     this.uuid = opts.uuid;
-    this.publicKey = opts.publicKey;
-    this.encryptedPrivateKey = opts.encryptedPrivateKey;
+    this.encryptionPublicKey = opts.encryptionKey.public;
+    this.encryptionPrivateKeyEncrypted = opts.encryptionKey.privateEncrypted;
+    this.signingPublicKey = opts.signingKey.public;
+    this.signingPrivateKeyEncrypted = opts.signingKey.privateEncrypted;
   }
 
   static async fromWireFormat(mk: schemas.MasterKey): Promise<MasterKeyPublic> {
-    const key = await RSAPublicKey.import(mk.publicKey);
+    const encryptionPublicKey = await RSAPublicKey.import(mk.encryptionKey.public);
+    const signingPublicKey = await ECDSAPublicKey.import(mk.signingKey.public);
     return new MasterKeyPublic({
       name: mk.name,
       uuid: mk.uuid,
-      publicKey: key,
-      encryptedPrivateKey: {
-        type: "encrypted private key",
-        key: { type: "ciphertext", data: mk.encryptedPrivateKey },
-        salt: { type: "salt", data: mk.salt },
+      encryptionKey: {
+        public: encryptionPublicKey,
+        privateEncrypted: {
+          type: "encrypted rsa private key",
+          key: { type: "ciphertext", data: mk.encryptionKey.privateEncrypted },
+          salt: { type: "salt", data: mk.encryptionKey.salt },
+        },
+      },
+      signingKey: {
+        public: signingPublicKey,
+        privateEncrypted: {
+          type: "encrypted ecdsa private key",
+          key: { type: "ciphertext", data: mk.signingKey.privateEncrypted },
+          salt: { type: "salt", data: mk.signingKey.salt },
+        },
       },
     });
   }
 
   async toKeyPair(password: string): Promise<MasterKeyPair> {
     const kdfPassword = await KeyDerivationPassword.import(password);
-    const privateKey = await RSAPrivateKey.import(this.encryptedPrivateKey, kdfPassword);
+    const encryptionPrivateKey = await RSAPrivateKey.import(
+      this.encryptionPrivateKeyEncrypted,
+      kdfPassword,
+    );
+    const signingPrivateKey = await ECDSAPrivateKey.import(
+      this.signingPrivateKeyEncrypted,
+      kdfPassword,
+    );
     return new MasterKeyPair({
       uuid: this.uuid,
       name: this.name,
-      publicKey: this.publicKey,
-      encryptedPrivateKey: this.encryptedPrivateKey,
-      privateKey,
+      encryptionKey: {
+        public: this.encryptionPublicKey,
+        privateEncrypted: this.encryptionPrivateKeyEncrypted,
+        private: encryptionPrivateKey,
+      },
+      signingKey: {
+        public: this.signingPublicKey,
+        privateEncrypted: this.signingPrivateKeyEncrypted,
+        private: signingPrivateKey,
+      },
       password,
     });
   }
 }
 
 export class MasterKeyPair extends MasterKeyPublic {
-  privateKey: RSAPrivateKey;
+  encryptionPrivateKey: RSAPrivateKey;
+  signingPrivateKey: ECDSAPrivateKey;
   password: string;
   constructor(opts: {
     name: string;
     uuid: string;
-    publicKey: RSAPublicKey;
-    privateKey: RSAPrivateKey;
+    encryptionKey: {
+      public: RSAPublicKey;
+      private: RSAPrivateKey;
+      privateEncrypted: EncryptedRSAPrivateKey;
+    };
+    signingKey: {
+      public: ECDSAPublicKey;
+      private: ECDSAPrivateKey;
+      privateEncrypted: EncryptedECDSAPrivateKey;
+    };
     password: string;
-    encryptedPrivateKey: EncryptedPrivateKey;
   }) {
-    super(pick(opts, ["name", "uuid", "publicKey", "encryptedPrivateKey"]));
-    this.privateKey = opts.privateKey;
+    super(opts);
+    this.encryptionPrivateKey = opts.encryptionKey.private;
+    this.signingPrivateKey = opts.signingKey.private;
     this.password = opts.password;
   }
 
   static async generate(uuid: string, name: string, password: string) {
-    const keyPair = await generateRSAKeyPair();
+    const encryptionKeyPair = await generateRSAKeyPair();
+    const signingKeyPair = await generateECDSAKeyPair();
     const kdfPassword = await KeyDerivationPassword.import(password);
-    const encryptedPrivateKey = await keyPair.privateKey.export(kdfPassword);
     return new MasterKeyPair({
       name,
       uuid,
-      publicKey: keyPair.publicKey,
-      privateKey: keyPair.privateKey,
+      encryptionKey: {
+        public: encryptionKeyPair.publicKey,
+        private: encryptionKeyPair.privateKey,
+        privateEncrypted: await encryptionKeyPair.privateKey.export(kdfPassword),
+      },
+      signingKey: {
+        public: signingKeyPair.publicKey,
+        private: signingKeyPair.privateKey,
+        privateEncrypted: await signingKeyPair.privateKey.export(kdfPassword),
+      },
       password,
-      encryptedPrivateKey,
     });
   }
 
@@ -410,9 +465,16 @@ export class MasterKeyPair extends MasterKeyPublic {
     return {
       name: this.name,
       uuid: this.uuid,
-      salt: this.encryptedPrivateKey.salt.data,
-      publicKey: await this.publicKey.export(),
-      encryptedPrivateKey: this.encryptedPrivateKey.key.data,
+      encryptionKey: {
+        public: await this.encryptionPublicKey.export(),
+        privateEncrypted: this.encryptionPrivateKeyEncrypted.key.data,
+        salt: this.encryptionPrivateKeyEncrypted.salt.data,
+      },
+      signingKey: {
+        public: await this.signingPublicKey.export(),
+        privateEncrypted: this.signingPrivateKeyEncrypted.key.data,
+        salt: this.signingPrivateKeyEncrypted.salt.data,
+      },
     };
   }
 }

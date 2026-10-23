@@ -16,11 +16,29 @@ import { inspect } from "node:util";
 function statements(db: DatabaseSync) {
   return {
     insertMasterKey: db.prepare(
-      `INSERT INTO master_keys (uuid, name, salt, public_key, encrypted_private_key)
-      VALUES (?, ?, ?, ?, ?);`,
+      `INSERT INTO master_keys (
+        uuid,
+        name,
+        encryption_public_key,
+        encryption_private_key_encrypted,
+        encryption_private_key_encryption_salt,
+        signing_public_key,
+        signing_private_key_encrypted,
+        signing_private_key_encryption_salt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
     ),
     listMasterKeys: db.prepare(
-      `SELECT id, name, uuid, salt, public_key, encrypted_private_key
+      `SELECT
+        id,
+        name,
+        uuid,
+        encryption_public_key,
+        encryption_private_key_encrypted,
+        encryption_private_key_encryption_salt,
+        signing_public_key,
+        signing_private_key_encrypted,
+        signing_private_key_encryption_salt
       FROM master_keys;`,
     ),
     insertJob: db.prepare(
@@ -86,9 +104,12 @@ export class Database {
       this.statements.insertMasterKey.run(
         key.uuid,
         key.name,
-        key.salt,
-        key.publicKey,
-        key.encryptedPrivateKey,
+        key.encryptionKey.public,
+        key.encryptionKey.privateEncrypted,
+        key.encryptionKey.salt,
+        key.signingKey.public,
+        key.signingKey.privateEncrypted,
+        key.signingKey.salt,
       );
     } catch (e) {
       if ((e as any).errstr === "constraint failed") {
@@ -102,9 +123,16 @@ export class Database {
     return rows.map((row) => ({
       name: row.name as string,
       uuid: row.uuid as string,
-      salt: row.salt as Bytes,
-      publicKey: row.public_key as Bytes,
-      encryptedPrivateKey: row.encrypted_private_key as Bytes,
+      encryptionKey: {
+        public: row.encryption_public_key as Bytes,
+        privateEncrypted: row.encryption_private_key_encrypted as Bytes,
+        salt: row.encryption_private_key_encryption_salt as Bytes,
+      },
+      signingKey: {
+        public: row.signing_public_key as Bytes,
+        privateEncrypted: row.signing_private_key_encrypted as Bytes,
+        salt: row.signing_private_key_encryption_salt as Bytes,
+      },
     }));
   }
 

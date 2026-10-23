@@ -55,12 +55,14 @@ describe("api client", () => {
       const keys = await client.listMasterKeys();
       expect(keys).toHaveLength(1);
       const mk = keys[0]!;
-      expect(mk.publicKey.fingerprint).toBe(masterKey.publicKey.fingerprint);
-      const encrypted = await mk.publicKey.encrypt({
+      expect(await mk.encryptionPublicKey.export()).toEqual(
+        await masterKey.encryptionPublicKey.export(),
+      );
+      const encrypted = await mk.encryptionPublicKey.encrypt({
         type: "plaintext",
         data: utf8("hello world"),
       });
-      const decrypted = await masterKey.privateKey.decrypt(encrypted);
+      const decrypted = await masterKey.encryptionPrivateKey.decrypt(encrypted);
       expect(decrypted.data).toStrictEqual(utf8("hello world"));
     });
 

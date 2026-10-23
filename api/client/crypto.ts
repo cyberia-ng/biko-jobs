@@ -6,8 +6,6 @@ const textEncoder = new TextEncoder();
 export type Plaintext = { type: "plaintext"; data: Bytes };
 export type Ciphertext = { type: "ciphertext"; data: Bytes };
 
-export type Fingerprint = string;
-
 export class KeyDerivationPassword {
   key: CryptoKey;
   private constructor(fields: { key: CryptoKey }) {
@@ -28,17 +26,8 @@ export class KeyDerivationPassword {
 export type Salt = { type: "salt"; data: Bytes };
 export class AESKey {
   key: CryptoKey;
-  fingerprint: Fingerprint;
-  private constructor(fields: { key: CryptoKey; fingerprint: Fingerprint }) {
-    this.key = fields.key;
-    this.fingerprint = fields.fingerprint;
-  }
-
-  private static async fromCryptoKey(key: CryptoKey): Promise<AESKey> {
-    const keyBytes = await crypto.subtle.exportKey("raw", key);
-    const fingerprintBuf = await crypto.subtle.digest("SHA-512", keyBytes);
-    const fingerprint = new Uint8Array(fingerprintBuf).toHex();
-    return new AESKey({ key, fingerprint });
+  private constructor(key: CryptoKey) {
+    this.key = key;
   }
 
   static async generate() {
@@ -46,7 +35,7 @@ export class AESKey {
       "encrypt",
       "decrypt",
     ]);
-    return AESKey.fromCryptoKey(key);
+    return new AESKey(key);
   }
 
   static async derive(password: KeyDerivationPassword, salt: Salt) {
@@ -62,7 +51,7 @@ export class AESKey {
       true,
       ["encrypt", "decrypt"],
     );
-    return AESKey.fromCryptoKey(key);
+    return new AESKey(key);
   }
 
   async encryptKey(masterKey: RSAPublicKey): Promise<Ciphertext> {
@@ -79,7 +68,7 @@ export class AESKey {
       "encrypt",
       "decrypt",
     ]);
-    return AESKey.fromCryptoKey(imported);
+    return new AESKey(imported);
   }
 
   async decrypt(ct: Ciphertext): Promise<Plaintext> {
@@ -98,17 +87,8 @@ export class AESKey {
 
 export class RSAPublicKey {
   key: CryptoKey;
-  fingerprint: Fingerprint;
-  private constructor(fields: { key: CryptoKey; fingerprint: Fingerprint }) {
-    this.key = fields.key;
-    this.fingerprint = fields.fingerprint;
-  }
-
-  static async fromCryptoKey(key: CryptoKey) {
-    const keyBytes = await crypto.subtle.exportKey("spki", key);
-    const fingerprintBuf = await crypto.subtle.digest("SHA-256", keyBytes);
-    const fingerprint = new Uint8Array(fingerprintBuf).toHex();
-    return new RSAPublicKey({ key, fingerprint });
+  constructor(key: CryptoKey) {
+    this.key = key;
   }
 
   static async import(data: Bytes) {
@@ -122,7 +102,7 @@ export class RSAPublicKey {
       true,
       ["encrypt"],
     );
-    return RSAPublicKey.fromCryptoKey(key);
+    return new RSAPublicKey(key);
   }
 
   async encrypt(pt: Plaintext): Promise<Ciphertext> {
@@ -135,15 +115,22 @@ export class RSAPublicKey {
   }
 }
 
-export type EncryptedPrivateKey = { type: "encrypted private key"; salt: Salt; key: Ciphertext };
+export type EncryptedRSAPrivateKey = {
+  type: "encrypted rsa private key";
+  salt: Salt;
+  key: Ciphertext;
+};
 
 export class RSAPrivateKey {
   key: CryptoKey;
-  constructor(fields: { key: CryptoKey }) {
-    this.key = fields.key;
+  constructor(key: CryptoKey) {
+    this.key = key;
   }
 
-  static async import(encryptedPrivateKey: EncryptedPrivateKey, password: KeyDerivationPassword) {
+  static async import(
+    encryptedPrivateKey: EncryptedRSAPrivateKey,
+    password: KeyDerivationPassword,
+  ) {
     const encryptionKey = await AESKey.derive(password, encryptedPrivateKey.salt);
     const rawPrivateKey = await encryptionKey.decrypt(encryptedPrivateKey.key);
     const privateKey = await crypto.subtle.importKey(
@@ -156,7 +143,7 @@ export class RSAPrivateKey {
       false,
       ["decrypt"],
     );
-    return new RSAPrivateKey({ key: privateKey });
+    return new RSAPrivateKey(privateKey);
   }
 
   async decrypt(ct: Ciphertext): Promise<Plaintext> {
@@ -164,7 +151,7 @@ export class RSAPrivateKey {
     return { type: "plaintext", data: new Uint8Array(buf) };
   }
 
-  async export(password: KeyDerivationPassword): Promise<EncryptedPrivateKey> {
+  async export(password: KeyDerivationPassword): Promise<EncryptedRSAPrivateKey> {
     const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
     const encryptionKey = await AESKey.derive(password, salt);
     const privkeyBytes = new Uint8Array(await crypto.subtle.exportKey("pkcs8", this.key));
@@ -172,7 +159,7 @@ export class RSAPrivateKey {
       type: "plaintext",
       data: privkeyBytes,
     });
-    return { type: "encrypted private key", salt, key };
+    return { type: "encrypted rsa private key", salt, key };
   }
 }
 
@@ -190,9 +177,118 @@ export async function generateRSAKeyPair(): Promise<{
     true,
     ["encrypt", "decrypt"],
   );
-  const publicKey = await RSAPublicKey.fromCryptoKey(keyPair.publicKey);
   return {
-    publicKey,
-    privateKey: new RSAPrivateKey({ key: keyPair.privateKey }),
+    publicKey: new RSAPublicKey(keyPair.publicKey),
+    privateKey: new RSAPrivateKey(keyPair.privateKey),
+  };
+}
+
+export type SignedData = { data: Bytes; signature: Bytes };
+
+export class VerificationError extends Error {
+  constructor() {
+    super("Message verification failed");
+  }
+}
+
+export class ECDSAPublicKey {
+  key: CryptoKey;
+  constructor(key: CryptoKey) {
+    this.key = key;
+  }
+
+  static async import(data: Bytes) {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      data,
+      {
+        name: "ECDSA",
+        namedCurve: "P-256",
+      },
+      true,
+      ["verify"],
+    );
+    return new ECDSAPublicKey(key);
+  }
+
+  async verify(signed: SignedData): Promise<Bytes> {
+    const success = await crypto.subtle.verify(
+      { name: "ECDSA", hash: "SHA-256" },
+      this.key,
+      signed.signature,
+      signed.data,
+    );
+    if (success) return signed.data;
+    else throw new VerificationError();
+  }
+
+  async export(): Promise<Bytes> {
+    return new Uint8Array(await crypto.subtle.exportKey("raw", this.key));
+  }
+}
+
+export type EncryptedECDSAPrivateKey = {
+  type: "encrypted ecdsa private key";
+  salt: Salt;
+  key: Ciphertext;
+};
+
+export class ECDSAPrivateKey {
+  key: CryptoKey;
+  constructor(key: CryptoKey) {
+    this.key = key;
+  }
+
+  static async import(
+    encryptedPrivateKey: EncryptedECDSAPrivateKey,
+    password: KeyDerivationPassword,
+  ) {
+    const encryptionKey = await AESKey.derive(password, encryptedPrivateKey.salt);
+    const rawPrivateKey = await encryptionKey.decrypt(encryptedPrivateKey.key);
+    const privateKey = await crypto.subtle.importKey(
+      "pkcs8",
+      rawPrivateKey.data,
+      {
+        name: "ECDSA",
+        namedCurve: "P-256",
+      },
+      false,
+      ["sign"],
+    );
+    return new ECDSAPrivateKey(privateKey);
+  }
+
+  async sign(data: Bytes): Promise<SignedData> {
+    const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, this.key, data);
+    return { data, signature: new Uint8Array(signature) };
+  }
+
+  async export(password: KeyDerivationPassword): Promise<EncryptedECDSAPrivateKey> {
+    const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
+    const encryptionKey = await AESKey.derive(password, salt);
+    const privkeyBytes = new Uint8Array(await crypto.subtle.exportKey("pkcs8", this.key));
+    const key = await encryptionKey.encrypt({
+      type: "plaintext",
+      data: privkeyBytes,
+    });
+    return { type: "encrypted ecdsa private key", salt, key };
+  }
+}
+
+export async function generateECDSAKeyPair(): Promise<{
+  publicKey: ECDSAPublicKey;
+  privateKey: ECDSAPrivateKey;
+}> {
+  const keyPair = await crypto.subtle.generateKey(
+    {
+      name: "ECDSA",
+      namedCurve: "P-256",
+    },
+    true,
+    ["sign", "verify"],
+  );
+  return {
+    publicKey: new ECDSAPublicKey(keyPair.publicKey),
+    privateKey: new ECDSAPrivateKey(keyPair.privateKey),
   };
 }
