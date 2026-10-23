@@ -148,7 +148,9 @@ export function JobsDisplay({
                   toggleSelected(job.uuid);
                 }}
               >
-                <div className="border rounded overflow-hidden mb-2 position-relative">
+                <div
+                  className={`border rounded overflow-hidden mb-2 position-relative ${selected.has(job.uuid) ? "bg-primary-subtle" : ""}`}
+                >
                   <div className="position-absolute top-0 end-0 p-1 rounded rounded-top-0 rounded-end-0">
                     <input
                       type="checkbox"
