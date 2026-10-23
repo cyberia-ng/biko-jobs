@@ -2,9 +2,12 @@ create table master_keys (
   id integer primary key,
   uuid text,
   name text,
-  salt blob,
-  public_key blob,
-  encrypted_private_key blob
+  encryption_public_key blob,
+  encryption_private_key_encrypted blob,
+  encryption_private_key_encryption_salt blob,
+  signing_public_key blob,
+  signing_private_key_encrypted blob,
+  signing_private_key_encryption_salt blob
 );
 create unique index master_keys_uuid on master_keys (uuid);
 create unique index master_keys_name on master_keys (name);
