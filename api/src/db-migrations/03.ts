@@ -81,15 +81,14 @@ export async function dataMigration3(db: DatabaseSync) {
     const seenBlobIds = new Set<string>();
     for (const session of rows) {
       const passwordText = await rl.question(`Password for session ${session.name}: `);
-      const password = await KeyDerivationPassword.import(passwordText);
-      const sessionKey = await AESKey.derive(password, { type: "salt", data: session.salt });
+      const sessionKey = await legacyAESKey(passwordText, session.salt);
       const eventsEncrypted = getEvents.all(session.id) as Array<{ data: Uint8Array<ArrayBuffer> }>;
       const eventsEncoded = await Promise.all(
-        eventsEncrypted.map((e) => sessionKey.decrypt({ type: "ciphertext", data: e.data })),
+        eventsEncrypted.map((e) => legacyAESDecrypt(sessionKey, e.data)),
       );
       const jobKeys = new Map<number, AESKey>();
       for (const eventEncoded of eventsEncoded) {
-        const event = mpDecoder.decode(eventEncoded.data) as any;
+        const event = mpDecoder.decode(eventEncoded) as any;
         const jobUUID = event.event.uuid;
         const jobId = insertJob.get(jobUUID)!.id as number;
         let jobKey = jobKeys.get(jobId);
@@ -99,7 +98,7 @@ export async function dataMigration3(db: DatabaseSync) {
           jobKeys.set(jobId, jobKey);
           insertJobKey.run(jobId, masterKeyId, encryptedJobKey.data);
         }
-        const eventEncryptedData = await jobKey.encrypt(eventEncoded);
+        const eventEncryptedData = await jobKey.encrypt({ type: "plaintext", data: eventEncoded });
         const eventUUID = crypto.randomUUID();
         insertEvent.run(jobId, eventUUID, eventEncryptedData.data);
 
@@ -111,8 +110,8 @@ export async function dataMigration3(db: DatabaseSync) {
           const row = getBlob.get(session.id, blobId);
           if (row === undefined) continue;
           const blobEncryptedOld = row.data as Uint8Array<ArrayBuffer>;
-          const blob = await sessionKey.decrypt({ type: "ciphertext", data: blobEncryptedOld });
-          const blobEncryptedNew = await jobKey.encrypt(blob);
+          const blob = await legacyAESDecrypt(sessionKey, blobEncryptedOld);
+          const blobEncryptedNew = await jobKey.encrypt({ type: "plaintext", data: blob });
           insertBlob.run(jobId, blobId, blobEncryptedNew.data);
         }
       }
@@ -120,4 +119,36 @@ export async function dataMigration3(db: DatabaseSync) {
   } finally {
     rl.close();
   }
+}
+
+async function legacyAESKey(password: string, salt: Uint8Array<ArrayBuffer>) {
+  const kdfKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      hash: "SHA-512",
+      salt: salt,
+      iterations: 1000,
+    },
+    kdfKey,
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"],
+  );
+  return key;
+}
+
+async function legacyAESDecrypt(key: CryptoKey, encrypted: Uint8Array<ArrayBuffer>) {
+  const [iv, encryptedData] = mpDecoder.decode(encrypted) as [
+    Uint8Array<ArrayBuffer>,
+    Uint8Array<ArrayBuffer>,
+  ];
+  const buf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encryptedData);
+  return new Uint8Array(buf);
 }
