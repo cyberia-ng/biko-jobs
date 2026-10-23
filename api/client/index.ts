@@ -4,12 +4,12 @@ import {
   ECDSAPrivateKey,
   ECDSAPublicKey,
   generateECDSAKeyPair,
-  generateRSAKeyPair,
+  generateX25519KeyPair,
   KeyDerivationPassword,
-  RSAPrivateKey,
-  RSAPublicKey,
+  X25519PrivateKey,
+  X25519PublicKey,
   type EncryptedECDSAPrivateKey,
-  type EncryptedRSAPrivateKey,
+  type EncryptedX25519PrivateKey,
 } from "@biko-jobs/api-client/crypto.ts";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 import type { Bytes } from "@biko-jobs/api-client/schemas.ts";
@@ -338,16 +338,16 @@ export class ApiClient {
 export class MasterKeyPublic {
   name: string;
   uuid: string;
-  encryptionPublicKey: RSAPublicKey;
-  protected encryptionPrivateKeyEncrypted: EncryptedRSAPrivateKey;
+  encryptionPublicKey: X25519PublicKey;
+  protected encryptionPrivateKeyEncrypted: EncryptedX25519PrivateKey;
   signingPublicKey: ECDSAPublicKey;
   protected signingPrivateKeyEncrypted: EncryptedECDSAPrivateKey;
   constructor(opts: {
     name: string;
     uuid: string;
     encryptionKey: {
-      public: RSAPublicKey;
-      privateEncrypted: EncryptedRSAPrivateKey;
+      public: X25519PublicKey;
+      privateEncrypted: EncryptedX25519PrivateKey;
     };
     signingKey: {
       public: ECDSAPublicKey;
@@ -363,7 +363,7 @@ export class MasterKeyPublic {
   }
 
   static async fromWireFormat(mk: schemas.MasterKey): Promise<MasterKeyPublic> {
-    const encryptionPublicKey = await RSAPublicKey.import(mk.encryptionKey.public);
+    const encryptionPublicKey = await X25519PublicKey.import(mk.encryptionKey.public, "master key");
     const signingPublicKey = await ECDSAPublicKey.import(mk.signingKey.public);
     return new MasterKeyPublic({
       name: mk.name,
@@ -371,7 +371,7 @@ export class MasterKeyPublic {
       encryptionKey: {
         public: encryptionPublicKey,
         privateEncrypted: {
-          type: "encrypted rsa private key",
+          type: "encrypted x25519 private key",
           key: { type: "ciphertext", data: mk.encryptionKey.privateEncrypted },
           salt: { type: "salt", data: mk.encryptionKey.salt },
         },
@@ -389,9 +389,10 @@ export class MasterKeyPublic {
 
   async toKeyPair(password: string): Promise<MasterKeyPair> {
     const kdfPassword = await KeyDerivationPassword.import(password);
-    const encryptionPrivateKey = await RSAPrivateKey.import(
+    const encryptionPrivateKey = await X25519PrivateKey.import(
       this.encryptionPrivateKeyEncrypted,
       kdfPassword,
+      "master key",
     );
     const signingPrivateKey = await ECDSAPrivateKey.import(
       this.signingPrivateKeyEncrypted,
@@ -416,16 +417,16 @@ export class MasterKeyPublic {
 }
 
 export class MasterKeyPair extends MasterKeyPublic {
-  encryptionPrivateKey: RSAPrivateKey;
+  encryptionPrivateKey: X25519PrivateKey;
   signingPrivateKey: ECDSAPrivateKey;
   password: string;
   constructor(opts: {
     name: string;
     uuid: string;
     encryptionKey: {
-      public: RSAPublicKey;
-      private: RSAPrivateKey;
-      privateEncrypted: EncryptedRSAPrivateKey;
+      public: X25519PublicKey;
+      private: X25519PrivateKey;
+      privateEncrypted: EncryptedX25519PrivateKey;
     };
     signingKey: {
       public: ECDSAPublicKey;
@@ -441,7 +442,7 @@ export class MasterKeyPair extends MasterKeyPublic {
   }
 
   static async generate(uuid: string, name: string, password: string) {
-    const encryptionKeyPair = await generateRSAKeyPair();
+    const encryptionKeyPair = await generateX25519KeyPair("master key");
     const signingKeyPair = await generateECDSAKeyPair();
     const kdfPassword = await KeyDerivationPassword.import(password);
     return new MasterKeyPair({
