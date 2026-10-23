@@ -42,7 +42,7 @@ export class AESKey {
     const key = await crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
-        hash: "SHA-512",
+        hash: "SHA-256",
         salt: salt.data,
         iterations: 1000,
       },
