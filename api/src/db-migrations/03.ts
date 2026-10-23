@@ -5,7 +5,7 @@ import { mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
 import {
   AESKey,
   generateECDSAKeyPair,
-  generateRSAKeyPair,
+  generateX25519KeyPair,
   KeyDerivationPassword,
 } from "@biko-jobs/api-client/crypto.ts";
 
@@ -15,8 +15,9 @@ export async function dataMigration3(db: DatabaseSync) {
     const masterKeyName = await rl.question("New master key name: ");
     const masterKeyPasswordText = await rl.question("New master key password: ");
     const masterKeyPassword = await KeyDerivationPassword.import(masterKeyPasswordText);
-    const masterKeyRSA = await generateRSAKeyPair();
-    const masterKeyRSAPrivateEncrypted = await masterKeyRSA.privateKey.export(masterKeyPassword);
+    const masterKeyX25519 = await generateX25519KeyPair("master key");
+    const masterKeyX25519PrivateEncrypted =
+      await masterKeyX25519.privateKey.export(masterKeyPassword);
     const masterKeyECDSA = await generateECDSAKeyPair();
     const masterKeyECDSAPrivateEncrypted =
       await masterKeyECDSA.privateKey.export(masterKeyPassword);
@@ -37,9 +38,9 @@ export async function dataMigration3(db: DatabaseSync) {
     const masterKeyId = insertMasterKey.get(
       crypto.randomUUID(),
       masterKeyName,
-      await masterKeyRSA.publicKey.export(),
-      masterKeyRSAPrivateEncrypted.key.data,
-      masterKeyRSAPrivateEncrypted.salt.data,
+      await masterKeyX25519.publicKey.export(),
+      masterKeyX25519PrivateEncrypted.key.data,
+      masterKeyX25519PrivateEncrypted.salt.data,
       await masterKeyECDSA.publicKey.export(),
       masterKeyECDSAPrivateEncrypted.key.data,
       masterKeyECDSAPrivateEncrypted.salt.data,
@@ -94,7 +95,7 @@ export async function dataMigration3(db: DatabaseSync) {
         let jobKey = jobKeys.get(jobId);
         if (jobKey === undefined) {
           jobKey = await AESKey.generate();
-          const encryptedJobKey = await jobKey.encryptKey(masterKeyRSA.publicKey);
+          const encryptedJobKey = await jobKey.encryptKey(masterKeyX25519.publicKey);
           jobKeys.set(jobId, jobKey);
           insertJobKey.run(jobId, masterKeyId, encryptedJobKey.data);
         }
