@@ -4,7 +4,13 @@ import { allStatusesV1, type ActionV1, type DeleteJobV1, type ImageV1 } from "./
 export type ActionV2 = Omit<ActionV1, "event"> & {
   version: 2;
   uuid: string;
-  event: UpsertJobV2 | ChangeJobStatusV2 | AddJobTagV2 | RemoveJobTagV2 | DeleteJobV1;
+  event:
+    | UpsertJobV2
+    | ChangeJobStatusV2
+    | AddJobTagV2
+    | RemoveJobTagV2
+    | DeleteJobV1
+    | SetJobArchivedV2;
 };
 
 export const allStatusesV2 = [...allStatusesV1, "cancelled"] as const;
@@ -36,6 +42,12 @@ export type RemoveJobTagV2 = {
   type: "remove job tag";
   uuid: string;
   tag: string;
+};
+
+export type SetJobArchivedV2 = {
+  type: "set job archived";
+  uuid: string;
+  archived: boolean;
 };
 
 export function migrateFromV1(action: ActionV1): ActionV2 {

@@ -32,3 +32,6 @@ export const addJobTag = (f: Event<"add job tag">) => withNow({ type: "add job t
 
 export const removeJobTag = (f: Event<"remove job tag">) =>
   withNow({ type: "remove job tag", ...f });
+
+export const setJobArchived = (f: Event<"set job archived">) =>
+  withNow({ type: "set job archived", ...f });

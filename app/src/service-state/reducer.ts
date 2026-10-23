@@ -23,10 +23,10 @@ function reduceJobAction(state: State, action: JobAction): State {
     }
     state.processedJobActions.add(action.uuid);
     const { event } = action;
+    const job = state.jobs.get(event.uuid);
     switch (event.type) {
       case "upsert job":
-        const existing = state.jobs.get(event.uuid);
-        const jobNumber = state.pendingJobNumbers.get(event.uuid) ?? existing?.number;
+        const jobNumber = state.pendingJobNumbers.get(event.uuid) ?? job?.number;
         state.pendingJobNumbers.delete(event.uuid);
         if (jobNumber === undefined) {
           return state;
@@ -34,13 +34,14 @@ function reduceJobAction(state: State, action: JobAction): State {
         state.jobs.set(event.uuid, {
           uuid: event.uuid,
           number: jobNumber,
-          status: existing?.status ?? "triaged",
+          status: job?.status ?? "triaged",
+          archived: job?.archived ?? false,
           timestamps: {
-            creation: existing?.timestamps.creation ?? action.timestamp,
-            working: existing?.timestamps.working,
-            completed: existing?.timestamps.completed,
-            cancelled: existing?.timestamps.cancelled,
-            hasComplexMovement: existing?.timestamps.hasComplexMovement ?? false,
+            creation: job?.timestamps.creation ?? action.timestamp,
+            working: job?.timestamps.working,
+            completed: job?.timestamps.completed,
+            cancelled: job?.timestamps.cancelled,
+            hasComplexMovement: job?.timestamps.hasComplexMovement ?? false,
           },
           ...pick(event, ["customerName", "customerPhoneNumber", "description", "tags", "images"]),
         });
@@ -52,7 +53,6 @@ function reduceJobAction(state: State, action: JobAction): State {
         state.jobs.get(event.uuid)?.tags.delete(event.tag);
         break;
       case "change job status":
-        const job = state.jobs.get(event.uuid);
         if (job !== undefined && job.status !== event.status) {
           switch (event.status) {
             case "working":
@@ -75,6 +75,11 @@ function reduceJobAction(state: State, action: JobAction): State {
         break;
       case "delete job":
         state.jobs.delete(event.uuid);
+        break;
+      case "set job archived":
+        if (job !== undefined) {
+          job.archived = event.archived;
+        }
         break;
       default:
         assertNever(event);
