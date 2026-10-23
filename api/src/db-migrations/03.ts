@@ -2,7 +2,12 @@ import type { DatabaseSync } from "node:sqlite";
 import * as readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
-import { AESKey, generateRSAKeyPair, KeyDerivationPassword } from "@biko-jobs/api-client/crypto.ts";
+import {
+  AESKey,
+  generateECDSAKeyPair,
+  generateRSAKeyPair,
+  KeyDerivationPassword,
+} from "@biko-jobs/api-client/crypto.ts";
 
 export async function dataMigration3(db: DatabaseSync) {
   const rl = readline.createInterface({ input: stdin, output: stdout });
@@ -10,19 +15,34 @@ export async function dataMigration3(db: DatabaseSync) {
     const masterKeyName = await rl.question("New master key name: ");
     const masterKeyPasswordText = await rl.question("New master key password: ");
     const masterKeyPassword = await KeyDerivationPassword.import(masterKeyPasswordText);
-    const masterKey = await generateRSAKeyPair();
-    const masterKeyEncrypted = await masterKey.privateKey.export(masterKeyPassword);
+    const masterKeyRSA = await generateRSAKeyPair();
+    const masterKeyRSAPrivateEncrypted = await masterKeyRSA.privateKey.export(masterKeyPassword);
+    const masterKeyECDSA = await generateECDSAKeyPair();
+    const masterKeyECDSAPrivateEncrypted =
+      await masterKeyECDSA.privateKey.export(masterKeyPassword);
     const insertMasterKey = db.prepare(
-      `INSERT INTO master_keys (name, uuid, salt, public_key, encrypted_private_key)
-       VALUES (?, ?, ?, ?, ?)
-       RETURNING id;`,
+      `INSERT INTO master_keys (
+        uuid,
+        name,
+        encryption_public_key,
+        encryption_private_key_encrypted,
+        encryption_private_key_encryption_salt,
+        signing_public_key,
+        signing_private_key_encrypted,
+        signing_private_key_encryption_salt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING id;`,
     );
     const masterKeyId = insertMasterKey.get(
-      masterKeyName,
       crypto.randomUUID(),
-      masterKeyEncrypted.salt.data,
-      await masterKey.publicKey.export(),
-      masterKeyEncrypted.key.data,
+      masterKeyName,
+      await masterKeyRSA.publicKey.export(),
+      masterKeyRSAPrivateEncrypted.key.data,
+      masterKeyRSAPrivateEncrypted.salt.data,
+      await masterKeyECDSA.publicKey.export(),
+      masterKeyECDSAPrivateEncrypted.key.data,
+      masterKeyECDSAPrivateEncrypted.salt.data,
     )!.id as number;
 
     const getEvents = db.prepare(`SELECT data FROM events WHERE session = ?;`);
@@ -75,7 +95,7 @@ export async function dataMigration3(db: DatabaseSync) {
         let jobKey = jobKeys.get(jobId);
         if (jobKey === undefined) {
           jobKey = await AESKey.generate();
-          const encryptedJobKey = await jobKey.encryptKey(masterKey.publicKey);
+          const encryptedJobKey = await jobKey.encryptKey(masterKeyRSA.publicKey);
           jobKeys.set(jobId, jobKey);
           insertJobKey.run(jobId, masterKeyId, encryptedJobKey.data);
         }
