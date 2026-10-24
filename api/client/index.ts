@@ -27,7 +27,8 @@ export type ClientErrorInfo =
   | { type: "blob put conflict"; uuid: string }
   | { type: "duplicate event"; uuid: string }
   | { type: "job keys incomplete" }
-  | { type: "master key post conflict"; name: string; uuid: string };
+  | { type: "master key post conflict"; name: string; uuid: string }
+  | { type: "not authorized" };
 
 export class ClientError extends Error {
   info: ClientErrorInfo;
@@ -40,6 +41,7 @@ export class ClientError extends Error {
         break;
       case "websocket error":
       case "job keys incomplete":
+      case "not authorized":
         break;
       case "job put conflict":
       case "blob put conflict":
@@ -59,6 +61,7 @@ export class ClientError extends Error {
 
 function raiseForStatus(res: { ok: boolean; status: number }) {
   if (!res.ok) {
+    if (res.status === 401) throw new ClientError({ type: "not authorized" });
     throw new ClientError({ type: "http error", status: res.status });
   }
 }
@@ -70,6 +73,7 @@ async function apiFetch(
     method?: RequestInit["method"];
     body?: unknown;
     query?: Record<string, string>;
+    auth?: AuthToken;
   },
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
   const endpoint = endpointComponents.map((c) => encodeURIComponent(c)).join("/");
@@ -89,6 +93,10 @@ async function apiFetch(
       url += encodeURIComponent(value);
       firstQueryParam = false;
     }
+  }
+  if (options?.auth !== undefined) {
+    fetchOptions.headers = fetchOptions.headers ?? {};
+    Object.assign(fetchOptions.headers, { Authorization: options.auth.token });
   }
   const res = await fetch(url, fetchOptions);
   const bodyBytes = await res.bytes();
@@ -126,10 +134,11 @@ export class ApiClient {
     return Promise.all(body.map((k) => MasterKeyPublic.fromWireFormat(k)));
   }
 
-  async addMasterKeyPair(keyPair: MasterKeyPair): Promise<void> {
+  async addMasterKeyPair(keyPair: MasterKeyPair, auth: AuthToken): Promise<void> {
     const res = await apiFetch(this.baseUrl, ["master-keys"], {
       method: "POST",
       body: await keyPair.toWireFormat(),
+      auth,
     });
     if (res.status === 409) {
       throw new ClientError({
@@ -141,7 +150,7 @@ export class ApiClient {
     raiseForStatus(res);
   }
 
-  async addJob(job: Job, access: MasterKeyPublic[]): Promise<number> {
+  async addJob(job: Job, access: MasterKeyPublic[], auth: AuthToken): Promise<number> {
     const encryptedJobKeysArrayP = access.map(
       async (mkp) => [mkp.uuid, (await job.key.encryptKey(mkp.encryptionPublicKey)).data] as const,
     );
@@ -153,6 +162,7 @@ export class ApiClient {
     const res = await apiFetch(this.baseUrl, ["jobs", body.uuid], {
       method: "PUT",
       body,
+      auth,
     });
     switch (res.status) {
       case 409:
@@ -201,7 +211,7 @@ export class ApiClient {
     return new Map(Object.entries(jobsEventsDict));
   }
 
-  async addEvent(event: JobEvent) {
+  async addEvent(event: JobEvent, auth: AuthToken) {
     const encoded = mpEncoder.encode(event.data);
     const encrypted = await event.job.key.encrypt({ type: "plaintext", data: encoded });
     const res = await apiFetch(this.baseUrl, ["events"], {
@@ -211,16 +221,18 @@ export class ApiClient {
         uuid: event.uuid,
         data: encrypted.data,
       } satisfies schemas.JobEvent,
+      auth,
     });
     if (res.status === 409) throw new ClientError({ type: "duplicate event", uuid: event.uuid });
     raiseForStatus(res);
   }
 
-  async putBlob(blob: JobBlob) {
+  async putBlob(blob: JobBlob, auth: AuthToken) {
     const encrypted = await blob.job.key.encrypt({ type: "plaintext", data: blob.data });
     const res = await apiFetch(this.baseUrl, ["blobs"], {
       method: "POST",
       body: { job: blob.job.uuid, uuid: blob.uuid, data: encrypted.data } satisfies schemas.JobBlob,
+      auth,
     });
     if (res.status === 409) throw new ClientError({ type: "blob put conflict", uuid: blob.uuid });
     raiseForStatus(res);
@@ -477,6 +489,34 @@ export class MasterKeyPair extends MasterKeyPublic {
         salt: this.signingPrivateKeyEncrypted.salt.data,
       },
     };
+  }
+}
+
+export class AuthToken {
+  expiry: Temporal.Instant;
+  token: string;
+  private constructor(opts: { expiry: Temporal.Instant; token: schemas.AuthToken }) {
+    this.expiry = opts.expiry;
+    this.token = mpEncoder.encode(opts.token).toBase64();
+  }
+
+  static async init(opts: {
+    masterKey: MasterKeyPair;
+    expiry: Temporal.Instant;
+    permissions: Set<"add master key" | "write jobs">;
+  }): Promise<AuthToken> {
+    const expiryStr = opts.expiry.toString();
+    const authorization: schemas.Authorization = {
+      expiry: expiryStr,
+      permissions: opts.permissions,
+    };
+    const packed = mpEncoder.encode(authorization);
+    const signed = await opts.masterKey.signingPrivateKey.sign(packed);
+    const token: schemas.AuthToken = {
+      masterKeyId: opts.masterKey.uuid,
+      signed,
+    };
+    return new AuthToken({ expiry: opts.expiry, token });
   }
 }
 

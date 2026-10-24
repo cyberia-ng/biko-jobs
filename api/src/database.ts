@@ -78,6 +78,7 @@ function statements(db: DatabaseSync) {
       SELECT id, ?, ? FROM jobs WHERE jobs.uuid = ?;`,
     ),
     getBlob: db.prepare(`SELECT data FROM job_blobs WHERE uuid = ?;`),
+    getMasterSigningKey: db.prepare(`SELECT signing_public_key FROM master_keys WHERE uuid = ?;`),
   };
 }
 
@@ -211,6 +212,12 @@ export class Database {
   getBlob(uuid: string): Bytes | undefined {
     const row = this.statements.getBlob.get(uuid);
     return row?.data as Bytes | undefined;
+  }
+
+  getMasterSigningKey(uuid: string): Bytes | undefined {
+    const row = this.statements.getMasterSigningKey.get(uuid);
+    if (row === undefined) return undefined;
+    return row.signing_public_key as Bytes;
   }
 }
 

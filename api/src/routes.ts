@@ -17,6 +17,7 @@ import {
   JobBlob,
   SocketEvent,
 } from "@biko-jobs/api-client/schemas.ts";
+import { verifier } from "./verification.ts";
 
 function msgPackBody(schema: z.ZodType, limit?: number) {
   return (req: Request, res: Response, next: NextFunction) =>
@@ -59,7 +60,7 @@ export function addRoutes(
     res.status(200).send();
   });
 
-  app.post("/master-keys", msgPackBody(MasterKey), (req, res) => {
+  app.post("/master-keys", verifier(db, "add master key"), msgPackBody(MasterKey), (req, res) => {
     try {
       db.addMasterKey(req.body as MasterKey);
       res.status(200).send();
@@ -74,7 +75,7 @@ export function addRoutes(
     res.status(200).send(keys);
   });
 
-  app.put("/jobs/:uuid", msgPackBody(Job), (req, res) => {
+  app.put("/jobs/:uuid", verifier(db, "write jobs"), msgPackBody(Job), (req, res) => {
     try {
       const job = req.body as Job;
       const jobId = db.addJob(job);
@@ -104,7 +105,7 @@ export function addRoutes(
     res.status(200).send(events);
   });
 
-  app.post("/events", msgPackBody(JobEvent), (req, res) => {
+  app.post("/events", verifier(db, "write jobs"), msgPackBody(JobEvent), (req, res) => {
     const event = req.body as JobEvent;
     try {
       db.addEvent(event);
@@ -116,15 +117,20 @@ export function addRoutes(
     }
   });
 
-  app.post("/blobs", msgPackBody(JobBlob, 15 * 1024 * 1024), (req, res) => {
-    try {
-      db.addBlob(req.body as JobBlob);
-      res.status(201).send();
-    } catch (e) {
-      if (e === "already exists") res.status(409).send();
-      else throw e;
-    }
-  });
+  app.post(
+    "/blobs",
+    verifier(db, "write jobs"),
+    msgPackBody(JobBlob, 15 * 1024 * 1024),
+    (req, res) => {
+      try {
+        db.addBlob(req.body as JobBlob);
+        res.status(201).send();
+      } catch (e) {
+        if (e === "already exists") res.status(409).send();
+        else throw e;
+      }
+    },
+  );
 
   app.get("/blobs/:uuid", (req, res) => {
     const blob = db.getBlob(req.params.uuid);

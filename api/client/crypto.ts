@@ -107,8 +107,6 @@ export class AESKey {
   }
 }
 
-export type SignedData = { data: Bytes; signature: Bytes };
-
 export class VerificationError extends Error {
   constructor() {
     super("Message verification failed");
@@ -156,6 +154,11 @@ export type EncryptedECDSAPrivateKey = {
   salt: Salt;
   key: Ciphertext;
 };
+
+export type SignedData = {
+  data: Bytes,
+  signature: Bytes,
+}
 
 export class ECDSAPrivateKey {
   key: CryptoKey;

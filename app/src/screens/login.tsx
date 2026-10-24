@@ -34,9 +34,6 @@ export function Login() {
       .then(() => setLoginResult("ready"))
       .catch(() => setLoginResult("wrong password"));
   }
-  function ephemeral() {
-    login({ type: "log in to ephemeral session" });
-  }
   let connected: MasterKeyPair | "ephemeral" | undefined;
   switch (loginState.login?.type) {
     case undefined:
@@ -53,7 +50,6 @@ export function Login() {
     <LoginForm
       masterKeys={loginState.masterKeys}
       onSubmit={submit}
-      onEphemeral={ephemeral}
       savedCredentials={savedCredentials}
       connected={connected}
       loginResult={loginResult}
@@ -64,14 +60,12 @@ export function Login() {
 export function LoginForm({
   masterKeys,
   onSubmit,
-  onEphemeral,
   savedCredentials,
   connected,
   loginResult,
 }: {
   masterKeys: MasterKeyPublic[];
   onSubmit: (key: MasterKeyPublic, password: string) => void;
-  onEphemeral: () => void;
   savedCredentials: Map<string, string>;
   connected: MasterKeyPair | "ephemeral" | undefined;
   loginResult: LoginResult;
@@ -93,7 +87,6 @@ export function LoginForm({
           selected={selectedKey}
           connected={connected}
           onSelect={setSelectedKey}
-          onEphemeral={onEphemeral}
         />
       </div>
       {selectedKey !== undefined && (
@@ -116,13 +109,11 @@ export function KeyList({
   selected,
   connected,
   onSelect,
-  onEphemeral,
 }: {
   keys: MasterKeyPublic[];
   selected: MasterKeyPublic | "ephemeral" | undefined;
   connected: MasterKeyPublic | "ephemeral" | undefined;
   onSelect: (key: MasterKeyPublic) => void;
-  onEphemeral: () => void;
 }) {
   return (
     <>
@@ -149,24 +140,6 @@ export function KeyList({
             </div>
           </a>
         ))}
-        <a
-          href="#"
-          className={"list-group-item p-2 d-flex" + (selected === "ephemeral" ? " active" : "")}
-          onClick={(e) => {
-            e.preventDefault();
-            onEphemeral();
-          }}
-        >
-          {connected === "ephemeral" && (
-            <div>
-              <i className="bi bi-link-45deg me-2" />
-            </div>
-          )}
-          <div className="flex-grow-1">Ephemeral session</div>
-          <div>
-            <i className="bi bi-chevron-right" />
-          </div>
-        </a>
       </div>
     </>
   );

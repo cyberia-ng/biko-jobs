@@ -4,3 +4,4 @@ Dockerfile.api
 Dockerfile.app
 docker-compose.yml
 .git
+api/src/.env

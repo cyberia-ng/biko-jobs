@@ -2,7 +2,7 @@ import "temporal-polyfill/global";
 import { readFileSync } from "node:fs";
 import { upsertJob } from "../../src/service-state/action.ts";
 import { join } from "node:path";
-import { ApiClient, Job, MasterKeyPair, type JobBlob, type JobEvent } from "@biko-jobs/api-client";
+import { ApiClient, AuthToken, Job, type JobBlob, type JobEvent } from "@biko-jobs/api-client";
 
 const img1 = {
   uuid: "10000000-0000-4000-8000-000000000001",
@@ -62,16 +62,18 @@ const upsertJob2 = (job: Job, imgs: JobBlob[]): JobEvent => {
 
 async function main() {
   const client = new ApiClient("http://localhost:3000");
-  const mk = await MasterKeyPair.generate(
-    "20000000-0000-4000-8000-000000000000",
-    "some name",
-    "some password",
-  );
-  await client.addMasterKeyPair(mk);
+  const mks = await client.listMasterKeys();
+  const mkPublic = mks.find((mk) => mk.name === "some name")!;
+  const mk = await mkPublic.toKeyPair("some password");
+  const authToken = await AuthToken.init({
+    masterKey: mk,
+    expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
+    permissions: new Set(["add master key", "write jobs"]),
+  });
   const job1 = await Job.generate("00000000-0000-4000-8000-000000000000");
   const job2 = await Job.generate("00000000-0000-4000-8000-000000000001");
-  await client.addJob(job1, [mk]);
-  await client.addJob(job2, [mk]);
+  await client.addJob(job1, [mk], authToken);
+  await client.addJob(job2, [mk], authToken);
   const job1Blobs = [img1, img2, img3].map((img) => ({
     uuid: img.uuid,
     data: img.data,
@@ -82,9 +84,9 @@ async function main() {
     data: img.data,
     job: job2,
   }));
-  await Promise.all([...job1Blobs, ...job2Blobs].map((blob) => client.putBlob(blob)));
-  await client.addEvent(upsertJob1(job1, job1Blobs));
-  await client.addEvent(upsertJob2(job2, job2Blobs));
+  await Promise.all([...job1Blobs, ...job2Blobs].map((blob) => client.putBlob(blob, authToken)));
+  await client.addEvent(upsertJob1(job1, job1Blobs), authToken);
+  await client.addEvent(upsertJob2(job2, job2Blobs), authToken);
 }
 
 main().catch(console.error);

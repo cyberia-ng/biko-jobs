@@ -1,4 +1,4 @@
-import type { MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
+import type { AuthToken, MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
 import { produce } from "immer";
 import { assertNever } from "./assertNever.ts";
 
@@ -9,14 +9,14 @@ export type State = {
         type: "master key";
         masterKey: MasterKeyPair;
       }
-    | { type: "ephemeral" }
+    | { type: "ephemeral"; authToken: AuthToken }
     | undefined;
 };
 
 export type Action =
   | { type: "update master keys list"; masterKeys: MasterKeyPublic[] }
   | { type: "log in with key pair"; masterKey: MasterKeyPair }
-  | { type: "log in to ephemeral session" };
+  | { type: "log in to ephemeral session"; authToken: AuthToken };
 
 export function reducer(state: State, action: Action): State {
   return produce(state, (state) => {
@@ -32,7 +32,7 @@ export function reducer(state: State, action: Action): State {
         state.login = { type: "master key", masterKey: action.masterKey };
         break;
       case "log in to ephemeral session":
-        state.login = { type: "ephemeral" };
+        state.login = { type: "ephemeral", authToken: action.authToken };
         break;
       default:
         assertNever(action);
