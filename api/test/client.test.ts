@@ -12,6 +12,8 @@ import {
 import { createApp } from "@biko-jobs/api/app.ts";
 import { expect, test, describe, beforeEach, afterEach } from "vitest";
 import type { Server } from "node:http";
+import * as schemas from "@biko-jobs/api-client/schemas.ts";
+import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 
 describe("api client", () => {
   let masterKey: MasterKeyPair;
@@ -303,6 +305,25 @@ describe("api client", () => {
           expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
           permissions: new Set(["add master key"]),
         });
+        for (const method of Object.values(jobTestMethods)) {
+          await expect(method(badAuthToken)).rejects.toThrow(
+            new ClientError({ type: "not authorized" }),
+          );
+        }
+      });
+
+      test("rejects token where signature does not match data", async () => {
+        const badAuthToken = await AuthToken.init({
+          masterKey,
+          expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
+          permissions: new Set(),
+        });
+        const tokenData = mpDecoder.decode(
+          Uint8Array.fromBase64(badAuthToken.tokenStr),
+        ) as schemas.AuthToken;
+        tokenData.authorization.permissions = new Set(["write jobs"]);
+        const tokenStr = mpEncoder.encode(tokenData).toBase64();
+        badAuthToken.tokenStr = tokenStr;
         for (const method of Object.values(jobTestMethods)) {
           await expect(method(badAuthToken)).rejects.toThrow(
             new ClientError({ type: "not authorized" }),

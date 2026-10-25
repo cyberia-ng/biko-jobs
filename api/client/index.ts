@@ -96,7 +96,7 @@ async function apiFetch(
   }
   if (options?.auth !== undefined) {
     fetchOptions.headers = fetchOptions.headers ?? {};
-    Object.assign(fetchOptions.headers, { Authorization: options.auth.token });
+    Object.assign(fetchOptions.headers, { Authorization: options.auth.tokenStr });
   }
   const res = await fetch(url, fetchOptions);
   const bodyBytes = await res.bytes();
@@ -493,11 +493,11 @@ export class MasterKeyPair extends MasterKeyPublic {
 }
 
 export class AuthToken {
-  expiry: Temporal.Instant;
-  token: string;
-  private constructor(opts: { expiry: Temporal.Instant; token: schemas.AuthToken }) {
-    this.expiry = opts.expiry;
-    this.token = mpEncoder.encode(opts.token).toBase64();
+  token: schemas.AuthToken;
+  tokenStr: string;
+  private constructor(token: schemas.AuthToken) {
+    this.token = token;
+    this.tokenStr = mpEncoder.encode(token).toBase64();
   }
 
   static async init(opts: {
@@ -514,9 +514,15 @@ export class AuthToken {
     const signed = await opts.masterKey.signingPrivateKey.sign(packed);
     const token: schemas.AuthToken = {
       masterKeyId: opts.masterKey.uuid,
-      signed,
+      authorization,
+      signature: signed.signature,
     };
-    return new AuthToken({ expiry: opts.expiry, token });
+    return new AuthToken(token);
+  }
+
+  static import(bytes: Bytes) {
+    const token = schemas.AuthToken.parse(mpDecoder.decode(bytes));
+    return new AuthToken(token);
   }
 }
 

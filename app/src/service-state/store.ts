@@ -84,7 +84,7 @@ export class Store {
       case "master key pair": {
         if (
           Temporal.Instant.compare(
-            this.loginState.authToken.expiry,
+            this.loginState.authToken.token.authorization.expiry,
             Temporal.Now.instant().add(multiplyDuration(AUTH_TOKEN_LIFETIME, 0.9)),
           ) === -1
         ) {

@@ -156,9 +156,9 @@ export type EncryptedECDSAPrivateKey = {
 };
 
 export type SignedData = {
-  data: Bytes,
-  signature: Bytes,
-}
+  data: Bytes;
+  signature: Bytes;
+};
 
 export class ECDSAPrivateKey {
   key: CryptoKey;
@@ -223,9 +223,11 @@ export async function generateECDSAKeyPair(): Promise<{
 export class X25519PublicKey {
   key: CryptoKey;
   context: string;
-  constructor(opts: { key: CryptoKey; context: string }) {
+  fingerprint: string;
+  constructor(opts: { key: CryptoKey; context: string; fingerprint: string }) {
     this.key = opts.key;
     this.context = opts.context;
+    this.fingerprint = opts.fingerprint;
   }
 
   async encrypt(pt: Plaintext): Promise<Ciphertext> {
@@ -253,8 +255,15 @@ export class X25519PublicKey {
 
   static async import(bytes: Bytes, context: string): Promise<X25519PublicKey> {
     const key = await crypto.subtle.importKey("raw", bytes, { name: "X25519" }, true, []);
-    return new X25519PublicKey({ key, context });
+    const fingerprint = await fingerprintX25519PublicKey(key);
+    return new X25519PublicKey({ key, context, fingerprint });
   }
+}
+
+async function fingerprintX25519PublicKey(key: CryptoKey): Promise<string> {
+  const bytes = await crypto.subtle.exportKey("raw", key);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return new Uint8Array(hash).toHex();
 }
 
 export type EncryptedX25519PrivateKey = {
@@ -320,8 +329,9 @@ export async function generateX25519KeyPair(context: string): Promise<{
   privateKey: X25519PrivateKey;
 }> {
   const keyPair = await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]);
+  const fingerprint = await fingerprintX25519PublicKey(keyPair.publicKey);
   return {
-    publicKey: new X25519PublicKey({ key: keyPair.publicKey, context }),
+    publicKey: new X25519PublicKey({ key: keyPair.publicKey, context, fingerprint }),
     privateKey: new X25519PrivateKey({ key: keyPair.privateKey, context }),
   };
 }

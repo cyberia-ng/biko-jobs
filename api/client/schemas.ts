@@ -69,15 +69,6 @@ export const EventStreamMessage = z.discriminatedUnion("type", [
 ]);
 export type EventStreamMessage = z.infer<typeof EventStreamMessage>;
 
-export const AuthToken = z.object({
-  masterKeyId: z.uuidv4(),
-  signed: z.object({
-    data: Bytes,
-    signature: Bytes,
-  }),
-});
-export type AuthToken = z.infer<typeof AuthToken>;
-
 export const Permission = z.union([z.literal("add master key"), z.literal("write jobs")]);
 export type Permission = z.infer<typeof Permission>;
 
@@ -86,3 +77,10 @@ export const Authorization = z.object({
   permissions: z.set(Permission),
 });
 export type Authorization = z.infer<typeof Authorization>;
+
+export const AuthToken = z.object({
+  masterKeyId: z.uuidv4(),
+  authorization: Authorization,
+  signature: Bytes,
+});
+export type AuthToken = z.infer<typeof AuthToken>;

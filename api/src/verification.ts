@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { Database } from "./database.ts";
-import { Authorization, AuthToken, Permission } from "@biko-jobs/api-client/schemas.ts";
-import { mpDecoder } from "@biko-jobs/api-client/messagepack.ts";
+import { AuthToken, Permission } from "@biko-jobs/api-client/schemas.ts";
+import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 import { ECDSAPublicKey } from "@biko-jobs/api-client/crypto.ts";
 
 export function verifier(db: Database, permission: Permission) {
@@ -25,9 +25,13 @@ export function verifier(db: Database, permission: Permission) {
       return;
     }
     ECDSAPublicKey.import(keyBytes)
-      .then((key) => key.verify(authToken.signed))
-      .then((authorizationBytes) => mpDecoder.decode(authorizationBytes))
-      .then((authorizationData) => Authorization.parse(authorizationData))
+      .then((key) =>
+        key.verify({
+          signature: authToken.signature,
+          data: mpEncoder.encode(authToken.authorization),
+        }),
+      )
+      .then(() => authToken.authorization)
       .then((authorization) => {
         if (!authorization.permissions.has(permission)) {
           res.status(401).send();
