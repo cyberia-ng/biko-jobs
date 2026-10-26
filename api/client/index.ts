@@ -268,8 +268,8 @@ export class ApiClient {
               break;
             }
             if (jobKey === undefined) continue;
-            const job = new Job(socketEvent.job.uuid, jobKey);
-            subscriber.onEvent({ type: "new job", job, jobNumber: socketEvent.number });
+            const job = new NumberedJob(socketEvent.job.uuid, jobKey, socketEvent.job.number);
+            subscriber.onEvent({ type: "new job", job });
           }
           break;
         case "job event":
@@ -538,6 +538,10 @@ export class Job {
     const jobKey = await AESKey.generate();
     return new Job(uuid, jobKey);
   }
+
+  withNumber(number: number): NumberedJob {
+    return new NumberedJob(this.uuid, this.key, number);
+  }
 }
 
 export class NumberedJob extends Job {
@@ -551,8 +555,7 @@ export class NumberedJob extends Job {
 export type SubscriptionEvent =
   | {
       type: "new job";
-      job: Job;
-      jobNumber: number;
+      job: NumberedJob;
     }
   | {
       type: "job event";

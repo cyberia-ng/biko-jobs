@@ -20,6 +20,7 @@ import {
   ModalTitle,
 } from "../components/modal.tsx";
 import { updateCanvas } from "jdenticon";
+import { assertNever } from "../assertNever.ts";
 
 type LoginResult = "ready" | "loading" | "wrong password";
 
@@ -282,16 +283,16 @@ function PairingServerDisplay({
   onFinished: () => void;
 }) {
   const [channel, setChannel] = useState<PairingServerChannel | undefined>(undefined);
-  type PairingApprovalData =
+  type PairingState =
     | {
         type: "pairing";
         clientFingerprint: string;
         approve: (approve: boolean) => void;
       }
-    | { type: "not pairing" }
+    | { type: "ready" }
     | { type: "processing" };
-  const [pairingApprovalData, setPairingApprovalData] = useState<PairingApprovalData>({
-    type: "not pairing",
+  const [pairingState, setPairingState] = useState<PairingState>({
+    type: "ready",
   });
 
   useEffect(() => {
@@ -300,20 +301,18 @@ function PairingServerDisplay({
       requestId,
       approve: (fingerprint) =>
         new Promise((res) => {
-          setPairingApprovalData({
+          setPairingState({
             type: "pairing",
             clientFingerprint: fingerprint,
             approve: (approve) => {
               if (approve) {
-                setPairingApprovalData({ type: "processing" });
+                setPairingState({ type: "processing" });
                 AuthToken.init({
                   masterKey,
                   expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 6 })),
                   permissions: new Set(["write jobs"]),
                 })
                   .then((authToken) => res(authToken))
-                  .catch(console.error)
-                  .then(() => setPairingApprovalData({ type: "not pairing" }))
                   .catch(console.error);
               } else {
                 res("rejected");
@@ -331,71 +330,73 @@ function PairingServerDisplay({
       .catch(console.error);
   }, [requestId, masterKey, onFinished]);
   useEffect(() => () => channel?.close(), [channel]);
-  if (channel === undefined) {
+  if (channel === undefined || pairingState.type === "processing") {
     return (
       <div className="text-center">
         <Spinner />
       </div>
     );
-  } else {
-    const hash = serialize(navigationLogin(requestId));
-    const url = new URL(window.location.href);
-    url.hash = hash;
-    return (
-      <>
-        {pairingApprovalData.type === "pairing" && (
-          <Modal
-            onDismiss={() => pairingApprovalData.approve(false)}
-            onConfirm={() => pairingApprovalData.approve(true)}
-          >
-            <ModalHeader>
-              <ModalTitle>Pairing request</ModalTitle>
-            </ModalHeader>
-            <ModalBody>
-              <div className="fs-5 mb-2">
-                Check that this image matches the one on the device to be paired:
+  }
+  switch (pairingState.type) {
+    case "ready": {
+      const hash = serialize(navigationLogin(requestId));
+      const url = new URL(window.location.href);
+      url.hash = hash;
+      return (
+        <Modal onDismiss={() => onFinished()}>
+          <ModalHeader>
+            <ModalTitle>Pairing</ModalTitle>
+            <ModalCloseButton />
+          </ModalHeader>
+          <ModalBody>
+            <QRCodeSVG
+              value={url.toString()}
+              className="d-block m-auto p-2 border rounded mt-2"
+              height={300}
+              width={300}
+            />
+            {import.meta.env.DEV && (
+              <div>
+                <a href={url.toString()} target="_blank">
+                  {url.toString()}
+                </a>
               </div>
-              <Jdenticon
-                value={pairingApprovalData.clientFingerprint}
-                width={150}
-                height={150}
-                className="d-block mx-auto p-2 border rounded"
-              />
-            </ModalBody>
-            <ModalFooter>
-              <ModalConfirmButton className="btn btn-success fs-5">Approve</ModalConfirmButton>
-              <ModalDismissButton className="btn btn-secondary fs-5">Cancel</ModalDismissButton>
-            </ModalFooter>
-          </Modal>
-        )}
-        {pairingApprovalData.type === "not pairing" && (
-          <Modal onDismiss={() => onFinished()}>
-            <ModalHeader>
-              <ModalTitle>Pairing</ModalTitle>
-              <ModalCloseButton />
-            </ModalHeader>
-            <ModalBody>
-              <QRCodeSVG
-                value={url.toString()}
-                className="d-block m-auto p-2 border rounded mt-2"
-                height={300}
-                width={300}
-              />
-              {import.meta.env.DEV && (
-                <div>
-                  <a href={url.toString()} target="_blank">
-                    {url.toString()}
-                  </a>
-                </div>
-              )}
-            </ModalBody>
-            <ModalFooter>
-              <ModalDismissButton>Cancel</ModalDismissButton>
-            </ModalFooter>
-          </Modal>
-        )}
-      </>
-    );
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <ModalDismissButton>Cancel</ModalDismissButton>
+          </ModalFooter>
+        </Modal>
+      );
+    }
+    case "pairing":
+      return (
+        <Modal
+          onDismiss={() => pairingState.approve(false)}
+          onConfirm={() => pairingState.approve(true)}
+        >
+          <ModalHeader>
+            <ModalTitle>Pairing request</ModalTitle>
+          </ModalHeader>
+          <ModalBody>
+            <div className="fs-5 mb-2">
+              Check that this image matches the one on the device to be paired:
+            </div>
+            <Jdenticon
+              value={pairingState.clientFingerprint}
+              width={150}
+              height={150}
+              className="d-block mx-auto p-2 border rounded"
+            />
+          </ModalBody>
+          <ModalFooter>
+            <ModalConfirmButton className="btn btn-success fs-5">Approve</ModalConfirmButton>
+            <ModalDismissButton className="btn btn-secondary fs-5">Cancel</ModalDismissButton>
+          </ModalFooter>
+        </Modal>
+      );
+    default:
+      assertNever(pairingState);
   }
 }
 

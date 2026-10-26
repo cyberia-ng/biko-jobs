@@ -7,6 +7,7 @@ import {
   ApiClient,
   AuthToken,
   Job,
+  NumberedJob,
   type Bytes,
   type JobBlob,
   type MasterKeyPair,
@@ -17,7 +18,7 @@ const AUTH_TOKEN_LIFETIME = Temporal.Duration.from({ minutes: 5 });
 
 export class Store {
   private state: State;
-  private jobs: Map<string, Job>;
+  private jobs: Map<string, NumberedJob>;
   private masterKeys: MasterKeyPublic[];
   private client: ApiClient;
   private subscribers: Set<() => void>;
@@ -42,6 +43,12 @@ export class Store {
     if (this.loginState.type === "master key pair") {
       const jobs = await this.client.getJobs(this.loginState.masterKey);
       for (const job of jobs) {
+        this.jobs.set(job.uuid, job);
+        this.reduce({ type: "create job", uuid: job.uuid, number: job.number });
+      }
+      this.callSubscribers();
+    } else if (this.loginState.type === "ephemeral") {
+      for (const job of this.jobs.values()) {
         this.jobs.set(job.uuid, job);
         this.reduce({ type: "create job", uuid: job.uuid, number: job.number });
       }
@@ -103,8 +110,10 @@ export class Store {
   async createJob(uuid: string): Promise<void> {
     const authToken = await this.getAuthToken();
     const job = await Job.generate(uuid);
-    await this.client.addJob(job, this.masterKeys, authToken);
-    this.jobs.set(job.uuid, job);
+    const number = await this.client.addJob(job, this.masterKeys, authToken);
+    this.jobs.set(job.uuid, job.withNumber(number));
+    this.reduce({ type: "create job", uuid: job.uuid, number });
+    this.callSubscribers();
   }
 
   subscribe(cb: () => void): () => void {
@@ -119,7 +128,7 @@ export class Store {
           switch (event.type) {
             case "new job":
               this.jobs.set(event.job.uuid, event.job);
-              this.reduce({ type: "create job", uuid: event.job.uuid, number: event.jobNumber });
+              this.reduce({ type: "create job", uuid: event.job.uuid, number: event.job.number });
               break;
             case "job event":
               const action = event.event.data as AnyVersionJobAction;

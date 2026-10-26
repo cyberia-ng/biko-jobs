@@ -25,7 +25,10 @@ export const Job = z.object({
 });
 export type Job = z.infer<typeof Job>;
 
-export const JobList = z.array(Job.extend({ number: z.number() }));
+export const NumberedJob = Job.extend({ number: z.number() });
+export type NumberedJob = z.infer<typeof NumberedJob>;
+
+export const JobList = z.array(NumberedJob);
 export type JobList = z.infer<typeof JobList>;
 
 export const JobEvent = z.object({
@@ -36,7 +39,7 @@ export const JobEvent = z.object({
 export type JobEvent = z.infer<typeof JobEvent>;
 
 export const SocketEvent = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("new job"), job: Job, number: z.number() }),
+  z.object({ type: z.literal("new job"), job: NumberedJob }),
   z.object({ type: z.literal("job event"), event: JobEvent }),
 ]);
 export type SocketEvent = z.infer<typeof SocketEvent>;
