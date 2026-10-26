@@ -1,14 +1,41 @@
-import { useContext, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AppContext } from "../context.ts";
-import { MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
+import { AuthToken, MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
 import { Page } from "../components/page.tsx";
 import { Spinner } from "../components/blob-loader.tsx";
+import {
+  ClientChannel as PairingClientChannel,
+  ServerChannel as PairingServerChannel,
+} from "@biko-jobs/api-client/pairing.ts";
+import { basicScreen, login as navigationLogin, serialize } from "../navigation-state.ts";
+import { QRCodeSVG } from "qrcode.react";
+import {
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalConfirmButton,
+  ModalDismissButton,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from "../components/modal.tsx";
+import { updateCanvas } from "jdenticon";
 
 type LoginResult = "ready" | "loading" | "wrong password";
 
 export function Login() {
-  const { loginState, login } = useContext(AppContext);
+  const { loginState, navigationState, login, navigate } = useContext(AppContext);
   const [loginResult, setLoginResult] = useState<LoginResult>("ready");
+  const [pairingState, setPairingState] = useState<
+    { masterKey: MasterKeyPair; requestId: string } | undefined
+  >(undefined);
+  const onPairingAccepted = useCallback(
+    (authToken: AuthToken) => {
+      login({ type: "log in to ephemeral session", authToken });
+      navigate(basicScreen("kanban"));
+    },
+    [login, navigate],
+  );
   if (loginState.masterKeys === undefined) {
     return (
       <Page>
@@ -47,13 +74,48 @@ export function Login() {
       break;
   }
   return (
-    <LoginForm
-      masterKeys={loginState.masterKeys}
-      onSubmit={submit}
-      savedCredentials={savedCredentials}
-      connected={connected}
-      loginResult={loginResult}
-    />
+    <Page>
+      <div>
+        <h3>Login</h3>
+        <hr />
+        <LoginForm
+          masterKeys={loginState.masterKeys}
+          onSubmit={submit}
+          savedCredentials={savedCredentials}
+          connected={connected}
+          loginResult={loginResult}
+        />
+      </div>
+      {connected instanceof MasterKeyPair && (
+        <div className="mt-4">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() =>
+              setPairingState({ masterKey: connected, requestId: crypto.randomUUID() })
+            }
+            disabled={pairingState !== undefined}
+          >
+            Pair new device
+          </button>
+          {pairingState !== undefined && (
+            <PairingServerDisplay
+              key={pairingState.requestId}
+              masterKey={pairingState.masterKey}
+              requestId={pairingState.requestId}
+              onFinished={() => setPairingState(undefined)}
+            />
+          )}
+        </div>
+      )}
+      {navigationState.screen === "login" && navigationState.pairingRequestId !== undefined && (
+        <PairingClientDisplay
+          onCancel={() => navigate(navigationLogin(undefined))}
+          requestId={navigationState.pairingRequestId}
+          onAccepted={onPairingAccepted}
+        />
+      )}
+    </Page>
   );
 }
 
@@ -78,17 +140,13 @@ export function LoginForm({
     onSubmit(selectedKey, password);
   }
   return (
-    <Page>
-      <div>
-        <h3>Login</h3>
-        <hr className="me-2" />
-        <KeyList
-          keys={masterKeys}
-          selected={selectedKey}
-          connected={connected}
-          onSelect={setSelectedKey}
-        />
-      </div>
+    <>
+      <KeyList
+        keys={masterKeys}
+        selected={selectedKey}
+        connected={connected}
+        onSelect={setSelectedKey}
+      />
       {selectedKey !== undefined && (
         <div className="mt-2">
           <Credentials
@@ -100,7 +158,7 @@ export function LoginForm({
           />
         </div>
       )}
-    </Page>
+    </>
   );
 }
 
@@ -212,4 +270,232 @@ export function Credentials({
       )}
     </form>
   );
+}
+
+function PairingServerDisplay({
+  masterKey,
+  requestId,
+  onFinished,
+}: {
+  masterKey: MasterKeyPair;
+  requestId: string;
+  onFinished: () => void;
+}) {
+  const [channel, setChannel] = useState<PairingServerChannel | undefined>(undefined);
+  type PairingApprovalData =
+    | {
+        type: "pairing";
+        clientFingerprint: string;
+        approve: (approve: boolean) => void;
+      }
+    | { type: "not pairing" }
+    | { type: "processing" };
+  const [pairingApprovalData, setPairingApprovalData] = useState<PairingApprovalData>({
+    type: "not pairing",
+  });
+
+  useEffect(() => {
+    PairingServerChannel.open({
+      baseUrl: "/api",
+      requestId,
+      approve: (fingerprint) =>
+        new Promise((res) => {
+          setPairingApprovalData({
+            type: "pairing",
+            clientFingerprint: fingerprint,
+            approve: (approve) => {
+              if (approve) {
+                setPairingApprovalData({ type: "processing" });
+                AuthToken.init({
+                  masterKey,
+                  expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 6 })),
+                  permissions: new Set(["write jobs"]),
+                })
+                  .then((authToken) => res(authToken))
+                  .catch(console.error)
+                  .then(() => setPairingApprovalData({ type: "not pairing" }))
+                  .catch(console.error);
+              } else {
+                res("rejected");
+              }
+            },
+          });
+        }),
+      onWebSocketError: console.error,
+    })
+      .then((channel) => {
+        setChannel(channel);
+        return channel.pair();
+      })
+      .then(() => onFinished())
+      .catch(console.error);
+  }, [requestId, masterKey, onFinished]);
+  useEffect(() => () => channel?.close(), [channel]);
+  if (channel === undefined) {
+    return (
+      <div className="text-center">
+        <Spinner />
+      </div>
+    );
+  } else {
+    const hash = serialize(navigationLogin(requestId));
+    const url = new URL(window.location.href);
+    url.hash = hash;
+    return (
+      <>
+        {pairingApprovalData.type === "pairing" && (
+          <Modal
+            onDismiss={() => pairingApprovalData.approve(false)}
+            onConfirm={() => pairingApprovalData.approve(true)}
+          >
+            <ModalHeader>
+              <ModalTitle>Pairing request</ModalTitle>
+            </ModalHeader>
+            <ModalBody>
+              <div className="fs-5 mb-2">
+                Check that this image matches the one on the device to be paired:
+              </div>
+              <Jdenticon
+                value={pairingApprovalData.clientFingerprint}
+                width={150}
+                height={150}
+                className="d-block mx-auto p-2 border rounded"
+              />
+            </ModalBody>
+            <ModalFooter>
+              <ModalConfirmButton className="btn btn-success fs-5">Approve</ModalConfirmButton>
+              <ModalDismissButton className="btn btn-secondary fs-5">Cancel</ModalDismissButton>
+            </ModalFooter>
+          </Modal>
+        )}
+        {pairingApprovalData.type === "not pairing" && (
+          <Modal onDismiss={() => onFinished()}>
+            <ModalHeader>
+              <ModalTitle>Pairing</ModalTitle>
+              <ModalCloseButton />
+            </ModalHeader>
+            <ModalBody>
+              <QRCodeSVG
+                value={url.toString()}
+                className="d-block m-auto p-2 border rounded mt-2"
+                height={300}
+                width={300}
+              />
+              {import.meta.env.DEV && (
+                <div>
+                  <a href={url.toString()} target="_blank">
+                    {url.toString()}
+                  </a>
+                </div>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <ModalDismissButton>Cancel</ModalDismissButton>
+            </ModalFooter>
+          </Modal>
+        )}
+      </>
+    );
+  }
+}
+
+function PairingClientDisplay({
+  requestId,
+  onAccepted,
+  onCancel,
+}: {
+  requestId: string;
+  onAccepted: (authToken: AuthToken) => void;
+  onCancel: () => void;
+}) {
+  const [pairingClientChannel, setPairingClientChannel] = useState<
+    PairingClientChannel | undefined
+  >(undefined);
+  const [rejected, setRejected] = useState(false);
+  useEffect(() => {
+    PairingClientChannel.open({
+      baseUrl: "/api",
+      requestId,
+      onWebSocketError: console.error,
+    })
+      .then((channel) => {
+        setPairingClientChannel(channel);
+        return channel.pair();
+      })
+      .then((result) => {
+        switch (result.type) {
+          case "accepted":
+            onAccepted(result.authToken);
+            break;
+          case "rejected":
+            setRejected(true);
+        }
+      })
+      .catch(console.error);
+  }, [requestId, onAccepted]);
+  useEffect(() => () => pairingClientChannel?.close(), [pairingClientChannel]);
+
+  if (!rejected) {
+    return (
+      <Modal onDismiss={() => onCancel()}>
+        <ModalHeader>
+          <ModalTitle>Pairing</ModalTitle>
+          <ModalCloseButton />
+        </ModalHeader>
+        <ModalBody>
+          <div className="mb-2 fs-5">The image on the approving device should match this one:</div>
+          <div>
+            {pairingClientChannel === undefined ? (
+              <div className="text-center">
+                <Spinner />
+              </div>
+            ) : (
+              <Jdenticon
+                value={pairingClientChannel.fingerprint}
+                width={150}
+                height={150}
+                className="d-block mx-auto p-2 rounded border"
+              />
+            )}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <ModalDismissButton className="btn btn-danger fs-5">Cancel pairing</ModalDismissButton>
+        </ModalFooter>
+      </Modal>
+    );
+  } else {
+    return (
+      <Modal onDismiss={() => onCancel()}>
+        <ModalHeader>
+          <ModalTitle>Pairing rejected</ModalTitle>
+          <ModalCloseButton />
+        </ModalHeader>
+        <ModalBody>
+          <div className="fs-5">The remote device rejected the pairing request.</div>
+        </ModalBody>
+        <ModalFooter>
+          <ModalDismissButton className="btn btn-primary fs-5">OK</ModalDismissButton>
+        </ModalFooter>
+      </Modal>
+    );
+  }
+}
+
+function Jdenticon({
+  value,
+  className,
+  width,
+  height,
+}: {
+  value: string;
+  className?: string;
+  width?: number;
+  height?: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (canvasRef.current !== null) updateCanvas(canvasRef.current, value);
+  }, [canvasRef, value]);
+  return <canvas ref={canvasRef} className={className} width={width} height={height} />;
 }

@@ -52,9 +52,10 @@ window.onload = () => {
 function App({ apiClient }: { apiClient: ApiClient }) {
   const [hash, navigateHash] = useHashLocation();
   const navigationState = useMemo(() => deserialize(hash) ?? initialNavigationState, [hash]);
-  function navigate(state: NavigationState) {
-    navigateHash(serialize(state));
-  }
+  const navigate = useCallback(
+    (state: NavigationState) => navigateHash(serialize(state)),
+    [navigateHash],
+  );
   const [loginState, dispatchLoginState] = useReducer(loginReducer, initialLoginState);
 
   const [loadingIds, dispatchLoading] = useReducer(

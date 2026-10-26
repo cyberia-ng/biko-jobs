@@ -1,11 +1,7 @@
 import "temporal-polyfill/global";
 import { createApp } from "@biko-jobs/api/app.ts";
 import type { Server } from "node:http";
-import {
-  ClientChannel,
-  ServerChannel,
-  type SessionSharingError,
-} from "@biko-jobs/api-client/pairing.ts";
+import { ClientChannel, ServerChannel } from "@biko-jobs/api-client/pairing.ts";
 import { ApiClient, AuthToken, MasterKeyPair } from "@biko-jobs/api-client";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
@@ -50,17 +46,13 @@ describe("pairing", () => {
         return "rejected" as const;
       }
     };
-    let exchangedClientFingerprint: string | undefined = undefined;
-    let sharingError: SessionSharingError | undefined = undefined;
+    let sharingError: Event | undefined = undefined;
     serverChannel = await ServerChannel.open({
       baseUrl: `http://localhost:${port}`,
       requestId: "some request",
       approve,
-      onKeyExchange: (clientFingerprint) => {
-        exchangedClientFingerprint = clientFingerprint;
-      },
-      onError: (error) => {
-        sharingError = error;
+      onWebSocketError: (event) => {
+        sharingError = event;
       },
     });
 
@@ -72,10 +64,9 @@ describe("pairing", () => {
         receivingError = event;
       },
     });
-    const receiveResult = await clientChannel.receiveAuthToken();
+    const [, receiveResult] = await Promise.all([serverChannel.pair(), clientChannel.pair()]);
     expect(sharingError).toBe(undefined);
     expect(receivingError).toBe(undefined);
-    expect(exchangedClientFingerprint).toStrictEqual(clientChannel.fingerprint);
     expect(receiveResult.type).not.toStrictEqual("rejected");
     expect(
       (receiveResult as Extract<typeof receiveResult, { type: "accepted" }>).authToken,
@@ -87,15 +78,14 @@ describe("pairing", () => {
       baseUrl: `http://localhost:${port}`,
       requestId: "some request",
       approve: () => Promise.resolve("rejected"),
-      onKeyExchange: () => {},
-      onError: () => {},
+      onWebSocketError: () => {},
     });
     clientChannel = await ClientChannel.open({
       baseUrl: `http://localhost:${port}`,
       requestId: "some request",
       onWebSocketError: () => {},
     });
-    const receiveResult = await clientChannel.receiveAuthToken();
+    const [, receiveResult] = await Promise.all([serverChannel.pair(), clientChannel.pair()]);
     expect(receiveResult.type).toBe("rejected");
   });
 });

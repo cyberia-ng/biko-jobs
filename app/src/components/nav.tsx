@@ -1,6 +1,6 @@
 import { useContext, type ReactNode } from "react";
 import { AppContext } from "../context.ts";
-import { basicScreen } from "../navigation-state.ts";
+import { basicScreen, login } from "../navigation-state.ts";
 
 export function Nav() {
   const { loginState, loading, navigationState, navigate, refresh } = useContext(AppContext);
@@ -43,7 +43,7 @@ export function Nav() {
             </div>
           </NavItem>
         )}
-        <NavItem end onClick={() => navigate(basicScreen("login"))}>
+        <NavItem end onClick={() => navigate(login(undefined))}>
           <i className="bi bi-key fs-1" />
         </NavItem>
         <NavItem end onClick={() => refresh()}>
