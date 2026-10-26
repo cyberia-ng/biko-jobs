@@ -20,7 +20,7 @@ import {
   ModalTitle,
 } from "../components/modal.tsx";
 import { updateCanvas } from "jdenticon";
-import { assertNever } from "../assertNever.ts";
+import { assertNever } from "../assert-never.ts";
 
 type LoginResult = "ready" | "loading" | "wrong password";
 

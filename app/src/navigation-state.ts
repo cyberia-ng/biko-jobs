@@ -1,4 +1,4 @@
-import { assertNever } from "./assertNever.ts";
+import { assertNever } from "./assert-never.ts";
 
 export type State =
   | {

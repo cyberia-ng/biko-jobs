@@ -2,7 +2,7 @@ import { produce } from "immer";
 import type { Action, JobAction } from "./action.ts";
 import type { State } from "./state.ts";
 import pick from "lodash/pick.js";
-import { assertNever } from "../assertNever.ts";
+import { assertNever } from "../assert-never.ts";
 
 export function reducer(state: State, action: Action): State {
   switch (action.type) {

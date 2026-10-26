@@ -22,7 +22,7 @@ import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
 import { Store as ServiceStore } from "./service-state/store.ts";
 import { enableMapSet, produce } from "immer";
-import { assertNever } from "./assertNever.ts";
+import { assertNever } from "./assert-never.ts";
 import { Export } from "./screens/export.tsx";
 import { useHashLocation } from "./use-hash-location.ts";
 import type { State as NavigationState } from "./navigation-state.ts";

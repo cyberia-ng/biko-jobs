@@ -1,4 +1,4 @@
-import { assertNever } from "@biko-jobs/api-client/assertNever.ts";
+import { assertNever } from "@biko-jobs/api-client/assert-never.ts";
 import {
   AESKey,
   ECDSAPrivateKey,
