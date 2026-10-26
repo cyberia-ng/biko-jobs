@@ -50,7 +50,7 @@ window.onload = () => {
 };
 
 function App({ apiClient }: { apiClient: ApiClient }) {
-  const [hash, navigateHash] = useHashLocation();
+  const [hash, navigateHash, addNavigationHook] = useHashLocation();
   const navigationState = useMemo(() => deserialize(hash) ?? initialNavigationState, [hash]);
   const navigate = useCallback(
     (state: NavigationState) => navigateHash(serialize(state)),
@@ -146,6 +146,7 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     loading: loadingIds.size !== 0,
     navigationState,
     navigate,
+    addNavigationHook,
     refresh,
   };
 

@@ -4,6 +4,7 @@ import type { JobAction } from "./service-state/action.ts";
 import type { State as NavigationState } from "./navigation-state.ts";
 import type { Bytes } from "@biko-jobs/api-client";
 import type { Action as LoginAction, State as LoginState } from "./login-state.ts";
+import type { addNavigationHook } from "./use-hash-location.ts";
 
 export type AppContextT = {
   loginState: LoginState;
@@ -18,6 +19,7 @@ export type AppContextT = {
   loading: boolean;
   navigationState: NavigationState;
   navigate: (state: NavigationState) => void;
+  addNavigationHook: typeof addNavigationHook;
   refresh: () => void;
 };
 export const AppContext = createContext<AppContextT>(null as any);

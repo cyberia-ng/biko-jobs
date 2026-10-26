@@ -5,8 +5,23 @@ import { upsertJob, type Image, type JobAction } from "../service-state/action.t
 import { Tags } from "../components/tag-control.tsx";
 import type { Job } from "../service-state/state.ts";
 import omit from "lodash/omit.js";
-import { jobDetail } from "../navigation-state.ts";
+import {
+  deserialize,
+  initialState as initialNavigationState,
+  jobDetail,
+} from "../navigation-state.ts";
 import { Page } from "../components/page.tsx";
+import { produce } from "immer";
+import {
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalConfirmButton,
+  ModalDismissButton,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from "../components/modal.tsx";
 
 type EditJobAction = Omit<
   Extract<JobAction["event"], { type: "upsert job" }>,
@@ -17,13 +32,32 @@ type EditJobAction = Omit<
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
-  const { service: service_, navigate, navigationState } = useContext(AppContext);
+  const { service, navigate, navigationState, addNavigationHook } = useContext(AppContext);
   const [loading, setLoading] = useState<boolean>(false);
   const [formReset, setFormReset] = useState(false);
-  if (service_ === undefined) {
+  const [unsaved, setUnsaved] = useState<
+    | { type: "clean" }
+    | { type: "dirty"; unhook: () => void }
+    | { type: "navigating while dirty"; override: () => void; cancel: () => void }
+  >({ type: "clean" });
+  function handleUnsaved() {
+    if (unsaved.type !== "clean") return;
+    const unhook = addNavigationHook(({ to, unhook }) => {
+      function override() {
+        unhook();
+        navigate(deserialize(to) ?? initialNavigationState);
+      }
+      function cancel() {
+        setUnsaved({ type: "dirty", unhook });
+      }
+      setUnsaved({ type: "navigating while dirty", override, cancel });
+      return { prevent: true };
+    });
+    setUnsaved({ type: "dirty", unhook });
+  }
+  if (service === undefined) {
     return <Page>not connected</Page>;
   }
-  const service = service_;
   function submit(jobAction: EditJobAction) {
     (async () => {
       setLoading(true);
@@ -49,6 +83,8 @@ export function EditJob(props: { new_?: boolean }) {
       if (isNew) {
         setFormReset(!formReset);
       }
+      if (unsaved.type === "dirty") unsaved.unhook();
+      setUnsaved({ type: "clean" });
       setLoading(false);
     })().catch(console.error);
   }
@@ -61,6 +97,7 @@ export function EditJob(props: { new_?: boolean }) {
         onSubmit={submit}
         disabled={loading}
         onReset={() => setFormReset(!formReset)}
+        onUnsaved={handleUnsaved}
       />
     );
   } else {
@@ -71,11 +108,22 @@ export function EditJob(props: { new_?: boolean }) {
     if (job === undefined) {
       content = "Job does not exist";
     } else {
-      content = <EditJobForm key={job.uuid} job={job} onSubmit={submit} disabled={loading} />;
+      content = (
+        <EditJobForm
+          key={job.uuid}
+          job={job}
+          onSubmit={submit}
+          disabled={loading}
+          onUnsaved={handleUnsaved}
+        />
+      );
     }
   }
   return (
     <Page>
+      {unsaved.type === "navigating while dirty" && (
+        <Unsaved onOverride={unsaved.override} onCancel={unsaved.cancel} />
+      )}
       {job !== undefined && (
         <div className="mb-2">
           <button className="btn btn-primary" onClick={() => navigate(jobDetail(job.uuid))}>
@@ -89,38 +137,65 @@ export function EditJob(props: { new_?: boolean }) {
   );
 }
 
+type FormData = {
+  name: string;
+  phoneNumber: string;
+  description: string;
+  tags: Set<string>;
+  photos: PhotosT;
+};
+type FormAction =
+  | ({ type: "partial" } & Partial<Omit<FormData, "tags">>)
+  | { type: "add tag"; tag: string }
+  | { type: "remove tag"; tag: string };
+function formReducer(state: FormData, action: FormAction): FormData {
+  return produce(state, (state) => {
+    switch (action.type) {
+      case "partial":
+        Object.assign(state, omit(action, "type"));
+        break;
+      case "add tag":
+        state.tags.add(action.tag);
+        break;
+      case "remove tag":
+        state.tags.delete(action.tag);
+        break;
+    }
+  });
+}
+
 function EditJobForm({
   job,
   onSubmit,
   onReset,
   disabled,
+  onUnsaved,
 }: {
   job?: Job;
   onSubmit: (job: EditJobAction) => void;
   onReset?: () => void;
   disabled: boolean;
+  onUnsaved: () => void;
 }) {
-  const [customerName, setCustomerName] = useState<string>(job?.customerName ?? "");
-  const [customerPhoneNumber, setCustomerPhoneNumber] = useState<string>(
-    job?.customerPhoneNumber ?? "",
-  );
-  const [description, setDescription] = useState<string>(job?.description ?? "");
-  const [tags, dispatchTags] = useReducer(
-    (tags: Set<string>, [add, tag]: [boolean, string]) =>
-      add ? tags.union(new Set([tag])) : tags.difference(new Set([tag])),
-    job?.tags ?? new Set(),
-  );
-  const [photos, setPhotos] = useState<PhotosT>(
-    job?.images.map((image) => ({ type: "existing", image, job: job.uuid })) ?? [],
-  );
+  const [formData, dispatchFormData_] = useReducer(formReducer, {
+    name: job?.customerName ?? "",
+    phoneNumber: job?.customerPhoneNumber ?? "",
+    description: job?.description ?? "",
+    tags: job?.tags ?? new Set(),
+    photos: job?.images.map((image) => ({ type: "existing" as const, image, job: job.uuid })) ?? [],
+  });
+  function dispatchFormData(action: FormAction) {
+    onUnsaved();
+    dispatchFormData_(action);
+  }
   function submit() {
     const jobAction: EditJobAction = {
       uuid: job?.uuid ?? crypto.randomUUID(),
-      tags,
-      customerName,
-      customerPhoneNumber,
-      description,
-      images: photos,
+      tags: formData.tags,
+      customerName: formData.name,
+      customerPhoneNumber: formData.phoneNumber,
+      description: formData.description,
+      images: formData.photos,
     };
     onSubmit(jobAction);
   }
@@ -135,9 +210,9 @@ function EditJobForm({
             type="text"
             className="form-control"
             id="customerName"
-            value={customerName}
+            value={formData.name}
             disabled={disabled}
-            onChange={(e) => setCustomerName(e.target.value)}
+            onChange={(e) => dispatchFormData({ type: "partial", name: e.target.value })}
           />
         </div>
         <div className="mb-3">
@@ -148,9 +223,9 @@ function EditJobForm({
             type="tel"
             className="form-control"
             id="customerPhoneNumber"
-            value={customerPhoneNumber}
+            value={formData.phoneNumber}
             disabled={disabled}
-            onChange={(e) => setCustomerPhoneNumber(e.target.value)}
+            onChange={(e) => dispatchFormData({ type: "partial", phoneNumber: e.target.value })}
           />
         </div>
         <div className="mb-3">
@@ -161,20 +236,23 @@ function EditJobForm({
             id="description"
             className="form-control"
             rows={5}
-            value={description}
+            value={formData.description}
             disabled={disabled}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => dispatchFormData({ type: "partial", description: e.target.value })}
           />
         </div>
         <div className="mb-3 edit-job-tags">
           <Tags
-            tags={tags}
-            onAddTag={(tag) => dispatchTags([true, tag])}
-            onDeleteTag={(tag) => dispatchTags([false, tag])}
+            tags={formData.tags}
+            onAddTag={(tag) => dispatchFormData({ type: "add tag", tag })}
+            onDeleteTag={(tag) => dispatchFormData({ type: "remove tag", tag })}
             disabled={disabled}
           />
         </div>
-        <Photos photos={photos} onChange={setPhotos} />
+        <Photos
+          photos={formData.photos}
+          onChange={(photos) => dispatchFormData({ type: "partial", photos })}
+        />
         <div className="mb-3">
           <button
             type="submit"
@@ -271,5 +349,21 @@ function Photos({ photos, onChange }: { photos: PhotosT; onChange: (photos: Phot
         />
       </div>
     </>
+  );
+}
+
+function Unsaved({ onOverride, onCancel }: { onOverride: () => void; onCancel: () => void }) {
+  return (
+    <Modal onConfirm={onOverride} onDismiss={onCancel}>
+      <ModalHeader>
+        <ModalTitle>Unsaved changes</ModalTitle>
+        <ModalCloseButton />
+      </ModalHeader>
+      <ModalBody>This page has unsaved changes. Do you want to discard them?</ModalBody>
+      <ModalFooter>
+        <ModalDismissButton>Cancel</ModalDismissButton>
+        <ModalConfirmButton className="btn btn-danger">Discard</ModalConfirmButton>
+      </ModalFooter>
+    </Modal>
   );
 }

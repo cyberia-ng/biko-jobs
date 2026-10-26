@@ -4,6 +4,16 @@ const listeners: { v: Array<() => void> } = {
   v: [],
 };
 
+export type NavigationHook = (opts: {
+  to: string;
+  unhook: () => void;
+}) => void | { prevent: boolean };
+const navigationHooks: Set<NavigationHook> = new Set();
+export function addNavigationHook(hook: NavigationHook): () => void {
+  navigationHooks.add(hook);
+  return () => navigationHooks.delete(hook);
+}
+
 const onHashChange = () => listeners.v.forEach((cb) => cb());
 
 const subscribeToHashUpdates = (callback: () => void) => {
@@ -17,7 +27,14 @@ const subscribeToHashUpdates = (callback: () => void) => {
 
 const currentHashLocation = () => location.hash.replace(/^#?/, "");
 
-export const navigate = (to: string) => {
+const navigate = (to: string) => {
+  for (const hook of navigationHooks) {
+    const hookRet = hook({
+      to,
+      unhook: () => navigationHooks.delete(hook),
+    });
+    if (hookRet !== undefined && hookRet.prevent) return;
+  }
   const oldURL = location.href;
 
   const url = new URL(location.href);
@@ -31,4 +48,8 @@ export const navigate = (to: string) => {
 };
 
 export const useHashLocation = () =>
-  [useSyncExternalStore(subscribeToHashUpdates, currentHashLocation), navigate] as const;
+  [
+    useSyncExternalStore(subscribeToHashUpdates, currentHashLocation),
+    navigate,
+    addNavigationHook,
+  ] as const;
