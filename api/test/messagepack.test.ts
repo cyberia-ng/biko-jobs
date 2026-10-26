@@ -10,7 +10,7 @@ describe("messagepack codec", () => {
           instant,
           mpDecoder.decode(mpEncoder.encode(instant)) as Temporal.Instant,
         ),
-      ).to.equal(0);
+      ).toBe(0);
     });
 
     test("date after 1970", () => {
@@ -20,7 +20,7 @@ describe("messagepack codec", () => {
           instant,
           mpDecoder.decode(mpEncoder.encode(instant)) as Temporal.Instant,
         ),
-      ).to.equal(0);
+      ).toBe(0);
     });
 
     test("epoch -1 nanosecond", () => {
@@ -30,7 +30,7 @@ describe("messagepack codec", () => {
           instant,
           mpDecoder.decode(mpEncoder.encode(instant)) as Temporal.Instant,
         ),
-      ).to.equal(0);
+      ).toBe(0);
     });
 
     test("epoch +1 nanosecond", () => {
@@ -40,7 +40,7 @@ describe("messagepack codec", () => {
           instant,
           mpDecoder.decode(mpEncoder.encode(instant)) as Temporal.Instant,
         ),
-      ).to.equal(0);
+      ).toBe(0);
     });
   });
 });
