@@ -37,7 +37,6 @@ export function verifier(db: Database, permission: Permission) {
           res.status(401).send();
           return;
         }
-        if (authorization.expiry === "never") return next();
         const expiry = Temporal.Instant.from(authorization.expiry);
         if (Temporal.Instant.compare(expiry, Temporal.Now.instant()) === -1) {
           res.status(401).send();
