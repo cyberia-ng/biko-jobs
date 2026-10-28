@@ -1,4 +1,4 @@
-import type { AuthToken, MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
+import { AuthToken, type MasterKeyPair, type MasterKeyPublic } from "@biko-jobs/api-client";
 import { produce } from "immer";
 import { assertNever } from "./assert-never.ts";
 
@@ -30,9 +30,11 @@ export function reducer(state: State, action: Action): State {
         break;
       case "log in with key pair":
         state.login = { type: "master key", masterKey: action.masterKey };
+        window.sessionStorage.removeItem("ephemeral session");
         break;
       case "log in to ephemeral session":
         state.login = { type: "ephemeral", authToken: action.authToken };
+        window.sessionStorage.setItem("ephemeral auth token", action.authToken.tokenStr);
         break;
       default:
         assertNever(action);
@@ -40,7 +42,14 @@ export function reducer(state: State, action: Action): State {
   });
 }
 
+const ephemeralAuthToken = window.sessionStorage.getItem("ephemeral auth token");
 export const initialState: State = {
   masterKeys: undefined,
-  login: undefined,
+  login:
+    ephemeralAuthToken === null
+      ? undefined
+      : {
+          type: "ephemeral",
+          authToken: AuthToken.fromStr(ephemeralAuthToken),
+        },
 };

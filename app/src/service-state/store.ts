@@ -48,8 +48,16 @@ export class Store {
       }
       this.callSubscribers();
     } else if (this.loginState.type === "ephemeral") {
-      for (const job of this.jobs.values()) {
+      for (let i = 0; i < window.sessionStorage.length; i++) {
+        const name = window.sessionStorage.key(i);
+        if (name === null) continue;
+        if (!name.startsWith("ephemeral job/")) continue;
+        const serialized = window.sessionStorage.getItem(name);
+        if (serialized === null) continue;
+        const job = await NumberedJob.deserialize(serialized);
         this.jobs.set(job.uuid, job);
+      }
+      for (const job of this.jobs.values()) {
         this.reduce({ type: "create job", uuid: job.uuid, number: job.number });
       }
       this.callSubscribers();
@@ -109,10 +117,14 @@ export class Store {
 
   async createJob(uuid: string): Promise<void> {
     const authToken = await this.getAuthToken();
-    const job = await Job.generate(uuid);
-    const number = await this.client.addJob(job, this.masterKeys, authToken);
-    this.jobs.set(job.uuid, job.withNumber(number));
-    this.reduce({ type: "create job", uuid: job.uuid, number });
+    const localJob = await Job.generate(uuid);
+    const job = await this.client.addJob(localJob, this.masterKeys, authToken);
+    if (this.loginState.type === "ephemeral") {
+      const serialized = await job.trustedSerialize();
+      window.sessionStorage.setItem(`ephemeral job/${job.uuid}`, serialized);
+    }
+    this.jobs.set(job.uuid, job);
+    this.reduce({ type: "create job", uuid: job.uuid, number: job.number });
     this.callSubscribers();
   }
 

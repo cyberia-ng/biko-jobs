@@ -150,7 +150,7 @@ export class ApiClient {
     raiseForStatus(res);
   }
 
-  async addJob(job: Job, access: MasterKeyPublic[], auth: AuthToken): Promise<number> {
+  async addJob(job: Job, access: MasterKeyPublic[], auth: AuthToken): Promise<NumberedJob> {
     const encryptedJobKeysArrayP = access.map(
       async (mkp) => [mkp.uuid, (await job.key.encryptKey(mkp.encryptionPublicKey)).data] as const,
     );
@@ -171,7 +171,7 @@ export class ApiClient {
         throw new ClientError({ type: "job keys incomplete" });
     }
     raiseForStatus(res);
-    return z.number().parse(res.body);
+    return job.withNumber(z.number().parse(res.body));
   }
 
   async getJobs(masterKey: MasterKeyPair): Promise<Array<NumberedJob>> {
@@ -524,6 +524,10 @@ export class AuthToken {
     const token = schemas.AuthToken.parse(mpDecoder.decode(bytes));
     return new AuthToken(token);
   }
+
+  static fromStr(tokenStr: string) {
+    return AuthToken.import(Uint8Array.fromBase64(tokenStr));
+  }
 }
 
 export class Job {
@@ -549,6 +553,26 @@ export class NumberedJob extends Job {
   constructor(uuid: string, key: AESKey, number: number) {
     super(uuid, key);
     this.number = number;
+  }
+
+  async trustedSerialize(): Promise<string> {
+    const toPack = {
+      number: this.number,
+      uuid: this.uuid,
+      key: (await this.key.trustedExport()).data,
+    };
+    const packed = mpEncoder.encode(toPack);
+    return packed.toBase64();
+  }
+
+  static async deserialize(serialize: string): Promise<NumberedJob> {
+    const unpacked = mpDecoder.decode(Uint8Array.fromBase64(serialize)) as {
+      number: number;
+      uuid: string;
+      key: Bytes;
+    };
+    const key = await AESKey.import({ type: "unencrypted key material", data: unpacked.key });
+    return new NumberedJob(unpacked.uuid, key, unpacked.number);
   }
 }
 

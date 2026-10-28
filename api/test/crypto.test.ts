@@ -24,7 +24,7 @@ describe("crypto", () => {
     test("encrypt/decrypt round trip with derive", async () => {
       const kdfPassword = await KeyDerivationPassword.import("password");
       const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-      const key = await AESKey.derivePassword(kdfPassword, salt);
+      const key = await AESKey.deriveFromPassword(kdfPassword, salt);
       expect(await key.decrypt(await key.encrypt(plaintext))).toStrictEqual(plaintext);
     });
 
