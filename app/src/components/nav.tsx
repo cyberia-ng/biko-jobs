@@ -37,16 +37,16 @@ export function Nav() {
         </NavItem>
         <div className="flex-grow-1"></div>
         {loading && (
-          <NavItem end>
+          <NavItem>
             <div className="spinner-border" role="status">
               <span className="visually-hidden">Loading...</span>
             </div>
           </NavItem>
         )}
-        <NavItem end onClick={() => navigate(login(undefined))}>
+        <NavItem onClick={() => navigate(login(undefined))}>
           <i className="bi bi-key fs-1" />
         </NavItem>
-        <NavItem end onClick={() => refresh()}>
+        <NavItem onClick={() => refresh()}>
           <i className="bi bi-arrow-clockwise fs-1" />
         </NavItem>
       </div>
@@ -57,12 +57,11 @@ export function Nav() {
 function NavItem(props: {
   active?: boolean;
   disabled?: boolean;
-  end?: boolean;
   children?: ReactNode | ReactNode[];
   onClick?: () => void;
 }) {
   return (
-    <div className={"nav-item " + ((props?.end ?? false) ? "border-top" : "border-bottom")}>
+    <div className="nav-item">
       <a
         className={
           "nav-link" +
