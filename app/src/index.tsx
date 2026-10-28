@@ -178,11 +178,11 @@ function App({ apiClient }: { apiClient: ApiClient }) {
   }
   return (
     <AppContext value={context}>
-      <div className="vh-100 d-flex flex-column flex-sm-row">
+      <div className="d-flex flex-column flex-sm-row">
         <div>
           <Nav />
         </div>
-        <div className="flex-grow-1 vh-100 overflow-scroll">{screen}</div>
+        <div className="flex-grow-1">{screen}</div>
       </div>
     </AppContext>
   );

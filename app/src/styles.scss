@@ -42,3 +42,13 @@ $bootstrap-icons-font-dir: "bootstrap-icons/font/fonts";
 .modal-title > * {
   margin-bottom: 0;
 }
+
+.custom-nav {
+  height: auto;
+
+  @include media-breakpoint-up(sm) {
+    height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+}
