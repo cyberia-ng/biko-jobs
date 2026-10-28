@@ -5,7 +5,7 @@ import { basicScreen, login } from "../navigation-state.ts";
 export function Nav() {
   const { loginState, loading, navigationState, navigate, refresh } = useContext(AppContext);
   return (
-    <div className="shadow top-0 position-sticky bg-dark nav nav-pills d-flex flex-row flex-sm-column custom-nav">
+    <div className="shadow top-0 position-sticky bg-dark nav nav-pills d-flex flex-row flex-sm-column custom-nav align-items-center flex-nowrap">
       <NavItem
         disabled={loginState?.login === undefined}
         active={navigationState.screen === "kanban"}
@@ -36,11 +36,13 @@ export function Nav() {
       </NavItem>
       <div className="flex-grow-1"></div>
       {loading && (
-        <NavItem>
-          <div className="spinner-border" role="status">
-            <span className="visually-hidden">Loading...</span>
+        <div className="nav-item">
+          <div className="nav-link p-0">
+            <div className="spinner-border" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
           </div>
-        </NavItem>
+        </div>
       )}
       <NavItem onClick={() => navigate(login(undefined))}>
         <i className="bi bi-key fs-1" />
