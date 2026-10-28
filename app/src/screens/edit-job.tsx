@@ -252,6 +252,7 @@ function EditJobForm({
         <Photos
           photos={formData.photos}
           onChange={(photos) => dispatchFormData({ type: "partial", photos })}
+          disabled={disabled}
         />
         <div className="mb-3">
           <button
@@ -282,7 +283,15 @@ type Photo =
   | { type: "existing"; image: Image; job: string }
   | { type: "new"; uuid: string; blob: Blob; url: string };
 type PhotosT = Array<Photo>;
-function Photos({ photos, onChange }: { photos: PhotosT; onChange: (photos: PhotosT) => void }) {
+function Photos({
+  photos,
+  onChange,
+  disabled,
+}: {
+  photos: PhotosT;
+  onChange: (photos: PhotosT) => void;
+  disabled: boolean;
+}) {
   function deletePhoto(id: string) {
     const photo = photos.find((photo) => photoId(photo) === id);
     if (photo !== undefined) {
@@ -311,17 +320,23 @@ function Photos({ photos, onChange }: { photos: PhotosT; onChange: (photos: Phot
         {photos.map((photo) => (
           <div className="row mb-3" key={photoId(photo)}>
             <div className="col-8">
-              {photo.type === "new" ? (
-                <img src={photo.url} className="img-fluid h-100 w-100 object-fit-cover" />
-              ) : (
-                <ImageBlob jobUUID={photo.job} blobUUID={photo.image.blobId} type="image/jpeg" />
-              )}
+              <div className="position-relative">
+                {disabled && (
+                  <div className="position-absolute h-100 w-100 top-0 left-0 bg-secondary-subtle opacity-75"></div>
+                )}
+                {photo.type === "new" ? (
+                  <img src={photo.url} className="img-fluid h-100 w-100 object-fit-cover" />
+                ) : (
+                  <ImageBlob jobUUID={photo.job} blobUUID={photo.image.blobId} type="image/jpeg" />
+                )}
+              </div>
             </div>
             <div className="col-4 d-flex">
               <button
                 type="button"
                 className="btn btn-danger align-self-center"
                 onClick={() => deletePhoto(photoId(photo))}
+                disabled={disabled}
               >
                 <i className="bi bi-trash" />
               </button>
@@ -346,6 +361,7 @@ function Photos({ photos, onChange }: { photos: PhotosT; onChange: (photos: Phot
               addPhoto(file);
             }
           }}
+          disabled={disabled}
         />
       </div>
     </>
