@@ -1,5 +1,5 @@
 import {
-  generateECDSAKeyPair,
+  generateEd25519KeyPair,
   generateX25519KeyPair,
   KeyDerivationPassword,
 } from "@biko-jobs/api-client/crypto.ts";
@@ -109,7 +109,7 @@ export class Database {
     const kdfPassword = await KeyDerivationPassword.import(password);
     const encryptionKeyPair = await generateX25519KeyPair("master key");
     const encryptionKeyPrivate = await encryptionKeyPair.privateKey.export(kdfPassword);
-    const signingKeyPair = await generateECDSAKeyPair();
+    const signingKeyPair = await generateEd25519KeyPair();
     const signingKeyPrivate = await signingKeyPair.privateKey.export(kdfPassword);
     this.addMasterKey({
       uuid: crypto.randomUUID(),

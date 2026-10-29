@@ -129,7 +129,7 @@ export class VerificationError extends Error {
   }
 }
 
-export class ECDSAPublicKey {
+export class Ed25519PublicKey {
   key: CryptoKey;
   constructor(key: CryptoKey) {
     this.key = key;
@@ -140,18 +140,17 @@ export class ECDSAPublicKey {
       "raw",
       data,
       {
-        name: "ECDSA",
-        namedCurve: "P-256",
+        name: "Ed25519",
       },
       true,
       ["verify"],
     );
-    return new ECDSAPublicKey(key);
+    return new Ed25519PublicKey(key);
   }
 
   async verify(signed: SignedData): Promise<Bytes> {
     const success = await crypto.subtle.verify(
-      { name: "ECDSA", hash: "SHA-256" },
+      { name: "Ed25519" },
       this.key,
       signed.signature,
       signed.data,
@@ -165,8 +164,8 @@ export class ECDSAPublicKey {
   }
 }
 
-export type EncryptedECDSAPrivateKey = {
-  type: "encrypted ecdsa private key";
+export type EncryptedEd25519PrivateKey = {
+  type: "encrypted ed25519 private key";
   salt: Salt;
   key: Ciphertext;
 };
@@ -176,14 +175,14 @@ export type SignedData = {
   signature: Bytes;
 };
 
-export class ECDSAPrivateKey {
+export class Ed25519PrivateKey {
   key: CryptoKey;
   constructor(key: CryptoKey) {
     this.key = key;
   }
 
   static async import(
-    encryptedPrivateKey: EncryptedECDSAPrivateKey,
+    encryptedPrivateKey: EncryptedEd25519PrivateKey,
     password: KeyDerivationPassword,
   ) {
     const encryptionKey = await AESKey.deriveFromPassword(password, encryptedPrivateKey.salt);
@@ -191,22 +190,19 @@ export class ECDSAPrivateKey {
     const privateKey = await crypto.subtle.importKey(
       "pkcs8",
       rawPrivateKey.data,
-      {
-        name: "ECDSA",
-        namedCurve: "P-256",
-      },
+      { name: "Ed25519" },
       false,
       ["sign"],
     );
-    return new ECDSAPrivateKey(privateKey);
+    return new Ed25519PrivateKey(privateKey);
   }
 
   async sign(data: Bytes): Promise<SignedData> {
-    const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, this.key, data);
+    const signature = await crypto.subtle.sign({ name: "Ed25519" }, this.key, data);
     return { data, signature: new Uint8Array(signature) };
   }
 
-  async export(password: KeyDerivationPassword): Promise<EncryptedECDSAPrivateKey> {
+  async export(password: KeyDerivationPassword): Promise<EncryptedEd25519PrivateKey> {
     const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
     const encryptionKey = await AESKey.deriveFromPassword(password, salt);
     const privkeyBytes = new Uint8Array(await crypto.subtle.exportKey("pkcs8", this.key));
@@ -214,25 +210,18 @@ export class ECDSAPrivateKey {
       type: "plaintext",
       data: privkeyBytes,
     });
-    return { type: "encrypted ecdsa private key", salt, key };
+    return { type: "encrypted ed25519 private key", salt, key };
   }
 }
 
-export async function generateECDSAKeyPair(): Promise<{
-  publicKey: ECDSAPublicKey;
-  privateKey: ECDSAPrivateKey;
+export async function generateEd25519KeyPair(): Promise<{
+  publicKey: Ed25519PublicKey;
+  privateKey: Ed25519PrivateKey;
 }> {
-  const keyPair = await crypto.subtle.generateKey(
-    {
-      name: "ECDSA",
-      namedCurve: "P-256",
-    },
-    true,
-    ["sign", "verify"],
-  );
+  const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
   return {
-    publicKey: new ECDSAPublicKey(keyPair.publicKey),
-    privateKey: new ECDSAPrivateKey(keyPair.privateKey),
+    publicKey: new Ed25519PublicKey(keyPair.publicKey),
+    privateKey: new Ed25519PrivateKey(keyPair.privateKey),
   };
 }
 

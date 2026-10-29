@@ -1,9 +1,9 @@
 import type { Bytes } from "@biko-jobs/api-client";
 import {
   AESKey,
-  ECDSAPrivateKey,
-  ECDSAPublicKey,
-  generateECDSAKeyPair,
+  Ed25519PrivateKey,
+  Ed25519PublicKey,
+  generateEd25519KeyPair,
   generateX25519KeyPair,
   KeyDerivationPassword,
   X25519PrivateKey,
@@ -48,28 +48,28 @@ describe("crypto", () => {
     });
   });
 
-  describe("ecdsa", () => {
+  describe("ed25519", () => {
     test("sign/verify round trip", async () => {
-      const key = await generateECDSAKeyPair();
+      const key = await generateEd25519KeyPair();
       expect(await key.publicKey.verify(await key.privateKey.sign(toBeSigned))).toStrictEqual(
         toBeSigned,
       );
     });
 
     test("import/export public key", async () => {
-      const key = await generateECDSAKeyPair();
+      const key = await generateEd25519KeyPair();
       const exported = await key.publicKey.export();
-      const roundtripped = await ECDSAPublicKey.import(exported);
+      const roundtripped = await Ed25519PublicKey.import(exported);
       expect(await roundtripped.verify(await key.privateKey.sign(toBeSigned))).toStrictEqual(
         toBeSigned,
       );
     });
 
     test("import/export private key", async () => {
-      const key = await generateECDSAKeyPair();
+      const key = await generateEd25519KeyPair();
       const kdfPassword = await KeyDerivationPassword.import("password");
       const exported = await key.privateKey.export(kdfPassword);
-      const roundtripped = await ECDSAPrivateKey.import(exported, kdfPassword);
+      const roundtripped = await Ed25519PrivateKey.import(exported, kdfPassword);
       expect(await key.publicKey.verify(await roundtripped.sign(toBeSigned))).toStrictEqual(
         toBeSigned,
       );

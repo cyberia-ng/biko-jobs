@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { Database } from "./database.ts";
 import { AuthToken, Permission } from "@biko-jobs/api-client/schemas.ts";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
-import { ECDSAPublicKey } from "@biko-jobs/api-client/crypto.ts";
+import { Ed25519PublicKey } from "@biko-jobs/api-client/crypto.ts";
 
 export function verifier(db: Database, permission: Permission) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -24,7 +24,7 @@ export function verifier(db: Database, permission: Permission) {
       res.status(401).send();
       return;
     }
-    ECDSAPublicKey.import(keyBytes)
+    Ed25519PublicKey.import(keyBytes)
       .then((key) =>
         key.verify({
           signature: authToken.signature,
