@@ -135,10 +135,10 @@ describe("api client", () => {
       );
     });
 
-    test("create returns job number", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      const jobNumber = await client.addJob(job, [masterKey], authToken);
-      expect(jobNumber).toBe(1);
+    test("create returns numbered job", async () => {
+      const localJob = await Job.generate(crypto.randomUUID());
+      const numberedJob = await client.addJob(localJob, [masterKey], authToken);
+      expect(numberedJob).toEqual(localJob.withNumber(1));
     });
   });
 
