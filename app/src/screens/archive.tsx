@@ -40,7 +40,7 @@ export function Archive() {
       />
       <hr />
       <JobsDisplay
-        jobs={archived}
+        jobs={archived.toReversed()}
         title="Archived jobs"
         verb="Unarchive"
         icon="box-arrow-up"
