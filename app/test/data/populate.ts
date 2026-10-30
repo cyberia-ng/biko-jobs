@@ -1,64 +1,74 @@
 import "temporal-polyfill/global";
 import { readFileSync } from "node:fs";
-import { upsertJob } from "../../src/service-state/action.ts";
 import { join } from "node:path";
 import { ApiClient, AuthToken, Job, type JobBlob, type JobEvent } from "@biko-jobs/api-client";
+import range from "lodash/range.js";
+import { fakerEN_GB as faker } from "@faker-js/faker";
+import { allStatuses, type JobAction } from "../../src/service-state/action.ts";
 
-const img1 = {
-  uuid: "10000000-0000-4000-8000-000000000001",
-  data: readFileSync(join(import.meta.dirname, "img1.jpg")),
-};
-const img2 = {
-  uuid: "10000000-0000-4000-8000-000000000002",
-  data: readFileSync(join(import.meta.dirname, "img2.jpg")),
-};
-const img3 = {
-  uuid: "10000000-0000-4000-8000-000000000003",
-  data: readFileSync(join(import.meta.dirname, "img3.jpg")),
-};
-const img4 = {
-  uuid: "10000000-0000-4000-8000-000000000004",
-  data: readFileSync(join(import.meta.dirname, "img4.jpg")),
-};
-const img5 = {
-  uuid: "10000000-0000-4000-8000-000000000005",
-  data: readFileSync(join(import.meta.dirname, "img5.jpg")),
-};
-const upsertJob1 = (job: Job, imgs: JobBlob[]): JobEvent => ({
-  uuid: "30000000-0000-4000-8000-000000000000",
-  job,
-  data: upsertJob({
-    uuid: job.uuid,
-    customerName: "Bob Bobson",
-    customerPhoneNumber: "07123456789",
-    description: `Brakes
-Front puncture
-Head gasket
-Wiper fluid
-New bell
-New exhaust
-Bottom text`,
-    tags: new Set(["difficult"]),
-    images: imgs.map((img) => ({ type: "image/jpeg", blobId: img.uuid })),
-  }),
-});
+const images = range(1, 5 + 1).map((n) => readFileSync(join(import.meta.dirname, `img${n}.jpg`)));
+function randomImage() {
+  return images[Math.floor(Math.random() * images.length)]!;
+}
 
-const upsertJob2 = (job: Job, imgs: JobBlob[]): JobEvent => {
-  const event = {
-    uuid: "30000000-0000-4000-8000-000000000001",
+async function randomJob() {
+  const job = await Job.generate(crypto.randomUUID());
+  const images = faker.helpers.multiple(randomImage, { count: { min: 1, max: 3 } });
+  const imageBlobs = images.map((image): JobBlob => ({
+    uuid: crypto.randomUUID(),
+    data: image,
     job,
-    data: upsertJob({
-      uuid: job.uuid,
-      customerName: "Jim Jimson",
-      customerPhoneNumber: "",
-      description: `Rear mech issues `,
-      tags: new Set(),
-      images: imgs.map((img) => ({ type: "image/jpeg", blobId: img.uuid })),
-    }),
-  };
-  event.data.timestamp = Temporal.Now.instant().subtract({ hours: 2 });
-  return event;
-};
+  }));
+  const createActionId = crypto.randomUUID();
+  const events: JobEvent[] = [
+    {
+      uuid: createActionId,
+      job,
+      data: {
+        version: 2,
+        uuid: createActionId,
+        timestamp: Temporal.Instant.from(
+          faker.date.recent({ days: { min: 0, max: 7 } }).toISOString(),
+        ),
+        event: {
+          type: "upsert job",
+          uuid: job.uuid,
+          tags: new Set(
+            faker.helpers.multiple(() => faker.hacker.adjective(), { count: { min: 0, max: 3 } }),
+          ),
+          customerName: faker.person.firstName(),
+          customerPhoneNumber: faker.phone.number(),
+          description: faker.helpers
+            .multiple(() => faker.company.buzzPhrase(), { count: { min: 1, max: 5 } })
+            .join("\n"),
+          images: imageBlobs.map((blob) => ({
+            type: "image/jpeg",
+            blobId: blob.uuid,
+          })),
+        },
+      } satisfies JobAction,
+    },
+  ];
+  const status = faker.helpers.maybe(() => faker.helpers.arrayElement(allStatuses.slice(1)));
+  if (status !== undefined) {
+    const changeStatusActionId = crypto.randomUUID();
+    events.push({
+      uuid: changeStatusActionId,
+      job,
+      data: {
+        version: 2,
+        uuid: changeStatusActionId,
+        timestamp: Temporal.Instant.from(faker.date.past().toISOString()),
+        event: {
+          type: "change job status",
+          uuid: job.uuid,
+          status,
+        },
+      } satisfies JobAction,
+    });
+  }
+  return { job, blobs: imageBlobs, events };
+}
 
 async function main() {
   const client = new ApiClient("http://localhost:3000");
@@ -70,23 +80,14 @@ async function main() {
     expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
     permissions: new Set(["add master key", "write jobs"]),
   });
-  const job1 = await Job.generate("00000000-0000-4000-8000-000000000000");
-  const job2 = await Job.generate("00000000-0000-4000-8000-000000000001");
-  await client.addJob(job1, [mk], authToken);
-  await client.addJob(job2, [mk], authToken);
-  const job1Blobs = [img1, img2, img3].map((img) => ({
-    uuid: img.uuid,
-    data: img.data,
-    job: job1,
-  }));
-  const job2Blobs = [img4, img5].map((img) => ({
-    uuid: img.uuid,
-    data: img.data,
-    job: job2,
-  }));
-  await Promise.all([...job1Blobs, ...job2Blobs].map((blob) => client.putBlob(blob, authToken)));
-  await client.addEvent(upsertJob1(job1, job1Blobs), authToken);
-  await client.addEvent(upsertJob2(job2, job2Blobs), authToken);
+  const data = await Promise.all(faker.helpers.multiple(randomJob, { count: { min: 5, max: 20 } }));
+  for (const { job, blobs, events } of data) {
+    await client.addJob(job, [mk], authToken);
+    await Promise.all(blobs.map((blob) => client.putBlob(blob, authToken)));
+    for (const event of events) {
+      await client.addEvent(event, authToken);
+    }
+  }
 }
 
 main().catch(console.error);
