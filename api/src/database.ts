@@ -1,8 +1,4 @@
-import {
-  generateEd25519KeyPair,
-  generateX25519KeyPair,
-  KeyDerivationPassword,
-} from "@biko-jobs/api-client/crypto.ts";
+import { generateEd25519KeyPair, generateX25519KeyPair } from "@biko-jobs/api-client/crypto.ts";
 import type {
   JobEvent,
   Job,
@@ -106,11 +102,10 @@ export class Database {
   }
 
   async registerInitialMasterKey(name: string, password: string) {
-    const kdfPassword = await KeyDerivationPassword.import(password);
-    const encryptionKeyPair = await generateX25519KeyPair("master key");
-    const encryptionKeyPrivate = await encryptionKeyPair.privateKey.export(kdfPassword);
+    const encryptionKeyPair = await generateX25519KeyPair();
+    const encryptionKeyPrivate = await encryptionKeyPair.privateKey.export(password);
     const signingKeyPair = await generateEd25519KeyPair();
-    const signingKeyPrivate = await signingKeyPair.privateKey.export(kdfPassword);
+    const signingKeyPrivate = await signingKeyPair.privateKey.export(password);
     this.addMasterKey({
       uuid: crypto.randomUUID(),
       name,

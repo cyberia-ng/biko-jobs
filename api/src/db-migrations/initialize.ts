@@ -2,6 +2,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { Database, migrateDb } from "@biko-jobs/api/database.ts";
 import { DatabaseSync } from "node:sqlite";
+import { MasterKeyPair } from "@biko-jobs/api-client";
 
 async function main() {
   const dbFile = process.argv[2];
@@ -18,7 +19,12 @@ async function main() {
   try {
     const masterKeyName = await rl.question("New master key name: ");
     const masterKeyPassword = await rl.question("New master key password: ");
-    await db.registerInitialMasterKey(masterKeyName, masterKeyPassword);
+    const mkPair = await MasterKeyPair.generate(
+      crypto.randomUUID(),
+      masterKeyName,
+      masterKeyPassword,
+    );
+    db.addMasterKey(await mkPair.toWireFormat());
     console.log("registered master key");
   } finally {
     rl.close();

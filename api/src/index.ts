@@ -1,14 +1,30 @@
+import { MasterKeyPair } from "@biko-jobs/api-client";
 import { createApp } from "./app.ts";
 
-createApp(process.env["SQLITE_PATH"])
-  .then((server) => {
-    server.listen(3000, () => {
-      console.log("Server is running on port 3000");
+async function main() {
+  const sqlitePath = process.env["SQLITE_PATH"];
+  let initialMasterKey: MasterKeyPair | undefined;
+  if (sqlitePath === undefined) {
+    initialMasterKey = await MasterKeyPair.generate(
+      crypto.randomUUID(),
+      "some name",
+      "some password",
+    );
+    if (process.env.NODE_ENV !== "test") {
+      console.warn(
+        "WARNING: Server running with in-memory DB; dummy master key will be registered.",
+      );
+    }
+  }
+  const server = await createApp({ sqlitePath, initialMasterKey });
+  server.listen(3000, () => {
+    console.log("Server is running on port 3000");
+  });
+  process.on("SIGINT", () => {
+    server.close(() => {
+      process.exit(0);
     });
-    process.on("SIGINT", () => {
-      server.close(() => {
-        process.exit(0);
-      });
-    });
-  })
-  .catch(console.error);
+  });
+}
+
+main().catch(console.error);

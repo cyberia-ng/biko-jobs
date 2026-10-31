@@ -10,7 +10,7 @@ import {
   AuthToken,
 } from "@biko-jobs/api-client";
 import { createApp } from "@biko-jobs/api/app.ts";
-import { expect, test, describe, beforeEach, afterEach } from "vitest";
+import { expect, test, describe, beforeEach, afterEach, beforeAll } from "vitest";
 import type { Server } from "node:http";
 import * as schemas from "@biko-jobs/api-client/schemas.ts";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
@@ -22,16 +22,17 @@ describe("api client", () => {
   let listener: Server;
   let port: number;
 
+  beforeAll(async () => {
+    masterKey = await MasterKeyPair.generate(crypto.randomUUID(), "some name", "some password");
+  });
+
   beforeEach(async () => {
-    const app = await createApp();
+    const app = await createApp({ initialMasterKey: masterKey });
     port = Math.round(Math.random() * (65535 - 1024) + 1024);
     listener = await new Promise((res) => {
       const server = app.listen(port, () => res(server));
     });
     client = new ApiClient(`http://localhost:${port}`);
-    const mks = await client.listMasterKeys();
-    const mkPublic = mks.find((mk) => mk.name === "some name")!;
-    masterKey = await mkPublic.toKeyPair("some password");
     authToken = await AuthToken.init({
       masterKey,
       expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
@@ -65,11 +66,14 @@ describe("api client", () => {
       expect(await mk.encryptionPublicKey.export()).toEqual(
         await masterKey.encryptionPublicKey.export(),
       );
-      const encrypted = await mk.encryptionPublicKey.encrypt({
-        type: "plaintext",
-        data: utf8("hello world"),
-      });
-      const decrypted = await masterKey.encryptionPrivateKey.decrypt(encrypted);
+      const encrypted = await mk.encryptionPublicKey.encrypt(
+        {
+          type: "plaintext",
+          data: utf8("hello world"),
+        },
+        "some context",
+      );
+      const decrypted = await masterKey.encryptionPrivateKey.decrypt(encrypted, "some context");
       expect(decrypted.data).toStrictEqual(utf8("hello world"));
     });
 

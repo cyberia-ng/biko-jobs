@@ -5,7 +5,6 @@ import {
   Ed25519PublicKey,
   generateEd25519KeyPair,
   generateX25519KeyPair,
-  KeyDerivationPassword,
   X25519PrivateKey,
   X25519PublicKey,
   type EncryptedEd25519PrivateKey,
@@ -152,7 +151,11 @@ export class ApiClient {
 
   async addJob(job: Job, access: MasterKeyPublic[], auth: AuthToken): Promise<NumberedJob> {
     const encryptedJobKeysArrayP = access.map(
-      async (mkp) => [mkp.uuid, (await job.key.encryptKey(mkp.encryptionPublicKey)).data] as const,
+      async (mkp) =>
+        [
+          mkp.uuid,
+          (await job.key.encryptKey(mkp.encryptionPublicKey, `job key/${job.uuid}`)).data,
+        ] as const,
     );
     const encryptedJobKeys = new Map(await Promise.all(encryptedJobKeysArrayP));
     const body: schemas.Job = {
@@ -182,10 +185,14 @@ export class ApiClient {
     const body = schemas.JobList.parse(res.body);
     const jobsP = body.map(async ({ uuid, keys, number }) => {
       const encryptedKey = keys.get(masterKey.uuid)!;
-      const key = await AESKey.decryptKey(masterKey.encryptionPrivateKey, {
-        type: "ciphertext",
-        data: encryptedKey,
-      });
+      const key = await AESKey.decryptKey(
+        masterKey.encryptionPrivateKey,
+        {
+          type: "ciphertext",
+          data: encryptedKey,
+        },
+        `job key/${uuid}`,
+      );
       return new NumberedJob(uuid, key, number);
     });
     return Promise.all(jobsP);
@@ -261,10 +268,14 @@ export class ApiClient {
             for (const [masterKeyUUID, encryptedJobKey] of socketEvent.job.keys.entries()) {
               const mk = subscriber.getMasterKey(masterKeyUUID);
               if (mk === undefined) continue;
-              jobKey = await AESKey.decryptKey(mk.encryptionPrivateKey, {
-                type: "ciphertext",
-                data: encryptedJobKey,
-              });
+              jobKey = await AESKey.decryptKey(
+                mk.encryptionPrivateKey,
+                {
+                  type: "ciphertext",
+                  data: encryptedJobKey,
+                },
+                `job key/${socketEvent.job.uuid}`,
+              );
               break;
             }
             if (jobKey === undefined) continue;
@@ -375,7 +386,7 @@ export class MasterKeyPublic {
   }
 
   static async fromWireFormat(mk: schemas.MasterKey): Promise<MasterKeyPublic> {
-    const encryptionPublicKey = await X25519PublicKey.import(mk.encryptionKey.public, "master key");
+    const encryptionPublicKey = await X25519PublicKey.import(mk.encryptionKey.public);
     const signingPublicKey = await Ed25519PublicKey.import(mk.signingKey.public);
     return new MasterKeyPublic({
       name: mk.name,
@@ -400,15 +411,13 @@ export class MasterKeyPublic {
   }
 
   async toKeyPair(password: string): Promise<MasterKeyPair> {
-    const kdfPassword = await KeyDerivationPassword.import(password);
     const encryptionPrivateKey = await X25519PrivateKey.import(
       this.encryptionPrivateKeyEncrypted,
-      kdfPassword,
-      "master key",
+      password,
     );
     const signingPrivateKey = await Ed25519PrivateKey.import(
       this.signingPrivateKeyEncrypted,
-      kdfPassword,
+      password,
     );
     return new MasterKeyPair({
       uuid: this.uuid,
@@ -454,21 +463,20 @@ export class MasterKeyPair extends MasterKeyPublic {
   }
 
   static async generate(uuid: string, name: string, password: string) {
-    const encryptionKeyPair = await generateX25519KeyPair("master key");
+    const encryptionKeyPair = await generateX25519KeyPair();
     const signingKeyPair = await generateEd25519KeyPair();
-    const kdfPassword = await KeyDerivationPassword.import(password);
     return new MasterKeyPair({
       name,
       uuid,
       encryptionKey: {
         public: encryptionKeyPair.publicKey,
         private: encryptionKeyPair.privateKey,
-        privateEncrypted: await encryptionKeyPair.privateKey.export(kdfPassword),
+        privateEncrypted: await encryptionKeyPair.privateKey.export(password),
       },
       signingKey: {
         public: signingKeyPair.publicKey,
         private: signingKeyPair.privateKey,
-        privateEncrypted: await signingKeyPair.privateKey.export(kdfPassword),
+        privateEncrypted: await signingKeyPair.privateKey.export(password),
       },
       password,
     });

@@ -13,7 +13,7 @@ export class PairingPublicKey {
   }
 
   static async import(keyBytes: Bytes) {
-    const key = await X25519PublicKey.import(keyBytes, "pairing");
+    const key = await X25519PublicKey.import(keyBytes);
     return new PairingPublicKey(key);
   }
 }
@@ -26,7 +26,7 @@ export class PairingKeyPair extends PairingPublicKey {
   }
 
   static async generate() {
-    const keyPair = await generateX25519KeyPair("pairing");
+    const keyPair = await generateX25519KeyPair();
     return new PairingKeyPair(keyPair.publicKey, keyPair.privateKey);
   }
 }
@@ -123,10 +123,13 @@ export class ServerChannel {
         } satisfies ServerMessage),
       );
     } else {
-      const encryptedAuthToken = await clientKey.publicKey.encrypt({
-        type: "plaintext",
-        data: mpEncoder.encode(approved.token),
-      });
+      const encryptedAuthToken = await clientKey.publicKey.encrypt(
+        {
+          type: "plaintext",
+          data: mpEncoder.encode(approved.token),
+        },
+        `pairing/${clientKey.publicKey.fingerprint}`,
+      );
       const acceptMessage: ServerMessage = {
         type: "server/accepted",
         clientFingerprint: clientKey.publicKey.fingerprint,
@@ -206,10 +209,13 @@ export class ClientChannel {
       return { type: "ignore" };
     }
     if (message.type === "server/rejected") return { type: "rejected" };
-    const decrypted = await this.keyPair.privateKey.decrypt({
-      type: "ciphertext",
-      data: message.encryptedAuthToken,
-    });
+    const decrypted = await this.keyPair.privateKey.decrypt(
+      {
+        type: "ciphertext",
+        data: message.encryptedAuthToken,
+      },
+      `pairing/${this.keyPair.publicKey.fingerprint}`,
+    );
     const token = AuthToken.import(decrypted.data);
     return { type: "accepted", authToken: token };
   }

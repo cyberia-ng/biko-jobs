@@ -3,15 +3,15 @@ import { createServer } from "node:http";
 import { addRoutes } from "./routes.ts";
 import { WrappedWebSocketServer } from "./websockets.ts";
 import { Database } from "./database.ts";
+import type { MasterKeyPair } from "@biko-jobs/api-client";
 
-export async function createApp(sqlitePath?: string) {
+export async function createApp(
+  opts: { sqlitePath?: string | undefined; initialMasterKey?: MasterKeyPair | undefined } = {},
+) {
   const app = express();
-  const db = new Database(sqlitePath);
-  if (sqlitePath === undefined) {
-    await db.registerInitialMasterKey("some name", "some password");
-    if (process.env.NODE_ENV !== "test") {
-      console.warn("WARNING: Server running with in-memory DB; dummy master key is registered.");
-    }
+  const db = new Database(opts.sqlitePath);
+  if (opts.initialMasterKey !== undefined) {
+    db.addMasterKey(await opts.initialMasterKey.toWireFormat());
   }
   const server = createServer(app);
   const wss = new WrappedWebSocketServer(server);
