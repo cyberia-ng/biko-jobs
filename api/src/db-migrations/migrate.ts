@@ -8,4 +8,7 @@ if (dbFile === undefined) {
 }
 
 const db = new DatabaseSync(dbFile);
-migrateDb(db, {}).catch(console.error);
+migrateDb(db, {}).catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
