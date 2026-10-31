@@ -1,5 +1,6 @@
 import type { Bytes } from "@biko-jobs/api-client";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
+import { scryptAsync } from "@noble/hashes/scrypt.js";
 
 const textEncoder = new TextEncoder();
 
@@ -7,35 +8,52 @@ export type Plaintext = { type: "plaintext"; data: Bytes };
 export type Ciphertext = { type: "ciphertext"; data: Bytes };
 export type UnencryptedKeyMaterial = { type: "unencrypted key material"; data: Bytes };
 
-export class KeyDerivationPassword {
-  key: CryptoKey;
-  private constructor(fields: { key: CryptoKey }) {
-    this.key = fields.key;
+export type Salt = { type: "salt"; data: Bytes };
+export class ScryptPassword {
+  private derived: Bytes;
+  private constructor(derived: Bytes) {
+    this.derived = derived;
   }
-  static async import(password: string) {
-    const key = await crypto.subtle.importKey(
-      "raw",
-      textEncoder.encode(password),
-      "PBKDF2",
-      false,
-      ["deriveKey"],
-    );
-    return new KeyDerivationPassword({ key });
+
+  static async derive(password: string, salt: Salt) {
+    const bytes = await scryptAsync(password, salt.data, { N: 2 ** 18, r: 8, p: 1 });
+    return new ScryptPassword(new Uint8Array(bytes));
+  }
+
+  async hkdf(): Promise<HKDFKey> {
+    return HKDFKey.import(this.derived);
   }
 }
 
-export class KeyDerivationBits {
+export class HKDFKey {
   key: CryptoKey;
-  private constructor(key: CryptoKey) {
+  constructor(key: CryptoKey) {
     this.key = key;
   }
   static async import(data: Bytes) {
-    const key = await crypto.subtle.importKey("raw", data, "HKDF", false, ["deriveKey"]);
-    return new KeyDerivationBits(key);
+    const hkdfKey = await crypto.subtle.importKey("raw", data, "HKDF", false, ["deriveBits"]);
+    return new HKDFKey(hkdfKey);
+  }
+
+  private async deriveBits(salt: Salt, context: string) {
+    const bits = await crypto.subtle.deriveBits(
+      {
+        name: "HKDF",
+        hash: "SHA-256",
+        salt: salt.data,
+        info: textEncoder.encode(context),
+      },
+      this.key,
+      256,
+    );
+    return new Uint8Array(bits);
+  }
+
+  async deriveKeyMaterial(salt: Salt, context: string): Promise<UnencryptedKeyMaterial> {
+    return { type: "unencrypted key material", data: await this.deriveBits(salt, context) };
   }
 }
 
-export type Salt = { type: "salt"; data: Bytes };
 export class AESKey {
   key: CryptoKey;
   private constructor(key: CryptoKey) {
@@ -50,32 +68,17 @@ export class AESKey {
     return new AESKey(key);
   }
 
-  static async deriveFromPassword(password: KeyDerivationPassword, salt: Salt) {
-    const key = await crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        hash: "SHA-256",
-        salt: salt.data,
-        iterations: 1000,
-      },
-      password.key,
-      { name: "AES-GCM", length: 256 },
-      true,
-      ["encrypt", "decrypt"],
-    );
-    return new AESKey(key);
-  }
-
-  static async deriveFromBits(bits: KeyDerivationBits, salt: Salt, context: string) {
-    const key = await crypto.subtle.deriveKey(
-      { name: "HKDF", hash: "SHA-256", salt: salt.data, info: textEncoder.encode(context) },
-      bits.key,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["encrypt", "decrypt"],
-    );
-    return new AESKey(key);
-  }
+  // static async deriveFromBits(bits: Bytes, salt: Salt, context: string) {
+  //   const hkdfKey = await crypto.subtle.importKey("raw", bits, "HKDF", false, ["deriveKey"]);
+  //   const key = await crypto.subtle.deriveKey(
+  //     { name: "HKDF", hash: "SHA-256", salt: salt.data, info: textEncoder.encode(context) },
+  //     hkdfKey,
+  //     { name: "AES-GCM", length: 256 },
+  //     false,
+  //     ["encrypt", "decrypt"],
+  //   );
+  //   return new AESKey(key);
+  // }
 
   async encryptKey(masterKey: X25519PublicKey): Promise<Ciphertext> {
     const rawKey: Plaintext = {
@@ -181,11 +184,12 @@ export class Ed25519PrivateKey {
     this.key = key;
   }
 
-  static async import(
-    encryptedPrivateKey: EncryptedEd25519PrivateKey,
-    password: KeyDerivationPassword,
-  ) {
-    const encryptionKey = await AESKey.deriveFromPassword(password, encryptedPrivateKey.salt);
+  static async import(encryptedPrivateKey: EncryptedEd25519PrivateKey, password: string) {
+    const kdfPassword = await ScryptPassword.derive(password, encryptedPrivateKey.salt);
+    const hkdfKey = await kdfPassword.hkdf();
+    const encryptionKey = await AESKey.import(
+      await hkdfKey.deriveKeyMaterial(encryptedPrivateKey.salt, "ed25519 key encryption"),
+    );
     const rawPrivateKey = await encryptionKey.decrypt(encryptedPrivateKey.key);
     const privateKey = await crypto.subtle.importKey(
       "pkcs8",
@@ -202,9 +206,13 @@ export class Ed25519PrivateKey {
     return { data, signature: new Uint8Array(signature) };
   }
 
-  async export(password: KeyDerivationPassword): Promise<EncryptedEd25519PrivateKey> {
+  async export(password: string): Promise<EncryptedEd25519PrivateKey> {
     const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-    const encryptionKey = await AESKey.deriveFromPassword(password, salt);
+    const kdfPassword = await ScryptPassword.derive(password, salt);
+    const hkdfKey = await kdfPassword.hkdf();
+    const encryptionKey = await AESKey.import(
+      await hkdfKey.deriveKeyMaterial(salt, "ed25519 key encryption"),
+    );
     const privkeyBytes = new Uint8Array(await crypto.subtle.exportKey("pkcs8", this.key));
     const key = await encryptionKey.encrypt({
       type: "plaintext",
@@ -237,14 +245,16 @@ export class X25519PublicKey {
 
   async encrypt(pt: Plaintext): Promise<Ciphertext> {
     const ephemeralKeyPair = await generateX25519KeyPair("");
-    const sharedBits = await crypto.subtle.deriveBits(
-      { name: "X25519", public: this.key },
-      ephemeralKeyPair.privateKey.key,
-      256,
+    const sharedBits = new Uint8Array(
+      await crypto.subtle.deriveBits(
+        { name: "X25519", public: this.key },
+        ephemeralKeyPair.privateKey.key,
+        256,
+      ),
     );
-    const hkdfKey = await KeyDerivationBits.import(new Uint8Array(sharedBits));
+    const hkdfKey = await HKDFKey.import(sharedBits);
     const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-    const aesKey = await AESKey.deriveFromBits(hkdfKey, salt, this.context);
+    const aesKey = await AESKey.import(await hkdfKey.deriveKeyMaterial(salt, this.context));
     const encrypted = await aesKey.encrypt(pt);
     const packed = mpEncoder.encode([
       await ephemeralKeyPair.publicKey.export(),
@@ -288,26 +298,26 @@ export class X25519PrivateKey {
   async decrypt(ct: Ciphertext): Promise<Plaintext> {
     const [publicKeyData, saltData, encrypted] = mpDecoder.decode(ct.data) as [Bytes, Bytes, Bytes];
     const publicKey = await X25519PublicKey.import(publicKeyData, this.context);
-    const sharedBits = await crypto.subtle.deriveBits(
-      { name: "X25519", public: publicKey.key },
-      this.key,
-      256,
+    const sharedBits = new Uint8Array(
+      await crypto.subtle.deriveBits({ name: "X25519", public: publicKey.key }, this.key, 256),
     );
-    const hkdfKey = await KeyDerivationBits.import(new Uint8Array(sharedBits));
-    const aesKey = await AESKey.deriveFromBits(
-      hkdfKey,
-      { type: "salt", data: saltData },
-      this.context,
+    const hkdfKey = await HKDFKey.import(sharedBits);
+    const aesKey = await AESKey.import(
+      await hkdfKey.deriveKeyMaterial({ type: "salt", data: saltData }, this.context),
     );
     return aesKey.decrypt({ type: "ciphertext", data: encrypted });
   }
 
   static async import(
     encryptedPrivateKey: EncryptedX25519PrivateKey,
-    password: KeyDerivationPassword,
+    password: string,
     context: string,
   ) {
-    const encryptionKey = await AESKey.deriveFromPassword(password, encryptedPrivateKey.salt);
+    const kdfPassword = await ScryptPassword.derive(password, encryptedPrivateKey.salt);
+    const hkdfKey = await kdfPassword.hkdf();
+    const encryptionKey = await AESKey.import(
+      await hkdfKey.deriveKeyMaterial(encryptedPrivateKey.salt, "x25519 key encryption"),
+    );
     const rawPrivateKey = await encryptionKey.decrypt(encryptedPrivateKey.key);
     const privateKey = await crypto.subtle.importKey(
       "pkcs8",
@@ -321,9 +331,13 @@ export class X25519PrivateKey {
     return new X25519PrivateKey({ key: privateKey, context });
   }
 
-  async export(password: KeyDerivationPassword): Promise<EncryptedX25519PrivateKey> {
+  async export(password: string): Promise<EncryptedX25519PrivateKey> {
     const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-    const encryptionKey = await AESKey.deriveFromPassword(password, salt);
+    const kdfPassword = await ScryptPassword.derive(password, salt);
+    const hkdfKey = await kdfPassword.hkdf();
+    const encryptionKey = await AESKey.import(
+      await hkdfKey.deriveKeyMaterial(salt, "x25519 key encryption"),
+    );
     const privkeyBytes = new Uint8Array(await crypto.subtle.exportKey("pkcs8", this.key));
     const key = await encryptionKey.encrypt({
       type: "plaintext",

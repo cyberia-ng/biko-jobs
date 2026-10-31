@@ -5,7 +5,7 @@ import {
   Ed25519PublicKey,
   generateEd25519KeyPair,
   generateX25519KeyPair,
-  KeyDerivationPassword,
+  ScryptPassword,
   X25519PrivateKey,
   X25519PublicKey,
   type Plaintext,
@@ -21,10 +21,11 @@ describe("crypto", () => {
   const toBeSigned = utf8("hello world");
 
   describe("aes", () => {
-    test("encrypt/decrypt round trip with derive", async () => {
-      const kdfPassword = await KeyDerivationPassword.import("password");
+    test("encrypt/decrypt round trip with import", async () => {
       const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-      const key = await AESKey.deriveFromPassword(kdfPassword, salt);
+      const kdfPassword = await ScryptPassword.derive("password", salt);
+      const hkdfKey = await kdfPassword.hkdf();
+      const key = await AESKey.import(await hkdfKey.deriveKeyMaterial(salt, "some context"));
       expect(await key.decrypt(await key.encrypt(plaintext))).toStrictEqual(plaintext);
     });
 
@@ -67,9 +68,8 @@ describe("crypto", () => {
 
     test("import/export private key", async () => {
       const key = await generateEd25519KeyPair();
-      const kdfPassword = await KeyDerivationPassword.import("password");
-      const exported = await key.privateKey.export(kdfPassword);
-      const roundtripped = await Ed25519PrivateKey.import(exported, kdfPassword);
+      const exported = await key.privateKey.export("password");
+      const roundtripped = await Ed25519PrivateKey.import(exported, "password");
       expect(await key.publicKey.verify(await roundtripped.sign(toBeSigned))).toStrictEqual(
         toBeSigned,
       );
@@ -95,9 +95,8 @@ describe("crypto", () => {
 
     test("import/export private key", async () => {
       const key = await generateX25519KeyPair("some context");
-      const kdfPassword = await KeyDerivationPassword.import("password");
-      const exported = await key.privateKey.export(kdfPassword);
-      const roundtripped = await X25519PrivateKey.import(exported, kdfPassword, "some context");
+      const exported = await key.privateKey.export("password");
+      const roundtripped = await X25519PrivateKey.import(exported, "password", "some context");
       expect(await roundtripped.decrypt(await key.publicKey.encrypt(plaintext))).toStrictEqual(
         plaintext,
       );

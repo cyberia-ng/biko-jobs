@@ -5,7 +5,7 @@ import {
   Ed25519PublicKey,
   generateEd25519KeyPair,
   generateX25519KeyPair,
-  KeyDerivationPassword,
+  type KeyDerivationPassword,
   X25519PrivateKey,
   X25519PublicKey,
   type EncryptedEd25519PrivateKey,
@@ -400,7 +400,7 @@ export class MasterKeyPublic {
   }
 
   async toKeyPair(password: string): Promise<MasterKeyPair> {
-    const kdfPassword = await KeyDerivationPassword.import(password);
+    const kdfPassword: KeyDerivationPassword = { type: "key derivation password", data: password };
     const encryptionPrivateKey = await X25519PrivateKey.import(
       this.encryptionPrivateKeyEncrypted,
       kdfPassword,
@@ -456,7 +456,7 @@ export class MasterKeyPair extends MasterKeyPublic {
   static async generate(uuid: string, name: string, password: string) {
     const encryptionKeyPair = await generateX25519KeyPair("master key");
     const signingKeyPair = await generateEd25519KeyPair();
-    const kdfPassword = await KeyDerivationPassword.import(password);
+    const kdfPassword: KeyDerivationPassword = { type: "key derivation password", data: password };
     return new MasterKeyPair({
       name,
       uuid,

@@ -1,7 +1,7 @@
 import {
   generateEd25519KeyPair,
   generateX25519KeyPair,
-  KeyDerivationPassword,
+  type KeyDerivationPassword,
 } from "@biko-jobs/api-client/crypto.ts";
 import type {
   JobEvent,
@@ -106,7 +106,7 @@ export class Database {
   }
 
   async registerInitialMasterKey(name: string, password: string) {
-    const kdfPassword = await KeyDerivationPassword.import(password);
+    const kdfPassword: KeyDerivationPassword = { type: "key derivation password", data: password };
     const encryptionKeyPair = await generateX25519KeyPair("master key");
     const encryptionKeyPrivate = await encryptionKeyPair.privateKey.export(kdfPassword);
     const signingKeyPair = await generateEd25519KeyPair();
