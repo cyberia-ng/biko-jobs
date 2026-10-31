@@ -1,5 +1,6 @@
 import type { Bytes } from "@biko-jobs/api-client";
 import {
+  AES_LENGTH,
   AESKey,
   Ed25519PrivateKey,
   Ed25519PublicKey,
@@ -20,12 +21,28 @@ describe("crypto", () => {
   const plaintext: Plaintext = { type: "plaintext", data: utf8("hello world") };
   const toBeSigned = utf8("hello world");
 
+  describe("scrypt", () => {
+    test("produces same data on same input", async () => {
+      const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
+      const scryptA = await ScryptPassword.derive("password", salt);
+      const hkdfA = await scryptA.hkdf("some context", 256);
+      const scryptB = await ScryptPassword.derive("password", salt);
+      const hkdfB = await scryptB.hkdf("some context", 256);
+      expect(hkdfA).toStrictEqual(hkdfB);
+    });
+
+    test("hkdf has right length", async () => {
+      const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
+      const scrypt = await ScryptPassword.derive("password", salt);
+      const hkdf = await scrypt.hkdf("some context", 256);
+      expect(hkdf.data).toHaveLength(256 / 8);
+    });
+  });
+
   describe("aes", () => {
     test("encrypt/decrypt round trip with import", async () => {
-      const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-      const kdfPassword = await ScryptPassword.derive("password", salt);
-      const hkdfKey = await kdfPassword.hkdf();
-      const key = await AESKey.import(await hkdfKey.deriveKeyMaterial(salt, "some context"));
+      const rawKey = crypto.getRandomValues(new Uint8Array(AES_LENGTH / 8));
+      const key = await AESKey.import({ type: "unencrypted key material", data: rawKey });
       expect(await key.decrypt(await key.encrypt(plaintext))).toStrictEqual(plaintext);
     });
 
@@ -35,10 +52,14 @@ describe("crypto", () => {
     });
 
     test("encrypted key", async () => {
-      const masterKeyPair = await generateX25519KeyPair("key encryption");
+      const masterKeyPair = await generateX25519KeyPair();
       const key = await AESKey.generate();
-      const encryptedKey = await key.encryptKey(masterKeyPair.publicKey);
-      const roundtripped = await AESKey.decryptKey(masterKeyPair.privateKey, encryptedKey);
+      const encryptedKey = await key.encryptKey(masterKeyPair.publicKey, "some aes key");
+      const roundtripped = await AESKey.decryptKey(
+        masterKeyPair.privateKey,
+        encryptedKey,
+        "some aes key",
+      );
       expect(await roundtripped.decrypt(await key.encrypt(plaintext))).toStrictEqual(plaintext);
       expect(await key.decrypt(await roundtripped.encrypt(plaintext))).toStrictEqual(plaintext);
     });
@@ -78,28 +99,37 @@ describe("crypto", () => {
 
   describe("x25519", () => {
     test("encrypt/decrypt round trip", async () => {
-      const keyPair = await generateX25519KeyPair("some context");
+      const keyPair = await generateX25519KeyPair();
       expect(
-        await keyPair.privateKey.decrypt(await keyPair.publicKey.encrypt(plaintext)),
+        await keyPair.privateKey.decrypt(
+          await keyPair.publicKey.encrypt(plaintext, "some context"),
+          "some context",
+        ),
       ).toStrictEqual(plaintext);
     });
 
     test("import/export public key", async () => {
-      const key = await generateX25519KeyPair("some context");
+      const key = await generateX25519KeyPair();
       const exported = await key.publicKey.export();
-      const roundtripped = await X25519PublicKey.import(exported, "some context");
-      expect(await key.privateKey.decrypt(await roundtripped.encrypt(plaintext))).toStrictEqual(
-        plaintext,
-      );
+      const roundtripped = await X25519PublicKey.import(exported);
+      expect(
+        await key.privateKey.decrypt(
+          await roundtripped.encrypt(plaintext, "some context"),
+          "some context",
+        ),
+      ).toStrictEqual(plaintext);
     });
 
     test("import/export private key", async () => {
-      const key = await generateX25519KeyPair("some context");
+      const key = await generateX25519KeyPair();
       const exported = await key.privateKey.export("password");
-      const roundtripped = await X25519PrivateKey.import(exported, "password", "some context");
-      expect(await roundtripped.decrypt(await key.publicKey.encrypt(plaintext))).toStrictEqual(
-        plaintext,
-      );
+      const roundtripped = await X25519PrivateKey.import(exported, "password");
+      expect(
+        await roundtripped.decrypt(
+          await key.publicKey.encrypt(plaintext, "some context"),
+          "some context",
+        ),
+      ).toStrictEqual(plaintext);
     });
   });
 });
