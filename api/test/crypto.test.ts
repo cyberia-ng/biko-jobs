@@ -88,9 +88,13 @@ describe("crypto", () => {
     });
 
     test("import/export private key", async () => {
+      const password = await ScryptPassword.derive("password", {
+        type: "salt",
+        data: crypto.getRandomValues(new Uint8Array(16)),
+      });
       const key = await generateEd25519KeyPair();
-      const exported = await key.privateKey.export("password");
-      const roundtripped = await Ed25519PrivateKey.import(exported, "password");
+      const exported = await key.privateKey.export(password);
+      const roundtripped = await Ed25519PrivateKey.import(exported, password);
       expect(await key.publicKey.verify(await roundtripped.sign(toBeSigned))).toStrictEqual(
         toBeSigned,
       );
@@ -121,9 +125,13 @@ describe("crypto", () => {
     });
 
     test("import/export private key", async () => {
+      const password = await ScryptPassword.derive("password", {
+        type: "salt",
+        data: crypto.getRandomValues(new Uint8Array(16)),
+      });
       const key = await generateX25519KeyPair();
-      const exported = await key.privateKey.export("password");
-      const roundtripped = await X25519PrivateKey.import(exported, "password");
+      const exported = await key.privateKey.export(password);
+      const roundtripped = await X25519PrivateKey.import(exported, password);
       expect(
         await roundtripped.decrypt(
           await key.publicKey.encrypt(plaintext, "some context"),

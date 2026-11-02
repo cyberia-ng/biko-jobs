@@ -13,7 +13,7 @@ export const AES_LENGTH = 256;
 export type Salt = { type: "salt"; data: Bytes };
 export class ScryptPassword {
   private derived: Bytes;
-  private salt: Salt;
+  salt: Salt;
   private constructor(derived: Bytes, salt: Salt) {
     this.derived = derived;
     this.salt = salt;
@@ -39,6 +39,11 @@ export class ScryptPassword {
       length,
     );
     return { type: "unencrypted key material", data: new Uint8Array(bits) };
+  }
+
+  async hash(): Promise<Bytes> {
+    const hash = await crypto.subtle.digest("SHA-256", this.derived);
+    return new Uint8Array(hash);
   }
 }
 
@@ -150,12 +155,6 @@ export class Ed25519PublicKey {
   }
 }
 
-export type EncryptedEd25519PrivateKey = {
-  type: "encrypted ed25519 private key";
-  salt: Salt;
-  key: Ciphertext;
-};
-
 export type SignedData = {
   data: Bytes;
   signature: Bytes;
@@ -167,12 +166,11 @@ export class Ed25519PrivateKey {
     this.key = key;
   }
 
-  static async import(encryptedPrivateKey: EncryptedEd25519PrivateKey, password: string) {
-    const scryptPassword = await ScryptPassword.derive(password, encryptedPrivateKey.salt);
+  static async import(encryptedPrivateKey: Ciphertext, password: ScryptPassword) {
     const encryptionKey = await AESKey.import(
-      await scryptPassword.hkdf("ed25519 key encryption", AES_LENGTH),
+      await password.hkdf("ed25519 key encryption", AES_LENGTH),
     );
-    const rawPrivateKey = await encryptionKey.decrypt(encryptedPrivateKey.key);
+    const rawPrivateKey = await encryptionKey.decrypt(encryptedPrivateKey);
     const privateKey = await crypto.subtle.importKey(
       "pkcs8",
       rawPrivateKey.data,
@@ -188,18 +186,15 @@ export class Ed25519PrivateKey {
     return { data, signature: new Uint8Array(signature) };
   }
 
-  async export(password: string): Promise<EncryptedEd25519PrivateKey> {
-    const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-    const scryptPassword = await ScryptPassword.derive(password, salt);
+  async export(password: ScryptPassword): Promise<Ciphertext> {
     const encryptionKey = await AESKey.import(
-      await scryptPassword.hkdf("ed25519 key encryption", AES_LENGTH),
+      await password.hkdf("ed25519 key encryption", AES_LENGTH),
     );
     const privkeyBytes = new Uint8Array(await crypto.subtle.exportKey("pkcs8", this.key));
-    const key = await encryptionKey.encrypt({
+    return encryptionKey.encrypt({
       type: "plaintext",
       data: privkeyBytes,
     });
-    return { type: "encrypted ed25519 private key", salt, key };
   }
 }
 
@@ -273,12 +268,6 @@ async function fingerprintX25519PublicKey(key: CryptoKey): Promise<string> {
   return new Uint8Array(hash).toHex();
 }
 
-export type EncryptedX25519PrivateKey = {
-  type: "encrypted x25519 private key";
-  salt: Salt;
-  key: Ciphertext;
-};
-
 export class X25519PrivateKey {
   key: CryptoKey;
   constructor(key: CryptoKey) {
@@ -313,11 +302,10 @@ export class X25519PrivateKey {
     return aesKey.decrypt({ type: "ciphertext", data: encrypted });
   }
 
-  static async import(encryptedPrivateKey: EncryptedX25519PrivateKey, password: string) {
-    const scryptPassword = await ScryptPassword.derive(password, encryptedPrivateKey.salt);
-    const rawAESKey = await scryptPassword.hkdf("x25519 key encryption", AES_LENGTH);
+  static async import(encryptedPrivateKey: Ciphertext, password: ScryptPassword) {
+    const rawAESKey = await password.hkdf("x25519 key encryption", AES_LENGTH);
     const encryptionKey = await AESKey.import(rawAESKey);
-    const rawPrivateKey = await encryptionKey.decrypt(encryptedPrivateKey.key);
+    const rawPrivateKey = await encryptionKey.decrypt(encryptedPrivateKey);
     const privateKey = await crypto.subtle.importKey(
       "pkcs8",
       rawPrivateKey.data,
@@ -330,18 +318,15 @@ export class X25519PrivateKey {
     return new X25519PrivateKey(privateKey);
   }
 
-  async export(password: string): Promise<EncryptedX25519PrivateKey> {
-    const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-    const scryptPassword = await ScryptPassword.derive(password, salt);
+  async export(password: ScryptPassword): Promise<Ciphertext> {
     const encryptionKey = await AESKey.import(
-      await scryptPassword.hkdf("x25519 key encryption", AES_LENGTH),
+      await password.hkdf("x25519 key encryption", AES_LENGTH),
     );
     const privkeyBytes = new Uint8Array(await crypto.subtle.exportKey("pkcs8", this.key));
-    const key = await encryptionKey.encrypt({
+    return encryptionKey.encrypt({
       type: "plaintext",
       data: privkeyBytes,
     });
-    return { type: "encrypted x25519 private key", salt, key };
   }
 }
 

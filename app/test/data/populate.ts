@@ -1,7 +1,14 @@
 import "temporal-polyfill/global";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ApiClient, AuthToken, Job, type JobBlob, type JobEvent } from "@biko-jobs/api-client";
+import {
+  ApiClient,
+  AuthToken,
+  Job,
+  MasterKeyPassword,
+  type JobBlob,
+  type JobEvent,
+} from "@biko-jobs/api-client";
 import range from "lodash/range.js";
 import { fakerEN_GB as faker } from "@faker-js/faker";
 import { allStatuses, type JobAction } from "../../src/service-state/action.ts";
@@ -74,7 +81,8 @@ async function main() {
   const client = new ApiClient("http://localhost:3000");
   const mks = await client.listMasterKeys();
   const mkPublic = mks.find((mk) => mk.name === "some name")!;
-  const mk = await mkPublic.toKeyPair("some password");
+  const mkPassword = await MasterKeyPassword.init(mkPublic, "some password");
+  const mk = await client.getMasterKeyPair(mkPassword);
   const authToken = await AuthToken.init({
     masterKey: mk,
     expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
@@ -82,7 +90,7 @@ async function main() {
   });
   const data = await Promise.all(faker.helpers.multiple(randomJob, { count: { min: 5, max: 20 } }));
   for (const { job, blobs, events } of data) {
-    await client.addJob(job, [mk], authToken);
+    await client.addJob(job, [mk.publicKey], authToken);
     await Promise.all(blobs.map((blob) => client.putBlob(blob, authToken)));
     for (const event of events) {
       await client.addEvent(event, authToken);

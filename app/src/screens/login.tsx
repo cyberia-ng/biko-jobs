@@ -1,6 +1,11 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AppContext } from "../context.ts";
-import { AuthToken, MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
+import {
+  AuthToken,
+  MasterKeyPair,
+  MasterKeyPassword,
+  MasterKeyPublic,
+} from "@biko-jobs/api-client";
 import { Page } from "../components/page.tsx";
 import { Spinner } from "../components/blob-loader.tsx";
 import {
@@ -25,7 +30,7 @@ import { assertNever } from "../assert-never.ts";
 type LoginResult = "ready" | "loading" | "wrong password";
 
 export function Login() {
-  const { loginState, navigationState, login, navigate } = useContext(AppContext);
+  const { loginState, navigationState, login, navigate, apiClient } = useContext(AppContext);
   const [loginResult, setLoginResult] = useState<LoginResult>("ready");
   const [pairingState, setPairingState] = useState<
     { masterKey: MasterKeyPair; requestId: string } | undefined
@@ -52,8 +57,8 @@ export function Login() {
   );
   function submit(key: MasterKeyPublic, password: string) {
     setLoginResult("loading");
-    key
-      .toKeyPair(password)
+    MasterKeyPassword.init(key, password)
+      .then((mkPassword) => apiClient.getMasterKeyPair(mkPassword))
       .then((keyPair) => {
         window.localStorage.setItem(`saved password/${keyPair.uuid}`, password);
         return keyPair;
@@ -171,7 +176,7 @@ export function KeyList({
 }: {
   keys: MasterKeyPublic[];
   selected: MasterKeyPublic | "ephemeral" | undefined;
-  connected: MasterKeyPublic | "ephemeral" | undefined;
+  connected: MasterKeyPair | "ephemeral" | undefined;
   onSelect: (key: MasterKeyPublic) => void;
 }) {
   return (

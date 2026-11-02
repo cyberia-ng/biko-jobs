@@ -5,10 +5,10 @@ import {
   Ed25519PublicKey,
   generateEd25519KeyPair,
   generateX25519KeyPair,
+  ScryptPassword,
   X25519PrivateKey,
   X25519PublicKey,
-  type EncryptedEd25519PrivateKey,
-  type EncryptedX25519PrivateKey,
+  type Salt,
 } from "@biko-jobs/api-client/crypto.ts";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 import type { Bytes } from "@biko-jobs/api-client/schemas.ts";
@@ -129,8 +129,32 @@ export class ApiClient {
   async listMasterKeys(): Promise<MasterKeyPublic[]> {
     const res = await apiFetch(this.baseUrl, ["master-keys"]);
     raiseForStatus(res);
-    const body = z.array(schemas.MasterKey).parse(res.body);
+    const body = z.array(schemas.MasterKeyPublic).parse(res.body);
     return Promise.all(body.map((k) => MasterKeyPublic.fromWireFormat(k)));
+  }
+
+  async getMasterKeyPair(password: MasterKeyPassword): Promise<MasterKeyPair> {
+    const res = await apiFetch(this.baseUrl, ["master-keys", password.uuid, "get-private"], {
+      method: "POST",
+      body: password.hash,
+    });
+    raiseForStatus(res);
+    const body = schemas.MasterKey.parse(res.body);
+    const mkPublic = await MasterKeyPublic.fromWireFormat(body);
+    const encryptionKeyPrivate = await X25519PrivateKey.import(
+      { type: "ciphertext", data: body.encryptionKeyPrivateEncrypted },
+      password.scryptPassword,
+    );
+    const signingKeyPrivate = await Ed25519PrivateKey.import(
+      { type: "ciphertext", data: body.signingKeyPrivateEncrypted },
+      password.scryptPassword,
+    );
+    return new MasterKeyPair({
+      publicKey: mkPublic,
+      password,
+      encryptionKeyPrivate: encryptionKeyPrivate,
+      signingKeyPrivate: signingKeyPrivate,
+    });
   }
 
   async addMasterKeyPair(keyPair: MasterKeyPair, auth: AuthToken): Promise<void> {
@@ -186,7 +210,7 @@ export class ApiClient {
     const jobsP = body.map(async ({ uuid, keys, number }) => {
       const encryptedKey = keys.get(masterKey.uuid)!;
       const key = await AESKey.decryptKey(
-        masterKey.encryptionPrivateKey,
+        masterKey.encryptionKeyPrivate,
         {
           type: "ciphertext",
           data: encryptedKey,
@@ -269,7 +293,7 @@ export class ApiClient {
               const mk = subscriber.getMasterKey(masterKeyUUID);
               if (mk === undefined) continue;
               jobKey = await AESKey.decryptKey(
-                mk.encryptionPrivateKey,
+                mk.encryptionKeyPrivate,
                 {
                   type: "ciphertext",
                   data: encryptedJobKey,
@@ -358,144 +382,118 @@ export class ApiClient {
   }
 }
 
-export class MasterKeyPublic {
-  name: string;
+export class MasterKeyPassword {
   uuid: string;
-  encryptionPublicKey: X25519PublicKey;
-  protected encryptionPrivateKeyEncrypted: EncryptedX25519PrivateKey;
-  signingPublicKey: Ed25519PublicKey;
-  protected signingPrivateKeyEncrypted: EncryptedEd25519PrivateKey;
-  constructor(opts: {
-    name: string;
-    uuid: string;
-    encryptionKey: {
-      public: X25519PublicKey;
-      privateEncrypted: EncryptedX25519PrivateKey;
-    };
-    signingKey: {
-      public: Ed25519PublicKey;
-      privateEncrypted: EncryptedEd25519PrivateKey;
-    };
-  }) {
-    this.name = opts.name;
+  scryptPassword: ScryptPassword;
+  hash: Bytes;
+  private constructor(opts: { uuid: string; password: ScryptPassword; hash: Bytes }) {
     this.uuid = opts.uuid;
-    this.encryptionPublicKey = opts.encryptionKey.public;
-    this.encryptionPrivateKeyEncrypted = opts.encryptionKey.privateEncrypted;
-    this.signingPublicKey = opts.signingKey.public;
-    this.signingPrivateKeyEncrypted = opts.signingKey.privateEncrypted;
+    this.scryptPassword = opts.password;
+    this.hash = opts.hash;
   }
 
-  static async fromWireFormat(mk: schemas.MasterKey): Promise<MasterKeyPublic> {
-    const encryptionPublicKey = await X25519PublicKey.import(mk.encryptionKey.public);
-    const signingPublicKey = await Ed25519PublicKey.import(mk.signingKey.public);
-    return new MasterKeyPublic({
-      name: mk.name,
-      uuid: mk.uuid,
-      encryptionKey: {
-        public: encryptionPublicKey,
-        privateEncrypted: {
-          type: "encrypted x25519 private key",
-          key: { type: "ciphertext", data: mk.encryptionKey.privateEncrypted },
-          salt: { type: "salt", data: mk.encryptionKey.salt },
-        },
-      },
-      signingKey: {
-        public: signingPublicKey,
-        privateEncrypted: {
-          type: "encrypted ed25519 private key",
-          key: { type: "ciphertext", data: mk.signingKey.privateEncrypted },
-          salt: { type: "salt", data: mk.signingKey.salt },
-        },
-      },
-    });
-  }
-
-  async toKeyPair(password: string): Promise<MasterKeyPair> {
-    const encryptionPrivateKey = await X25519PrivateKey.import(
-      this.encryptionPrivateKeyEncrypted,
-      password,
-    );
-    const signingPrivateKey = await Ed25519PrivateKey.import(
-      this.signingPrivateKeyEncrypted,
-      password,
-    );
-    return new MasterKeyPair({
-      uuid: this.uuid,
-      name: this.name,
-      encryptionKey: {
-        public: this.encryptionPublicKey,
-        privateEncrypted: this.encryptionPrivateKeyEncrypted,
-        private: encryptionPrivateKey,
-      },
-      signingKey: {
-        public: this.signingPublicKey,
-        privateEncrypted: this.signingPrivateKeyEncrypted,
-        private: signingPrivateKey,
-      },
-      password,
+  static async init(publicKey: MasterKeyPublic, password: string) {
+    const scryptPassword = await ScryptPassword.derive(password, publicKey.salt);
+    return new MasterKeyPassword({
+      uuid: publicKey.uuid,
+      password: scryptPassword,
+      hash: await scryptPassword.hash(),
     });
   }
 }
 
-export class MasterKeyPair extends MasterKeyPublic {
-  encryptionPrivateKey: X25519PrivateKey;
-  signingPrivateKey: Ed25519PrivateKey;
-  password: string;
+export class MasterKeyPublic {
+  name: string;
+  uuid: string;
+  salt: Salt;
+  encryptionPublicKey: X25519PublicKey;
+  signingPublicKey: Ed25519PublicKey;
   constructor(opts: {
     name: string;
     uuid: string;
-    encryptionKey: {
-      public: X25519PublicKey;
-      private: X25519PrivateKey;
-      privateEncrypted: EncryptedX25519PrivateKey;
-    };
-    signingKey: {
-      public: Ed25519PublicKey;
-      private: Ed25519PrivateKey;
-      privateEncrypted: EncryptedEd25519PrivateKey;
-    };
-    password: string;
+    salt: Salt;
+    encryptionKey: X25519PublicKey;
+    signingKey: Ed25519PublicKey;
   }) {
-    super(opts);
-    this.encryptionPrivateKey = opts.encryptionKey.private;
-    this.signingPrivateKey = opts.signingKey.private;
+    this.name = opts.name;
+    this.uuid = opts.uuid;
+    this.salt = opts.salt;
+    this.encryptionPublicKey = opts.encryptionKey;
+    this.signingPublicKey = opts.signingKey;
+  }
+
+  static async fromWireFormat(mk: schemas.MasterKeyPublic): Promise<MasterKeyPublic> {
+    const encryptionPublicKey = await X25519PublicKey.import(mk.encryptionKeyPublic);
+    const signingPublicKey = await Ed25519PublicKey.import(mk.signingKeyPublic);
+    return new MasterKeyPublic({
+      name: mk.name,
+      uuid: mk.uuid,
+      salt: { type: "salt", data: mk.password_salt },
+      encryptionKey: encryptionPublicKey,
+      signingKey: signingPublicKey,
+    });
+  }
+}
+
+export class MasterKeyPair {
+  publicKey: MasterKeyPublic;
+  encryptionKeyPrivate: X25519PrivateKey;
+  signingKeyPrivate: Ed25519PrivateKey;
+  password: MasterKeyPassword;
+  constructor(opts: {
+    publicKey: MasterKeyPublic;
+    password: MasterKeyPassword;
+    encryptionKeyPrivate: X25519PrivateKey;
+    signingKeyPrivate: Ed25519PrivateKey;
+  }) {
+    this.publicKey = opts.publicKey;
+    this.encryptionKeyPrivate = opts.encryptionKeyPrivate;
+    this.signingKeyPrivate = opts.signingKeyPrivate;
     this.password = opts.password;
   }
 
+  get uuid() {
+    return this.publicKey.uuid;
+  }
+
+  get name() {
+    return this.publicKey.name;
+  }
+
   static async generate(uuid: string, name: string, password: string) {
+    const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
     const encryptionKeyPair = await generateX25519KeyPair();
     const signingKeyPair = await generateEd25519KeyPair();
-    return new MasterKeyPair({
+    const publicKey = new MasterKeyPublic({
       name,
       uuid,
-      encryptionKey: {
-        public: encryptionKeyPair.publicKey,
-        private: encryptionKeyPair.privateKey,
-        privateEncrypted: await encryptionKeyPair.privateKey.export(password),
-      },
-      signingKey: {
-        public: signingKeyPair.publicKey,
-        private: signingKeyPair.privateKey,
-        privateEncrypted: await signingKeyPair.privateKey.export(password),
-      },
-      password,
+      salt,
+      encryptionKey: encryptionKeyPair.publicKey,
+      signingKey: signingKeyPair.publicKey,
+    });
+    const mkPassword = await MasterKeyPassword.init(publicKey, password);
+    return new MasterKeyPair({
+      publicKey,
+      encryptionKeyPrivate: encryptionKeyPair.privateKey,
+      signingKeyPrivate: signingKeyPair.privateKey,
+      password: mkPassword,
     });
   }
 
   async toWireFormat(): Promise<schemas.MasterKey> {
     return {
-      name: this.name,
-      uuid: this.uuid,
-      encryptionKey: {
-        public: await this.encryptionPublicKey.export(),
-        privateEncrypted: this.encryptionPrivateKeyEncrypted.key.data,
-        salt: this.encryptionPrivateKeyEncrypted.salt.data,
-      },
-      signingKey: {
-        public: await this.signingPublicKey.export(),
-        privateEncrypted: this.signingPrivateKeyEncrypted.key.data,
-        salt: this.signingPrivateKeyEncrypted.salt.data,
-      },
+      name: this.publicKey.name,
+      uuid: this.publicKey.uuid,
+      password_salt: this.publicKey.salt.data,
+      password_hash: this.password.hash,
+      encryptionKeyPublic: await this.publicKey.encryptionPublicKey.export(),
+      encryptionKeyPrivateEncrypted: (
+        await this.encryptionKeyPrivate.export(this.password.scryptPassword)
+      ).data,
+      signingKeyPublic: await this.publicKey.signingPublicKey.export(),
+      signingKeyPrivateEncrypted: (
+        await this.signingKeyPrivate.export(this.password.scryptPassword)
+      ).data,
     };
   }
 }
@@ -519,9 +517,9 @@ export class AuthToken {
       permissions: opts.permissions,
     };
     const packed = mpEncoder.encode(authorization);
-    const signed = await opts.masterKey.signingPrivateKey.sign(packed);
+    const signed = await opts.masterKey.signingKeyPrivate.sign(packed);
     const token: schemas.AuthToken = {
-      masterKeyId: opts.masterKey.uuid,
+      masterKeyId: opts.masterKey.publicKey.uuid,
       authorization,
       signature: signed.signature,
     };

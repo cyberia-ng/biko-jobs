@@ -1,4 +1,3 @@
-import { generateEd25519KeyPair, generateX25519KeyPair } from "@biko-jobs/api-client/crypto.ts";
 import type {
   JobEvent,
   Job,
@@ -8,7 +7,9 @@ import type {
   JobEvents,
   Bytes,
   JobBlob,
+  MasterKeyPublic,
 } from "@biko-jobs/api-client/schemas.ts";
+import { timingSafeEqual } from "crypto";
 import { readFileSync, readdirSync } from "fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -20,12 +21,12 @@ function statements(db: DatabaseSync) {
       `INSERT INTO master_keys (
         uuid,
         name,
+        password_salt,
+        password_hash,
         encryption_public_key,
         encryption_private_key_encrypted,
-        encryption_private_key_encryption_salt,
         signing_public_key,
-        signing_private_key_encrypted,
-        signing_private_key_encryption_salt
+        signing_private_key_encrypted
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
     ),
@@ -34,13 +35,22 @@ function statements(db: DatabaseSync) {
         id,
         name,
         uuid,
+        password_salt,
+        encryption_public_key,
+        signing_public_key
+      FROM master_keys;`,
+    ),
+    getMasterKey: db.prepare(
+      `SELECT
+        name,
+        password_salt,
+        password_hash,
         encryption_public_key,
         encryption_private_key_encrypted,
-        encryption_private_key_encryption_salt,
         signing_public_key,
-        signing_private_key_encrypted,
-        signing_private_key_encryption_salt
-      FROM master_keys;`,
+        signing_private_key_encrypted
+      FROM master_keys
+      WHERE uuid = ?;`,
     ),
     insertJob: db.prepare(
       `INSERT INTO jobs (uuid)
@@ -101,38 +111,17 @@ export class Database {
     this.statements = statements(this.db);
   }
 
-  async registerInitialMasterKey(name: string, password: string) {
-    const encryptionKeyPair = await generateX25519KeyPair();
-    const encryptionKeyPrivate = await encryptionKeyPair.privateKey.export(password);
-    const signingKeyPair = await generateEd25519KeyPair();
-    const signingKeyPrivate = await signingKeyPair.privateKey.export(password);
-    this.addMasterKey({
-      uuid: crypto.randomUUID(),
-      name,
-      encryptionKey: {
-        public: await encryptionKeyPair.publicKey.export(),
-        privateEncrypted: encryptionKeyPrivate.key.data,
-        salt: encryptionKeyPrivate.salt.data,
-      },
-      signingKey: {
-        public: await signingKeyPair.publicKey.export(),
-        privateEncrypted: signingKeyPrivate.key.data,
-        salt: signingKeyPrivate.salt.data,
-      },
-    });
-  }
-
   addMasterKey(key: MasterKey): void {
     try {
       this.statements.insertMasterKey.run(
         key.uuid,
         key.name,
-        key.encryptionKey.public,
-        key.encryptionKey.privateEncrypted,
-        key.encryptionKey.salt,
-        key.signingKey.public,
-        key.signingKey.privateEncrypted,
-        key.signingKey.salt,
+        key.password_salt,
+        key.password_hash,
+        key.encryptionKeyPublic,
+        key.encryptionKeyPrivateEncrypted,
+        key.signingKeyPublic,
+        key.signingKeyPrivateEncrypted,
       );
     } catch (e) {
       if ((e as any).errstr === "constraint failed") {
@@ -141,22 +130,33 @@ export class Database {
     }
   }
 
-  listMasterKeys(): MasterKey[] {
+  listMasterKeys(): MasterKeyPublic[] {
     const rows = this.statements.listMasterKeys.all();
     return rows.map((row) => ({
       name: row.name as string,
       uuid: row.uuid as string,
-      encryptionKey: {
-        public: row.encryption_public_key as Bytes,
-        privateEncrypted: row.encryption_private_key_encrypted as Bytes,
-        salt: row.encryption_private_key_encryption_salt as Bytes,
-      },
-      signingKey: {
-        public: row.signing_public_key as Bytes,
-        privateEncrypted: row.signing_private_key_encrypted as Bytes,
-        salt: row.signing_private_key_encryption_salt as Bytes,
-      },
+      password_salt: row.password_salt as Bytes,
+      encryptionKeyPublic: row.encryption_public_key as Bytes,
+      signingKeyPublic: row.signing_public_key as Bytes,
     }));
+  }
+
+  getMasterKey(uuid: string, hash: Bytes): MasterKey | undefined {
+    const row = this.statements.getMasterKey.get(uuid);
+    if (row === undefined) throw "not found";
+    if (!timingSafeEqual(row.password_hash as Bytes, hash)) {
+      throw "bad hash";
+    }
+    return {
+      uuid: uuid,
+      name: row.name as string,
+      password_salt: row.password_salt as Bytes,
+      password_hash: hash,
+      encryptionKeyPublic: row.encryption_public_key as Bytes,
+      encryptionKeyPrivateEncrypted: row.encryption_private_key_encrypted as Bytes,
+      signingKeyPublic: row.signing_public_key as Bytes,
+      signingKeyPrivateEncrypted: row.signing_private_key_encrypted as Bytes,
+    };
   }
 
   addJob(job: Job): number {

@@ -2,32 +2,22 @@ import "temporal-polyfill/global";
 import { createApp } from "@biko-jobs/api/app.ts";
 import type { Server } from "node:http";
 import { ClientChannel, ServerChannel } from "@biko-jobs/api-client/pairing.ts";
-import { ApiClient, AuthToken, MasterKeyPair } from "@biko-jobs/api-client";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { AuthToken } from "@biko-jobs/api-client";
+import { mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
+import * as schemas from "@biko-jobs/api-client/schemas.ts";
 
 describe("pairing", () => {
   let listener: Server;
   let port: number;
   let serverChannel: ServerChannel;
   let clientChannel: ClientChannel;
-  let masterKey: MasterKeyPair;
-  let authToken: AuthToken;
-  let client: ApiClient;
 
   beforeEach(async () => {
     const app = await createApp();
     port = Math.round(Math.random() * (65535 - 1024) + 1024);
     listener = await new Promise((res) => {
       const server = app.listen(port, () => res(server));
-    });
-    client = new ApiClient(`http://localhost:${port}`);
-    const mks = await client.listMasterKeys();
-    const mkPublic = mks.find((mk) => mk.name === "some name")!;
-    masterKey = await mkPublic.toKeyPair("some password");
-    authToken = await AuthToken.init({
-      masterKey,
-      expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
-      permissions: new Set(["add master key", "write jobs"]),
     });
   });
 
@@ -39,7 +29,17 @@ describe("pairing", () => {
   });
 
   test("it works", async () => {
-    const approve = async (receivedClientFingerprint: string) => {
+    const authToken = AuthToken.import(
+      mpEncoder.encode({
+        masterKeyId: crypto.randomUUID(),
+        authorization: {
+          expiry: new Date().toISOString(),
+          permissions: new Set(["add master key", "write jobs"]),
+        },
+        signature: new Uint8Array([42]),
+      } satisfies schemas.AuthToken),
+    );
+    const approve = async (receivedClientFingerprint: string): Promise<AuthToken | "rejected"> => {
       if (clientChannel.fingerprint === receivedClientFingerprint) {
         return authToken;
       } else {

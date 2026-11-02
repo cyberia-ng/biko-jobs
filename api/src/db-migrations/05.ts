@@ -30,12 +30,12 @@ export async function dataMigration5(db: DatabaseSync) {
       `INSERT INTO master_keys (
         uuid,
         name,
+        password_salt,
+        password_hash,
         encryption_public_key,
         encryption_private_key_encrypted,
-        encryption_private_key_encryption_salt,
         signing_public_key,
-        signing_private_key_encrypted,
-        signing_private_key_encryption_salt
+        signing_private_key_encrypted
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id;`,
@@ -88,19 +88,25 @@ export async function dataMigration5(db: DatabaseSync) {
       const newPassword = await rl.question(
         `New password for master key "${masterKeyName as string}": `,
       );
+      const newSalt: newCrypto.Salt = {
+        type: "salt",
+        data: crypto.getRandomValues(new Uint8Array(16)),
+      };
+      const newPasswordScrypt = await newCrypto.ScryptPassword.derive(newPassword, newSalt);
       const newEncryptionPrivKeyEncrypted =
-        await newEncryptionKeyPair.privateKey.export(newPassword);
-      const newSigningPrivKeyEncrypted = await newSigningKeyPair.privateKey.export(newPassword);
+        await newEncryptionKeyPair.privateKey.export(newPasswordScrypt);
+      const newSigningPrivKeyEncrypted =
+        await newSigningKeyPair.privateKey.export(newPasswordScrypt);
       const newKeyUUID = crypto.randomUUID();
       const { id: newMasterKeyId } = insertNewMasterKey.get(
         newKeyUUID,
         masterKeyName + "-new",
+        newSalt.data,
+        await newPasswordScrypt.hash(),
         await newEncryptionKeyPair.publicKey.export(),
-        newEncryptionPrivKeyEncrypted.key.data,
-        newEncryptionPrivKeyEncrypted.salt.data,
+        newEncryptionPrivKeyEncrypted.data,
         await newSigningKeyPair.publicKey.export(),
-        newSigningPrivKeyEncrypted.key.data,
-        newSigningPrivKeyEncrypted.salt.data,
+        newSigningPrivKeyEncrypted.data,
       )!;
 
       const jobKeyRows = selectJobKeysByMasterKey.all(oldMasterKeyId as number);

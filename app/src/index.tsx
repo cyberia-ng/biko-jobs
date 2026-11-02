@@ -26,7 +26,7 @@ import { assertNever } from "./assert-never.ts";
 import { Export } from "./screens/export.tsx";
 import { useHashLocation } from "./use-hash-location.ts";
 import type { State as NavigationState } from "./navigation-state.ts";
-import { ApiClient } from "@biko-jobs/api-client";
+import { ApiClient, MasterKeyPassword } from "@biko-jobs/api-client";
 import { initialState as initialLoginState, reducer as loginReducer } from "./login-state.ts";
 import { Login } from "./screens/login.tsx";
 import { Archive } from "./screens/archive.tsx";
@@ -113,11 +113,11 @@ function App({ apiClient }: { apiClient: ApiClient }) {
       if (masterKey === undefined) return;
       withLoading(
         "dev autologin",
-        masterKey
-          .toKeyPair("some password")
+        MasterKeyPassword.init(masterKey, "some password")
+          .then((mkPassword) => apiClient.getMasterKeyPair(mkPassword))
           .then((mk) => dispatchLoginState({ type: "log in with key pair", masterKey: mk })),
       ).catch(console.error);
-    }, [loginState, withLoading]);
+    }, [apiClient, loginState, withLoading]);
   }
 
   const context: AppContextT = {
@@ -148,6 +148,7 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     navigate,
     addNavigationHook,
     refresh,
+    apiClient,
   };
 
   let screen: ReactNode;

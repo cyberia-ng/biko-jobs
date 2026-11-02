@@ -6,16 +6,17 @@ import express, {
 } from "express";
 import type { Database } from "./database.ts";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
-import type { z } from "zod";
+import { z } from "zod";
 import {
   JobEvent,
   Job,
   JobList,
   JobUUIDs,
-  MasterKey,
   JobEvents,
   JobBlob,
   SocketEvent,
+  Bytes,
+  MasterKey,
 } from "@biko-jobs/api-client/schemas.ts";
 import { verifier } from "./verification.ts";
 
@@ -73,6 +74,24 @@ export function addRoutes(
   app.get("/master-keys", (_req, res) => {
     const keys = db.listMasterKeys();
     res.status(200).send(keys);
+  });
+
+  app.post("/master-keys/:uuid/get-private", msgPackBody(Bytes), (req, res) => {
+    try {
+      const key = db.getMasterKey(req.params.uuid as string, req.body as Bytes);
+      res.status(200).send(key);
+    } catch (e) {
+      switch (e) {
+        case "not found":
+          res.status(404).send();
+          return;
+        case "bad hash":
+          res.status(403).send();
+          return;
+        default:
+          throw e;
+      }
+    }
   });
 
   app.put("/jobs/:uuid", verifier(db, "write jobs"), msgPackBody(Job), (req, res) => {

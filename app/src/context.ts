@@ -2,7 +2,7 @@ import { createContext } from "react";
 import type { State as ServiceState } from "./service-state/state.ts";
 import type { JobAction } from "./service-state/action.ts";
 import type { State as NavigationState } from "./navigation-state.ts";
-import type { Bytes } from "@biko-jobs/api-client";
+import type { ApiClient, Bytes } from "@biko-jobs/api-client";
 import type { Action as LoginAction, State as LoginState } from "./login-state.ts";
 import type { addNavigationHook } from "./use-hash-location.ts";
 
@@ -21,5 +21,6 @@ export type AppContextT = {
   navigate: (state: NavigationState) => void;
   addNavigationHook: typeof addNavigationHook;
   refresh: () => void;
+  apiClient: ApiClient;
 };
 export const AppContext = createContext<AppContextT>(null as any);

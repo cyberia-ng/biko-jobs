@@ -1,0 +1,2 @@
+alter table master_keys drop column encryption_private_key_encryption_salt;
+alter table master_keys drop column signing_private_key_encryption_salt;

@@ -3,19 +3,19 @@ import { z } from "zod";
 export const Bytes = z.instanceof(Uint8Array);
 export type Bytes = z.infer<typeof Bytes>;
 
-export const MasterKey = z.object({
+export const MasterKeyPublic = z.object({
   uuid: z.uuidv4(),
   name: z.string(),
-  encryptionKey: z.object({
-    public: Bytes,
-    privateEncrypted: Bytes,
-    salt: Bytes,
-  }),
-  signingKey: z.object({
-    public: Bytes,
-    privateEncrypted: Bytes,
-    salt: Bytes,
-  }),
+  password_salt: Bytes,
+  encryptionKeyPublic: Bytes,
+  signingKeyPublic: Bytes,
+});
+export type MasterKeyPublic = z.infer<typeof MasterKeyPublic>;
+
+export const MasterKey = MasterKeyPublic.extend({
+  password_hash: Bytes,
+  encryptionKeyPrivateEncrypted: Bytes,
+  signingKeyPrivateEncrypted: Bytes,
 });
 export type MasterKey = z.infer<typeof MasterKey>;
 
