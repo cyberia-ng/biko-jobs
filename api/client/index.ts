@@ -393,7 +393,11 @@ export class MasterKeyPassword {
   }
 
   static async init(publicKey: MasterKeyPublic, password: string) {
-    const scryptPassword = await ScryptPassword.derive(password, publicKey.salt);
+    const scryptPassword = await ScryptPassword.derive(
+      password,
+      publicKey.passwordSalt,
+      publicKey.passwordHardness,
+    );
     return new MasterKeyPassword({
       uuid: publicKey.uuid,
       password: scryptPassword,
@@ -405,19 +409,22 @@ export class MasterKeyPassword {
 export class MasterKeyPublic {
   name: string;
   uuid: string;
-  salt: Salt;
+  passwordSalt: Salt;
+  passwordHardness: number;
   encryptionPublicKey: X25519PublicKey;
   signingPublicKey: Ed25519PublicKey;
   constructor(opts: {
     name: string;
     uuid: string;
-    salt: Salt;
+    passwordSalt: Salt;
+    passwordHardness: number;
     encryptionKey: X25519PublicKey;
     signingKey: Ed25519PublicKey;
   }) {
     this.name = opts.name;
     this.uuid = opts.uuid;
-    this.salt = opts.salt;
+    this.passwordSalt = opts.passwordSalt;
+    this.passwordHardness = opts.passwordHardness;
     this.encryptionPublicKey = opts.encryptionKey;
     this.signingPublicKey = opts.signingKey;
   }
@@ -428,7 +435,8 @@ export class MasterKeyPublic {
     return new MasterKeyPublic({
       name: mk.name,
       uuid: mk.uuid,
-      salt: { type: "salt", data: mk.password_salt },
+      passwordSalt: { type: "salt", data: mk.passwordSalt },
+      passwordHardness: mk.passwordHardness,
       encryptionKey: encryptionPublicKey,
       signingKey: signingPublicKey,
     });
@@ -460,14 +468,15 @@ export class MasterKeyPair {
     return this.publicKey.name;
   }
 
-  static async generate(uuid: string, name: string, password: string) {
+  static async generate(uuid: string, name: string, password: string, hardness: number = 16) {
     const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
     const encryptionKeyPair = await generateX25519KeyPair();
     const signingKeyPair = await generateEd25519KeyPair();
     const publicKey = new MasterKeyPublic({
       name,
       uuid,
-      salt,
+      passwordSalt: salt,
+      passwordHardness: hardness,
       encryptionKey: encryptionKeyPair.publicKey,
       signingKey: signingKeyPair.publicKey,
     });
@@ -484,8 +493,9 @@ export class MasterKeyPair {
     return {
       name: this.publicKey.name,
       uuid: this.publicKey.uuid,
-      password_salt: this.publicKey.salt.data,
-      password_hash: this.password.hash,
+      passwordSalt: this.publicKey.passwordSalt.data,
+      passwordHardness: this.publicKey.passwordHardness,
+      passwordHash: this.password.hash,
       encryptionKeyPublic: await this.publicKey.encryptionPublicKey.export(),
       encryptionKeyPrivateEncrypted: (
         await this.encryptionKeyPrivate.export(this.password.scryptPassword)

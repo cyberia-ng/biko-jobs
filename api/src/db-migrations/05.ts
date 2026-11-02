@@ -32,12 +32,13 @@ export async function dataMigration5(db: DatabaseSync) {
         name,
         password_salt,
         password_hash,
+        password_hardness,
         encryption_public_key,
         encryption_private_key_encrypted,
         signing_public_key,
         signing_private_key_encrypted
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id;`,
     );
     const insertJobKey = db.prepare(
@@ -92,7 +93,12 @@ export async function dataMigration5(db: DatabaseSync) {
         type: "salt",
         data: crypto.getRandomValues(new Uint8Array(16)),
       };
-      const newPasswordScrypt = await newCrypto.ScryptPassword.derive(newPassword, newSalt);
+      const hardness = 17;
+      const newPasswordScrypt = await newCrypto.ScryptPassword.derive(
+        newPassword,
+        newSalt,
+        hardness,
+      );
       const newEncryptionPrivKeyEncrypted =
         await newEncryptionKeyPair.privateKey.export(newPasswordScrypt);
       const newSigningPrivKeyEncrypted =
@@ -103,6 +109,7 @@ export async function dataMigration5(db: DatabaseSync) {
         masterKeyName + "-new",
         newSalt.data,
         await newPasswordScrypt.hash(),
+        hardness,
         await newEncryptionKeyPair.publicKey.export(),
         newEncryptionPrivKeyEncrypted.data,
         await newSigningKeyPair.publicKey.export(),

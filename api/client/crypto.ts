@@ -19,8 +19,11 @@ export class ScryptPassword {
     this.salt = salt;
   }
 
-  static async derive(password: string, salt: Salt) {
-    const bytes = await scryptAsync(password, salt.data, { N: 2 ** 18, r: 8, p: 1 });
+  static async derive(password: string, salt: Salt, hardness: number) {
+    if (!Number.isSafeInteger(hardness) || hardness < 16 || hardness > 24) {
+      throw new Error("hardness must be an integer in the range [16, 24]");
+    }
+    const bytes = await scryptAsync(password, salt.data, { N: 2 ** hardness, r: 8, p: 1 });
     return new ScryptPassword(new Uint8Array(bytes), salt);
   }
 

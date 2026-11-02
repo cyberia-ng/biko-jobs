@@ -23,12 +23,13 @@ function statements(db: DatabaseSync) {
         name,
         password_salt,
         password_hash,
+        password_hardness,
         encryption_public_key,
         encryption_private_key_encrypted,
         signing_public_key,
         signing_private_key_encrypted
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     ),
     listMasterKeys: db.prepare(
       `SELECT
@@ -36,6 +37,7 @@ function statements(db: DatabaseSync) {
         name,
         uuid,
         password_salt,
+        password_hardness,
         encryption_public_key,
         signing_public_key
       FROM master_keys;`,
@@ -45,6 +47,7 @@ function statements(db: DatabaseSync) {
         name,
         password_salt,
         password_hash,
+        password_hardness,
         encryption_public_key,
         encryption_private_key_encrypted,
         signing_public_key,
@@ -116,8 +119,9 @@ export class Database {
       this.statements.insertMasterKey.run(
         key.uuid,
         key.name,
-        key.password_salt,
-        key.password_hash,
+        key.passwordSalt,
+        key.passwordHash,
+        key.passwordHardness,
         key.encryptionKeyPublic,
         key.encryptionKeyPrivateEncrypted,
         key.signingKeyPublic,
@@ -135,7 +139,8 @@ export class Database {
     return rows.map((row) => ({
       name: row.name as string,
       uuid: row.uuid as string,
-      password_salt: row.password_salt as Bytes,
+      passwordSalt: row.password_salt as Bytes,
+      passwordHardness: row.password_hardness as number,
       encryptionKeyPublic: row.encryption_public_key as Bytes,
       signingKeyPublic: row.signing_public_key as Bytes,
     }));
@@ -150,8 +155,9 @@ export class Database {
     return {
       uuid: uuid,
       name: row.name as string,
-      password_salt: row.password_salt as Bytes,
-      password_hash: hash,
+      passwordSalt: row.password_salt as Bytes,
+      passwordHash: hash,
+      passwordHardness: row.password_hardness as number,
       encryptionKeyPublic: row.encryption_public_key as Bytes,
       encryptionKeyPrivateEncrypted: row.encryption_private_key_encrypted as Bytes,
       signingKeyPublic: row.signing_public_key as Bytes,

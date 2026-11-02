@@ -64,7 +64,8 @@ describe("api client", () => {
       expect(keys).toHaveLength(1);
       const mk = keys[0]!;
       expect(mk.name).toBe("some name");
-      expect(mk.salt).toStrictEqual(masterKey.publicKey.salt);
+      expect(mk.passwordSalt).toStrictEqual(masterKey.publicKey.passwordSalt);
+      expect(mk.passwordHardness).toStrictEqual(masterKey.publicKey.passwordHardness);
       expect(await mk.encryptionPublicKey.export()).toEqual(
         await masterKey.publicKey.encryptionPublicKey.export(),
       );

@@ -24,16 +24,16 @@ describe("crypto", () => {
   describe("scrypt", () => {
     test("produces same data on same input", async () => {
       const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-      const scryptA = await ScryptPassword.derive("password", salt);
+      const scryptA = await ScryptPassword.derive("password", salt, 16);
       const hkdfA = await scryptA.hkdf("some context", 256);
-      const scryptB = await ScryptPassword.derive("password", salt);
+      const scryptB = await ScryptPassword.derive("password", salt, 16);
       const hkdfB = await scryptB.hkdf("some context", 256);
       expect(hkdfA).toStrictEqual(hkdfB);
     });
 
     test("hkdf has right length", async () => {
       const salt: Salt = { type: "salt", data: crypto.getRandomValues(new Uint8Array(16)) };
-      const scrypt = await ScryptPassword.derive("password", salt);
+      const scrypt = await ScryptPassword.derive("password", salt, 16);
       const hkdf = await scrypt.hkdf("some context", 256);
       expect(hkdf.data).toHaveLength(256 / 8);
     });
@@ -88,10 +88,14 @@ describe("crypto", () => {
     });
 
     test("import/export private key", async () => {
-      const password = await ScryptPassword.derive("password", {
-        type: "salt",
-        data: crypto.getRandomValues(new Uint8Array(16)),
-      });
+      const password = await ScryptPassword.derive(
+        "password",
+        {
+          type: "salt",
+          data: crypto.getRandomValues(new Uint8Array(16)),
+        },
+        16,
+      );
       const key = await generateEd25519KeyPair();
       const exported = await key.privateKey.export(password);
       const roundtripped = await Ed25519PrivateKey.import(exported, password);
@@ -125,10 +129,14 @@ describe("crypto", () => {
     });
 
     test("import/export private key", async () => {
-      const password = await ScryptPassword.derive("password", {
-        type: "salt",
-        data: crypto.getRandomValues(new Uint8Array(16)),
-      });
+      const password = await ScryptPassword.derive(
+        "password",
+        {
+          type: "salt",
+          data: crypto.getRandomValues(new Uint8Array(16)),
+        },
+        16,
+      );
       const key = await generateX25519KeyPair();
       const exported = await key.privateKey.export(password);
       const roundtripped = await X25519PrivateKey.import(exported, password);
