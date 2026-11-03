@@ -51,13 +51,6 @@ export type JobEvents = z.infer<typeof JobEvents>;
 export const JobUUIDs = z.set(z.uuidv4());
 export type JobUUIDs = z.infer<typeof JobUUIDs>;
 
-export const JobBlob = z.object({
-  job: z.uuidv4(),
-  uuid: z.uuidv4(),
-  data: Bytes,
-});
-export type JobBlob = z.infer<typeof JobBlob>;
-
 export const EventStreamMessage = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("job event"),

@@ -6,7 +6,6 @@ import type {
   MasterKey,
   JobEvents,
   Bytes,
-  JobBlob,
   MasterKeyPublic,
 } from "@biko-jobs/api-client/schemas.ts";
 import { timingSafeEqual } from "crypto";
@@ -87,11 +86,6 @@ function statements(db: DatabaseSync) {
       `INSERT INTO job_events (job, uuid, data)
       SELECT id, ?, ? FROM jobs WHERE jobs.uuid = ?;`,
     ),
-    insertBlob: db.prepare(
-      `INSERT INTO job_blobs (job, uuid, data)
-      SELECT id, ?, ? FROM jobs WHERE jobs.uuid = ?;`,
-    ),
-    getBlob: db.prepare(`SELECT data FROM job_blobs WHERE uuid = ?;`),
     getMasterSigningKey: db.prepare(`SELECT signing_public_key FROM master_keys WHERE uuid = ?;`),
   };
 }
@@ -227,21 +221,6 @@ export class Database {
     }
   }
 
-  addBlob(blob: JobBlob) {
-    try {
-      this.statements.insertBlob.run(blob.uuid, blob.data, blob.job);
-    } catch (e) {
-      if ((e as any).errstr === "constraint failed") {
-        throw "already exists";
-      } else throw e;
-    }
-  }
-
-  getBlob(uuid: string): Bytes | undefined {
-    const row = this.statements.getBlob.get(uuid);
-    return row?.data as Bytes | undefined;
-  }
-
   getMasterSigningKey(uuid: string): Bytes | undefined {
     const row = this.statements.getMasterSigningKey.get(uuid);
     if (row === undefined) return undefined;
@@ -251,27 +230,30 @@ export class Database {
 
 export async function migrateDb(
   db: DatabaseSync,
-  dataMigrations: Record<number, (db: DatabaseSync) => Promise<void>>,
+  dataMigrations: Record<
+    number,
+    { pre?: (db: DatabaseSync) => Promise<void>; post?: (db: DatabaseSync) => Promise<void> }
+  >,
 ) {
   db.exec("PRAGMA foreign_keys = on;");
   const version = dbVersion(db);
   const migrations = getMigrations();
   for (const migration of migrations) {
     if (migration.num <= version) continue;
+    const dataMigration = dataMigrations[migration.num];
     db.exec("BEGIN TRANSACTION;");
     try {
+      await dataMigration?.pre?.(db);
       db.exec(migration.migration);
       db.exec(`PRAGMA user_version = ${migration.num};`);
-      const dataMigration = dataMigrations[migration.num];
-      if (dataMigration !== undefined) {
-        await dataMigration(db);
-      }
+      await dataMigration?.post?.(db);
       db.exec("COMMIT;");
     } catch (e) {
       db.exec("ROLLBACK;");
       throw new Error(`migration failed: ${migration.filename}; ${inspect(e)}`);
     }
   }
+  db.exec("VACUUM;");
 }
 
 function getMigrations() {

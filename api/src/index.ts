@@ -16,7 +16,8 @@ async function main() {
       );
     }
   }
-  const server = await createApp({ sqlitePath, initialMasterKey });
+  const blobDirectory = process.env["BLOB_DIRECTORY"];
+  const server = await createApp({ sqlitePath, initialMasterKey, blobDirectory });
   server.listen(3000, () => {
     console.log("Server is running on port 3000");
   });

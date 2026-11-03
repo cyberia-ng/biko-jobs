@@ -13,12 +13,12 @@ import {
   JobList,
   JobUUIDs,
   JobEvents,
-  JobBlob,
   SocketEvent,
   Bytes,
   MasterKey,
 } from "@biko-jobs/api-client/schemas.ts";
 import { verifier } from "./verification.ts";
+import type { BlobStore } from "./blob-store.ts";
 
 function msgPackBody(schema: z.ZodType, limit?: number) {
   return (req: Request, res: Response, next: NextFunction) =>
@@ -39,9 +39,10 @@ function msgPackBody(schema: z.ZodType, limit?: number) {
 export function addRoutes(
   app: ReturnType<typeof express>,
   db: Database,
+  blobStore: BlobStore,
   onEvent: (event: SocketEvent) => void,
 ) {
-  app.use((req, res, next) => {
+  app.use((_req, res, next) => {
     const originalSend = res.send.bind(res);
     res.send = (body: unknown) => {
       if (body === undefined) {
@@ -136,28 +137,32 @@ export function addRoutes(
     }
   });
 
-  app.post(
-    "/blobs",
+  app.put(
+    "/blobs/:uuid",
     verifier(db, "write jobs"),
-    msgPackBody(JobBlob, 15 * 1024 * 1024),
-    (req, res) => {
-      try {
-        db.addBlob(req.body as JobBlob);
-        res.status(201).send();
-      } catch (e) {
-        if (e === "already exists") res.status(409).send();
-        else throw e;
-      }
+    msgPackBody(Bytes, 15 * 1024 * 1024),
+    (req, res, next) => {
+      blobStore
+        .put(req.params.uuid as string, req.body as Bytes)
+        .then(() => res.status(201).send())
+        .catch((e) => {
+          if (e === "already exists") res.status(409).send();
+          else next(e);
+        });
     },
   );
 
-  app.get("/blobs/:uuid", (req, res) => {
-    const blob = db.getBlob(req.params.uuid);
-    if (blob === undefined) {
-      res.status(404).send();
-    } else {
-      res.status(200).send(blob);
-    }
+  app.get("/blobs/:uuid", (req, res, next) => {
+    blobStore
+      .get(req.params.uuid)
+      .then((blob) => {
+        if (blob === undefined) {
+          res.status(404).send();
+        } else {
+          res.status(200).send(blob);
+        }
+      })
+      .catch(next);
   });
 
   app.use(((err: any, _req, _res, next) => {

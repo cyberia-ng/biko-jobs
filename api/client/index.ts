@@ -260,9 +260,9 @@ export class ApiClient {
 
   async putBlob(blob: JobBlob, auth: AuthToken) {
     const encrypted = await blob.job.key.encrypt({ type: "plaintext", data: blob.data });
-    const res = await apiFetch(this.baseUrl, ["blobs"], {
-      method: "POST",
-      body: { job: blob.job.uuid, uuid: blob.uuid, data: encrypted.data } satisfies schemas.JobBlob,
+    const res = await apiFetch(this.baseUrl, ["blobs", blob.uuid], {
+      method: "PUT",
+      body: encrypted.data,
       auth,
     });
     if (res.status === 409) throw new ClientError({ type: "blob put conflict", uuid: blob.uuid });

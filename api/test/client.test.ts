@@ -14,6 +14,9 @@ import { expect, test, describe, beforeEach, afterEach, beforeAll } from "vitest
 import type { Server } from "node:http";
 import * as schemas from "@biko-jobs/api-client/schemas.ts";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 describe("api client", () => {
   let masterKey: MasterKeyPair;
@@ -21,13 +24,15 @@ describe("api client", () => {
   let client: ApiClient;
   let listener: Server;
   let port: number;
+  let blobDirectory: string;
 
   beforeAll(async () => {
     masterKey = await MasterKeyPair.generate(crypto.randomUUID(), "some name", "some password");
   });
 
   beforeEach(async () => {
-    const app = await createApp({ initialMasterKey: masterKey });
+    blobDirectory = mkdtempSync(join(tmpdir(), "biko-jobs-test-"));
+    const app = await createApp({ initialMasterKey: masterKey, blobDirectory });
     port = Math.round(Math.random() * (65535 - 1024) + 1024);
     listener = await new Promise((res) => {
       const server = app.listen(port, () => res(server));
@@ -43,6 +48,7 @@ describe("api client", () => {
   afterEach(async () => {
     await new Promise<void>((res) => listener.close(() => res()));
     listener.closeAllConnections();
+    rmSync(blobDirectory, { recursive: true });
   });
 
   function utf8(s: string): Bytes {
