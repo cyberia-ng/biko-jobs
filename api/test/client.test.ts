@@ -202,6 +202,14 @@ describe("api client", () => {
       expect(events.size).toBe(1);
       expect(events.get(job1.uuid)).toStrictEqual([event1]);
     });
+
+    test("get events for empty job", async () => {
+      const job = await Job.generate(crypto.randomUUID());
+      await client.addJob(job, [masterKey.publicKey], authToken);
+      const events = await client.getEventsByJobs([job]);
+      expect(events.size).toBe(1);
+      expect(events.get(job.uuid)).toStrictEqual([]);
+    });
   });
 
   describe("blobs", () => {

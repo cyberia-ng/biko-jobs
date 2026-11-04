@@ -194,11 +194,20 @@ export class Database {
 
   getEventsByJobs(jobs: JobUUIDs): JobEvents {
     const rows = this.statements.getEvents.all(JSON.stringify(Array.from(jobs)));
-    return rows.map((row) => ({
-      job: row.job_uuid as string,
-      uuid: row.event_uuid as string,
-      data: row.event_data as Bytes,
-    }));
+    const events: JobEvent[] = [];
+    const emptyJobs: Set<string> = new Set();
+    for (const { job_uuid, event_uuid, event_data } of rows) {
+      if (event_uuid === null || event_data === null) {
+        emptyJobs.add(job_uuid as string);
+      } else {
+        events.push({
+          job: job_uuid as string,
+          uuid: event_uuid as string,
+          data: event_data as Bytes,
+        });
+      }
+    }
+    return { events, emptyJobs };
   }
 
   getJobs(): JobList {

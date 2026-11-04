@@ -45,7 +45,7 @@ export const SocketEvent = z.discriminatedUnion("type", [
 ]);
 export type SocketEvent = z.infer<typeof SocketEvent>;
 
-export const JobEvents = z.array(JobEvent);
+export const JobEvents = z.object({ events: z.array(JobEvent), emptyJobs: z.set(z.uuidv4()) });
 export type JobEvents = z.infer<typeof JobEvents>;
 
 export const JobUUIDs = z.set(z.uuidv4());

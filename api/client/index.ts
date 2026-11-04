@@ -13,7 +13,6 @@ import {
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 import type { Bytes } from "@biko-jobs/api-client/schemas.ts";
 import * as schemas from "@biko-jobs/api-client/schemas.ts";
-import groupBy from "lodash/groupBy.js";
 import pick from "lodash/pick.js";
 import { z } from "zod";
 
@@ -231,15 +230,26 @@ export class ApiClient {
     raiseForStatus(res);
     const responseBody = schemas.JobEvents.parse(res.body);
     const jobsMap = new Map(jobs.map((job) => [job.uuid, job]));
-    const eventPs = responseBody.map(async (event) => {
+    const eventPs = responseBody.events.map(async (event) => {
       const job = jobsMap.get(event.job)!;
       const decrypted = await job.key.decrypt({ type: "ciphertext", data: event.data });
       const decoded = mpDecoder.decode(decrypted.data);
       return { uuid: event.uuid, data: decoded, job } satisfies JobEvent;
     });
     const events = await Promise.all(eventPs);
-    const jobsEventsDict = groupBy(events, (event) => event.job.uuid);
-    return new Map(Object.entries(jobsEventsDict));
+    const out: Map<string, JobEvent[]> = new Map();
+    for (const event of events) {
+      let jobEvents: JobEvent[] | undefined = out.get(event.job.uuid);
+      if (jobEvents === undefined) {
+        jobEvents = [];
+        out.set(event.job.uuid, jobEvents);
+      }
+      jobEvents.push(event);
+    }
+    for (const emptyJob of responseBody.emptyJobs) {
+      out.set(emptyJob, []);
+    }
+    return out;
   }
 
   async addEvent(event: JobEvent, auth: AuthToken) {
