@@ -41,7 +41,7 @@ export class Store {
 
   private async getJobs() {
     if (this.loginState.type === "master key pair") {
-      const jobs = await this.client.getJobs(this.loginState.masterKey);
+      const jobs = await this.client.listJobs(this.loginState.masterKey, await this.getAuthToken());
       for (const job of jobs) {
         this.jobs.set(job.uuid, job);
         this.reduce({ type: "create job", uuid: job.uuid, number: job.number });
@@ -65,7 +65,10 @@ export class Store {
   }
 
   private async getJobEvents() {
-    const events = await this.client.getEventsByJobs(Array.from(this.jobs.values()));
+    const events = await this.client.getEventsByJobs(
+      Array.from(this.jobs.values()),
+      await this.getAuthToken(),
+    );
     for (const jobEvents of events.values()) {
       for (const event of jobEvents) {
         const jobAction = event.data as AnyVersionJobAction;
@@ -207,7 +210,7 @@ export class Store {
     if (job === undefined) {
       return undefined;
     }
-    const blob = await this.client.getBlob(blobUUID, job);
+    const blob = await this.client.getBlob(blobUUID, job, await this.getAuthToken());
     return blob?.data;
   }
 
@@ -230,7 +233,7 @@ async function generateAuthToken(masterKey: MasterKeyPair): Promise<AuthToken> {
   return await AuthToken.init({
     masterKey,
     expiry: Temporal.Now.instant().add(AUTH_TOKEN_LIFETIME),
-    permissions: new Set(["write jobs", "add master key"]),
+    permissions: new Set(["list jobs", "create jobs", "read job data", "write job data"]),
   });
 }
 

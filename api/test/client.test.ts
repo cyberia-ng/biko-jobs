@@ -1,13 +1,13 @@
 import {
   ApiClient,
   ClientError,
-  type JobBlob,
   type JobEvent,
   MasterKeyPair,
   type Bytes,
   Job,
   NumberedJob,
   AuthToken,
+  type JobBlob,
 } from "@biko-jobs/api-client";
 import { createApp } from "@biko-jobs/api/app.ts";
 import { expect, test, describe, beforeEach, afterEach, beforeAll } from "vitest";
@@ -41,7 +41,13 @@ describe("api client", () => {
     authToken = await AuthToken.init({
       masterKey,
       expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
-      permissions: new Set(["add master key", "write jobs"]),
+      permissions: new Set([
+        "add master key",
+        "list jobs",
+        "create jobs",
+        "read job data",
+        "write job data",
+      ]),
     });
   });
 
@@ -136,10 +142,10 @@ describe("api client", () => {
   });
 
   describe("jobs", () => {
-    test("get jobs", async () => {
+    test("list jobs", async () => {
       const job = await Job.generate(crypto.randomUUID());
       await client.addJob(job, [masterKey.publicKey], authToken);
-      const jobs = await client.getJobs(masterKey);
+      const jobs = await client.listJobs(masterKey, authToken);
       expect(jobs).toStrictEqual([new NumberedJob(job.uuid, job.key, 1)]);
     });
 
@@ -198,7 +204,7 @@ describe("api client", () => {
       const event2 = { uuid: crypto.randomUUID(), data: "hola mundo", job: job2 };
       await client.addEvent(event1, authToken);
       await client.addEvent(event2, authToken);
-      const events = await client.getEventsByJobs([job1]);
+      const events = await client.getEventsByJobs([job1], authToken);
       expect(events.size).toBe(1);
       expect(events.get(job1.uuid)).toStrictEqual([event1]);
     });
@@ -206,7 +212,7 @@ describe("api client", () => {
     test("get events for empty job", async () => {
       const job = await Job.generate(crypto.randomUUID());
       await client.addJob(job, [masterKey.publicKey], authToken);
-      const events = await client.getEventsByJobs([job]);
+      const events = await client.getEventsByJobs([job], authToken);
       expect(events.size).toBe(1);
       expect(events.get(job.uuid)).toStrictEqual([]);
     });
@@ -218,7 +224,7 @@ describe("api client", () => {
       await client.addJob(job, [masterKey.publicKey], authToken);
       const blob: JobBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), job };
       await client.putBlob(blob, authToken);
-      const received = await client.getBlob(blob.uuid, job);
+      const received = await client.getBlob(blob.uuid, job, authToken);
       expect(received).toStrictEqual(blob);
     });
 
@@ -235,7 +241,7 @@ describe("api client", () => {
     test("read non-existent blob", async () => {
       const job = await Job.generate(crypto.randomUUID());
       await client.addJob(job, [masterKey.publicKey], authToken);
-      const received = await client.getBlob(crypto.randomUUID(), job);
+      const received = await client.getBlob(crypto.randomUUID(), job, authToken);
       expect(received).toBe(undefined);
     });
   });
@@ -285,71 +291,109 @@ describe("api client", () => {
   });
 
   describe("authorization", () => {
-    describe("write jobs", () => {
-      const jobTestMethods = {
-        addJob: async (badAuthToken: AuthToken) => {
+    const testMethods: Record<schemas.Permission, Array<(t: AuthToken) => Promise<void>>> = {
+      "add master key": [
+        async (badAuthToken) => {
+          const newMasterKey = await MasterKeyPair.generate(
+            crypto.randomUUID(),
+            "some other name",
+            "some password",
+          );
+          await client.addMasterKeyPair(newMasterKey, badAuthToken);
+        },
+      ],
+      "list jobs": [
+        async (badAuthToken: AuthToken) => {
+          await client.listJobs(masterKey, badAuthToken);
+        },
+      ],
+      "create jobs": [
+        async (badAuthToken: AuthToken) => {
           const job = await Job.generate(crypto.randomUUID());
           await client.addJob(job, [masterKey.publicKey], badAuthToken);
         },
-        addJobEvent: async (badAuthToken: AuthToken) => {
+      ],
+      "read job data": [
+        async (badAuthToken: AuthToken) => {
+          const job = await Job.generate(crypto.randomUUID());
+          await client.addJob(job, [masterKey.publicKey], authToken);
+          await client.getEventsByJobs([job], badAuthToken);
+        },
+        async (badAuthToken: AuthToken) => {
+          const job = await Job.generate(crypto.randomUUID());
+          const blob: JobBlob = { uuid: crypto.randomUUID(), job, data: utf8("hello world") };
+          await client.putBlob(blob, authToken);
+          await client.getBlob(blob.uuid, job, badAuthToken);
+        },
+      ],
+      "write job data": [
+        async (badAuthToken: AuthToken) => {
           const job = await Job.generate(crypto.randomUUID());
           await client.addJob(job, [masterKey.publicKey], authToken);
           const event: JobEvent = { uuid: crypto.randomUUID(), data: "hello world", job };
           await client.addEvent(event, badAuthToken);
         },
-        putBlob: async (badAuthToken: AuthToken) => {
+        async (badAuthToken: AuthToken) => {
           const job = await Job.generate(crypto.randomUUID());
           await client.addJob(job, [masterKey.publicKey], authToken);
           const blob: JobBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), job };
           await client.putBlob(blob, badAuthToken);
         },
-      };
+      ],
+    };
 
-      test("rejects bogus auth token", async () => {
-        const unregisteredMasterKey = await MasterKeyPair.generate(
-          crypto.randomUUID(),
-          "unregistered",
-          "password",
-        );
+    test("rejects bogus auth token", async () => {
+      const unregisteredMasterKey = await MasterKeyPair.generate(
+        crypto.randomUUID(),
+        "unregistered",
+        "password",
+      );
+      for (const [permission, tests] of Object.entries(testMethods)) {
         const bogusAuthToken = await AuthToken.init({
           masterKey: unregisteredMasterKey,
           expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
-          permissions: new Set(["write jobs"]),
+          permissions: new Set([permission as schemas.Permission]),
         });
-        for (const method of Object.values(jobTestMethods)) {
-          await expect(method(bogusAuthToken)).rejects.toThrow(
+        for (const testFn of tests) {
+          await expect(testFn(bogusAuthToken)).rejects.toThrow(
             new ClientError({ type: "not authorized" }),
           );
         }
-      });
+      }
+    });
 
-      test("rejects expired auth token", async () => {
+    test("rejects expired auth token", async () => {
+      for (const [permission, tests] of Object.entries(testMethods)) {
         const expiredAuthToken = await AuthToken.init({
           masterKey,
           expiry: Temporal.Now.instant().subtract(Temporal.Duration.from({ minutes: 1 })),
-          permissions: new Set(["write jobs"]),
+          permissions: new Set([permission as schemas.Permission]),
         });
-        for (const method of Object.values(jobTestMethods)) {
+        for (const method of tests) {
           await expect(method(expiredAuthToken)).rejects.toThrow(
             new ClientError({ type: "not authorized" }),
           );
         }
-      });
+      }
+    });
 
-      test("rejects token without valid permission", async () => {
+    test("rejects token without valid permission", async () => {
+      for (const [, tests] of Object.entries(testMethods)) {
         const badAuthToken = await AuthToken.init({
           masterKey,
           expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
-          permissions: new Set(["add master key"]),
+          permissions: new Set([]),
         });
-        for (const method of Object.values(jobTestMethods)) {
+        for (const method of tests) {
           await expect(method(badAuthToken)).rejects.toThrow(
             new ClientError({ type: "not authorized" }),
           );
         }
-      });
+      }
+    });
 
-      test("rejects token where signature does not match data", async () => {
+    test("rejects token where signature does not match data", async () => {
+      for (const [permission, tests] of Object.entries(testMethods)) {
         const badAuthToken = await AuthToken.init({
           masterKey,
           expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
@@ -358,31 +402,15 @@ describe("api client", () => {
         const tokenData = mpDecoder.decode(
           Uint8Array.fromBase64(badAuthToken.tokenStr),
         ) as schemas.AuthToken;
-        tokenData.authorization.permissions = new Set(["write jobs"]);
+        tokenData.authorization.permissions = new Set([permission as schemas.Permission]);
         const tokenStr = mpEncoder.encode(tokenData).toBase64();
         badAuthToken.tokenStr = tokenStr;
-        for (const method of Object.values(jobTestMethods)) {
+        for (const method of tests) {
           await expect(method(badAuthToken)).rejects.toThrow(
             new ClientError({ type: "not authorized" }),
           );
         }
-      });
-    });
-
-    test("rejects adding master key if permission not given", async () => {
-      const newMasterKey = await MasterKeyPair.generate(
-        crypto.randomUUID(),
-        "some other name",
-        "some password",
-      );
-      const badAuthToken = await AuthToken.init({
-        masterKey,
-        expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
-        permissions: new Set(["write jobs"]),
-      });
-      await expect(client.addMasterKeyPair(newMasterKey, badAuthToken)).rejects.toThrow(
-        new ClientError({ type: "not authorized" }),
-      );
+      }
     });
   });
 });

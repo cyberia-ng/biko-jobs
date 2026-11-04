@@ -34,7 +34,7 @@ describe("pairing", () => {
         masterKeyId: crypto.randomUUID(),
         authorization: {
           expiry: new Date().toISOString(),
-          permissions: new Set(["add master key", "write jobs"]),
+          permissions: new Set([]),
         },
         signature: new Uint8Array([42]),
       } satisfies schemas.AuthToken),

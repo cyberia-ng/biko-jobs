@@ -66,7 +66,13 @@ export const EventStreamMessage = z.discriminatedUnion("type", [
 ]);
 export type EventStreamMessage = z.infer<typeof EventStreamMessage>;
 
-export const Permission = z.union([z.literal("add master key"), z.literal("write jobs")]);
+export const Permission = z.union([
+  z.literal("add master key"),
+  z.literal("list jobs"),
+  z.literal("create jobs"),
+  z.literal("read job data"),
+  z.literal("write job data"),
+]);
 export type Permission = z.infer<typeof Permission>;
 
 export const Authorization = z.object({

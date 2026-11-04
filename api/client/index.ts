@@ -200,9 +200,10 @@ export class ApiClient {
     return job.withNumber(z.number().parse(res.body));
   }
 
-  async getJobs(masterKey: MasterKeyPair): Promise<Array<NumberedJob>> {
+  async listJobs(masterKey: MasterKeyPair, authToken: AuthToken): Promise<Array<NumberedJob>> {
     const res = await apiFetch(this.baseUrl, ["jobs"], {
       method: "GET",
+      auth: authToken,
     });
     raiseForStatus(res);
     const body = schemas.JobList.parse(res.body);
@@ -221,11 +222,12 @@ export class ApiClient {
     return Promise.all(jobsP);
   }
 
-  async getEventsByJobs(jobs: Job[]): Promise<Map<string, JobEvent[]>> {
+  async getEventsByJobs(jobs: Job[], authToken: AuthToken): Promise<Map<string, JobEvent[]>> {
     const requestBody: schemas.JobUUIDs = new Set(jobs.map((job) => job.uuid));
     const res = await apiFetch(this.baseUrl, ["events", "by-jobs"], {
       method: "POST",
       body: requestBody,
+      auth: authToken,
     });
     raiseForStatus(res);
     const responseBody = schemas.JobEvents.parse(res.body);
@@ -279,8 +281,8 @@ export class ApiClient {
     raiseForStatus(res);
   }
 
-  async getBlob(uuid: string, job: Job): Promise<JobBlob | undefined> {
-    const res = await apiFetch(this.baseUrl, ["blobs", uuid]);
+  async getBlob(uuid: string, job: Job, auth: AuthToken): Promise<JobBlob | undefined> {
+    const res = await apiFetch(this.baseUrl, ["blobs", uuid], { auth });
     if (res.status === 404) {
       return undefined;
     }
@@ -529,7 +531,7 @@ export class AuthToken {
   static async init(opts: {
     masterKey: MasterKeyPair;
     expiry: Temporal.Instant;
-    permissions: Set<"add master key" | "write jobs">;
+    permissions: Set<schemas.Permission>;
   }): Promise<AuthToken> {
     const expiryStr = opts.expiry.toString();
     const authorization: schemas.Authorization = {

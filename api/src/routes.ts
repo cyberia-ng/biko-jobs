@@ -95,7 +95,7 @@ export function addRoutes(
     }
   });
 
-  app.put("/jobs/:uuid", verifier(db, "write jobs"), msgPackBody(Job), (req, res) => {
+  app.put("/jobs/:uuid", verifier(db, "create jobs"), msgPackBody(Job), (req, res) => {
     try {
       const job = req.body as Job;
       const jobId = db.addJob(job);
@@ -115,17 +115,17 @@ export function addRoutes(
     }
   });
 
-  app.get("/jobs", (_req, res) => {
+  app.get("/jobs", verifier(db, "list jobs"), (_req, res) => {
     const list: JobList = db.getJobs();
     res.status(200).send(list);
   });
 
-  app.post("/events/by-jobs", msgPackBody(JobUUIDs), (req, res) => {
+  app.post("/events/by-jobs", verifier(db, "read job data"), msgPackBody(JobUUIDs), (req, res) => {
     const events: JobEvents = db.getEventsByJobs(req.body as JobUUIDs);
     res.status(200).send(events);
   });
 
-  app.post("/events", verifier(db, "write jobs"), msgPackBody(JobEvent), (req, res) => {
+  app.post("/events", verifier(db, "write job data"), msgPackBody(JobEvent), (req, res) => {
     const event = req.body as JobEvent;
     try {
       db.addEvent(event);
@@ -139,7 +139,7 @@ export function addRoutes(
 
   app.put(
     "/blobs/:uuid",
-    verifier(db, "write jobs"),
+    verifier(db, "write job data"),
     msgPackBody(Bytes, 15 * 1024 * 1024),
     (req, res, next) => {
       blobStore
@@ -152,9 +152,9 @@ export function addRoutes(
     },
   );
 
-  app.get("/blobs/:uuid", (req, res, next) => {
+  app.get("/blobs/:uuid", verifier(db, "read job data"), (req, res, next) => {
     blobStore
-      .get(req.params.uuid)
+      .get(req.params.uuid as string)
       .then((blob) => {
         if (blob === undefined) {
           res.status(404).send();

@@ -86,7 +86,7 @@ async function main() {
   const authToken = await AuthToken.init({
     masterKey: mk,
     expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
-    permissions: new Set(["add master key", "write jobs"]),
+    permissions: new Set(["create jobs", "write job data"]),
   });
   const data = await Promise.all(faker.helpers.multiple(randomJob, { count: { min: 5, max: 20 } }));
   for (const { job, blobs, events } of data) {

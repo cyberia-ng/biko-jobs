@@ -38,7 +38,7 @@ export function Login() {
   const onPairingAccepted = useCallback(
     (authToken: AuthToken) => {
       login({ type: "log in to ephemeral session", authToken });
-      navigate(basicScreen("kanban"));
+      navigate(basicScreen("new job"));
     },
     [login, navigate],
   );
@@ -315,7 +315,7 @@ function PairingServerDisplay({
                 AuthToken.init({
                   masterKey,
                   expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 6 })),
-                  permissions: new Set(["write jobs"]),
+                  permissions: new Set(["create jobs", "read job data", "write job data"]),
                 })
                   .then((authToken) => res(authToken))
                   .catch(console.error);

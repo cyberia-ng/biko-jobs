@@ -109,6 +109,9 @@ function App({ apiClient }: { apiClient: ApiClient }) {
   if (import.meta.env.DEV) {
     useEffect(() => {
       if (loginState.login !== undefined) return;
+      if (navigationState.screen === "login" && navigationState.pairingRequestId !== undefined) {
+        return;
+      }
       const masterKey = loginState.masterKeys?.find((mk) => mk.name === "some name");
       if (masterKey === undefined) return;
       withLoading(
@@ -117,7 +120,7 @@ function App({ apiClient }: { apiClient: ApiClient }) {
           .then((mkPassword) => apiClient.getMasterKeyPair(mkPassword))
           .then((mk) => dispatchLoginState({ type: "log in with key pair", masterKey: mk })),
       ).catch(console.error);
-    }, [apiClient, loginState, withLoading]);
+    }, [apiClient, loginState, navigationState, withLoading]);
   }
 
   const context: AppContextT = {
