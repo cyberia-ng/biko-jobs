@@ -14,7 +14,7 @@ async function main() {
   const dbRaw = new DatabaseSync(dbFile);
   await migrateDb(dbRaw, {});
   dbRaw.close();
-  const db = new Database(dbFile);
+  const db = await Database.init(dbFile);
   const rl = createInterface({ input: stdin, output: stdout });
   try {
     const masterKeyName = await rl.question("New master key name: ");

@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { inspect } from "node:util";
 
-function statements(db: DatabaseSync) {
+function prepareStatements(db: DatabaseSync) {
   return {
     insertMasterKey: db.prepare(
       `INSERT INTO master_keys (
@@ -92,20 +92,25 @@ function statements(db: DatabaseSync) {
 
 export class Database {
   private db: DatabaseSync;
-  private statements: ReturnType<typeof statements>;
+  private statements: ReturnType<typeof prepareStatements>;
 
-  constructor(sqlitePath?: string) {
+  private constructor(db: DatabaseSync, statements: ReturnType<typeof prepareStatements>) {
+    this.db = db;
+    this.statements = statements;
+  }
+
+  static async init(sqlitePath: string | undefined) {
+    let db: DatabaseSync;
     if (sqlitePath === undefined) {
-      this.db = new DatabaseSync(":memory:");
-      migrateDb(this.db, {}).catch(console.error);
+      db = new DatabaseSync(":memory:");
+      await migrateDb(db, {});
     } else {
-      this.db = new DatabaseSync(sqlitePath);
-      if (!dbIsFullyMigrated(this.db)) {
+      db = new DatabaseSync(sqlitePath);
+      if (!dbIsFullyMigrated(db)) {
         throw new Error("File-backed database must be fully migrated");
       }
     }
-
-    this.statements = statements(this.db);
+    return new Database(db, prepareStatements(db));
   }
 
   addMasterKey(key: MasterKey): void {

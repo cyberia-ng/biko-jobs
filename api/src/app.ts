@@ -14,7 +14,7 @@ export async function createApp(
   } = {},
 ) {
   const app = express();
-  const db = new Database(opts.sqlitePath);
+  const db = await Database.init(opts.sqlitePath);
   const blobStore =
     opts.blobDirectory === undefined
       ? new MemoryBlobStore()
