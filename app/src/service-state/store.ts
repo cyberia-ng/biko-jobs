@@ -189,8 +189,10 @@ export class Store {
     }
     await this.client.syncSocketState();
     this.state = initialState;
-    await this.getJobs();
-    await this.getJobEvents();
+    if (loginState.login !== undefined) {
+      await this.getJobs();
+      await this.getJobEvents();
+    }
     this.callSubscribers();
   }
 
