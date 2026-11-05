@@ -1,10 +1,10 @@
 import type {
-  JobEvent,
-  Job,
-  JobList,
-  JobUUIDs,
+  StreamEvent,
+  Stream,
+  StreamList,
+  StreamUUIDs,
   MasterKey,
-  JobEvents,
+  StreamEvents,
   Bytes,
   MasterKeyPublic,
 } from "@biko-jobs/api-client/schemas.ts";
@@ -54,37 +54,37 @@ function prepareStatements(db: DatabaseSync) {
       FROM master_keys
       WHERE uuid = ?;`,
     ),
-    insertJob: db.prepare(
-      `INSERT INTO jobs (uuid)
+    insertStream: db.prepare(
+      `INSERT INTO streams (uuid)
       VALUES (?) RETURNING id;`,
     ),
-    insertJobKey: db.prepare(
-      `INSERT INTO job_keys (job, master_key, encrypted_job_key)
+    insertStreamKey: db.prepare(
+      `INSERT INTO stream_keys (stream, master_key, encrypted_stream_key)
       VALUES (?, ?, ?);`,
     ),
-    getJobs: db.prepare(
+    getStreams: db.prepare(
       `SELECT
-        jobs.id AS job_number,
-        jobs.uuid AS uuid,
-        job_keys.encrypted_job_key AS encrypted_job_key,
+        streams.id AS stream_number,
+        streams.uuid AS uuid,
+        stream_keys.encrypted_stream_key AS encrypted_stream_key,
         master_keys.uuid AS master_key_uuid
-      FROM jobs
-      LEFT JOIN job_keys ON jobs.id = job_keys.job
-      LEFT JOIN master_keys ON job_keys.master_key = master_keys.id;`,
+      FROM streams
+      LEFT JOIN stream_keys ON streams.id = stream_keys.stream
+      LEFT JOIN master_keys ON stream_keys.master_key = master_keys.id;`,
     ),
     getEvents: db.prepare(
       `SELECT
-        jobs.uuid AS job_uuid,
-        job_events.uuid AS event_uuid,
-        job_events.data AS event_data
-      FROM jobs
-      LEFT JOIN job_events ON jobs.id = job_events.job
-      WHERE jobs.uuid IN (SELECT value FROM json_each(?))
-      ORDER BY job_events.id;`,
+        streams.uuid AS stream_uuid,
+        stream_events.uuid AS event_uuid,
+        stream_events.data AS event_data
+      FROM streams
+      LEFT JOIN stream_events ON streams.id = stream_events.stream
+      WHERE streams.uuid IN (SELECT value FROM json_each(?))
+      ORDER BY stream_events.id;`,
     ),
     insertEvent: db.prepare(
-      `INSERT INTO job_events (job, uuid, data)
-      SELECT id, ?, ? FROM jobs WHERE jobs.uuid = ?;`,
+      `INSERT INTO stream_events (stream, uuid, data)
+      SELECT id, ?, ? FROM streams WHERE streams.uuid = ?;`,
     ),
     getMasterSigningKey: db.prepare(`SELECT signing_public_key FROM master_keys WHERE uuid = ?;`),
   };
@@ -164,26 +164,26 @@ export class Database {
     };
   }
 
-  addJob(job: Job): number {
+  addStream(stream: Stream): number {
     this.db.exec("BEGIN TRANSACTION;");
     try {
-      const jobId = this.statements.insertJob.get(job.uuid)!.id as number;
+      const streamId = this.statements.insertStream.get(stream.uuid)!.id as number;
       const masterKeys = this.statements.listMasterKeys.all() as Array<{
         id: number;
         uuid: string;
       }>;
-      if (masterKeys.length !== job.keys.size) {
+      if (masterKeys.length !== stream.keys.size) {
         throw "key mismatch";
       }
       for (const masterKey of masterKeys) {
-        const jobKey = job.keys.get(masterKey.uuid);
-        if (jobKey === undefined) {
+        const streamKey = stream.keys.get(masterKey.uuid);
+        if (streamKey === undefined) {
           throw "key mismatch";
         }
-        this.statements.insertJobKey.run(jobId, masterKey.id, jobKey);
+        this.statements.insertStreamKey.run(streamId, masterKey.id, streamKey);
       }
       this.db.exec("COMMIT;");
-      return jobId;
+      return streamId;
     } catch (e) {
       this.db.exec("ROLLBACK;");
       if ((e as any).errstr === "constraint failed") {
@@ -192,42 +192,44 @@ export class Database {
     }
   }
 
-  getEventsByJobs(jobs: JobUUIDs): JobEvents {
-    const rows = this.statements.getEvents.all(JSON.stringify(Array.from(jobs)));
-    const events: JobEvent[] = [];
-    const emptyJobs: Set<string> = new Set();
-    for (const { job_uuid, event_uuid, event_data } of rows) {
+  getEventsByStreams(streams: StreamUUIDs): StreamEvents {
+    const rows = this.statements.getEvents.all(JSON.stringify(Array.from(streams)));
+    const events: StreamEvent[] = [];
+    const emptyStreams: Set<string> = new Set();
+    for (const { stream_uuid, event_uuid, event_data } of rows) {
       if (event_uuid === null || event_data === null) {
-        emptyJobs.add(job_uuid as string);
+        emptyStreams.add(stream_uuid as string);
       } else {
         events.push({
-          job: job_uuid as string,
+          stream: stream_uuid as string,
           uuid: event_uuid as string,
           data: event_data as Bytes,
         });
       }
     }
-    return { events, emptyJobs };
+    return { events, emptyStreams };
   }
 
-  getJobs(): JobList {
-    const jobs = new Map<string, { number: number; keys: Map<string, Bytes> }>();
-    const rows = this.statements.getJobs.all();
+  getStreams(): StreamList {
+    const streams = new Map<string, { number: number; keys: Map<string, Bytes> }>();
+    const rows = this.statements.getStreams.all();
     for (const row of rows) {
       const uuid = row.uuid as string;
-      let jobData = jobs.get(uuid);
-      if (jobData === undefined) {
-        jobData = { number: row.job_number as number, keys: new Map() };
-        jobs.set(uuid, jobData);
+      let streamData = streams.get(uuid);
+      if (streamData === undefined) {
+        streamData = { number: row.stream_number as number, keys: new Map() };
+        streams.set(uuid, streamData);
       }
-      jobData.keys.set(row.master_key_uuid as string, row.encrypted_job_key as Bytes);
+      streamData.keys.set(row.master_key_uuid as string, row.encrypted_stream_key as Bytes);
     }
-    return Array.from(jobs.entries().map(([uuid, { number, keys }]) => ({ number, uuid, keys })));
+    return Array.from(
+      streams.entries().map(([uuid, { number, keys }]) => ({ number, uuid, keys })),
+    );
   }
 
-  addEvent(event: JobEvent) {
+  addEvent(event: StreamEvent) {
     try {
-      this.statements.insertEvent.run(event.uuid, event.data, event.job);
+      this.statements.insertEvent.run(event.uuid, event.data, event.stream);
     } catch (e) {
       if ((e as any).errstr === "constraint failed") {
         throw "already exists";

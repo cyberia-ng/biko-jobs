@@ -21,10 +21,10 @@ export type { Bytes } from "@biko-jobs/api-client/schemas.ts";
 export type ClientErrorInfo =
   | { type: "http error"; status: number }
   | { type: "websocket error"; event: Event }
-  | { type: "job put conflict"; uuid: string }
-  | { type: "blob put conflict"; uuid: string }
+  | { type: "stream create conflict"; uuid: string }
+  | { type: "blob create conflict"; uuid: string }
   | { type: "duplicate event"; uuid: string }
-  | { type: "job keys incomplete" }
+  | { type: "stream keys incomplete" }
   | { type: "master key post conflict"; name: string; uuid: string }
   | { type: "not authorized" };
 
@@ -38,11 +38,11 @@ export class ClientError extends Error {
         message += ` status ${info.status}`;
         break;
       case "websocket error":
-      case "job keys incomplete":
+      case "stream keys incomplete":
       case "not authorized":
         break;
-      case "job put conflict":
-      case "blob put conflict":
+      case "stream create conflict":
+      case "blob create conflict":
       case "duplicate event":
         message += ` ${info.uuid}`;
         break;
@@ -108,7 +108,7 @@ async function apiFetch(
 }
 
 type WebSocketSubscriber = {
-  getJob: (uuid: string) => Job | undefined;
+  getStream: (uuid: string) => Stream | undefined;
   getMasterKey: (uuid: string) => MasterKeyPair | undefined;
   onConnect: () => void;
   onEvent: (event: SubscriptionEvent) => void;
@@ -172,42 +172,49 @@ export class ApiClient {
     raiseForStatus(res);
   }
 
-  async addJob(job: Job, access: MasterKeyPublic[], auth: AuthToken): Promise<NumberedJob> {
-    const encryptedJobKeysArrayP = access.map(
+  async addStream(
+    stream: Stream,
+    access: MasterKeyPublic[],
+    auth: AuthToken,
+  ): Promise<NumberedStream> {
+    const encryptedStreamKeysArrayP = access.map(
       async (mkp) =>
         [
           mkp.uuid,
-          (await job.key.encryptKey(mkp.encryptionPublicKey, `job key/${job.uuid}`)).data,
+          (await stream.key.encryptKey(mkp.encryptionPublicKey, `stream key/${stream.uuid}`)).data,
         ] as const,
     );
-    const encryptedJobKeys = new Map(await Promise.all(encryptedJobKeysArrayP));
-    const body: schemas.Job = {
-      uuid: job.uuid,
-      keys: encryptedJobKeys,
+    const encryptedStreamKeys = new Map(await Promise.all(encryptedStreamKeysArrayP));
+    const body: schemas.Stream = {
+      uuid: stream.uuid,
+      keys: encryptedStreamKeys,
     };
-    const res = await apiFetch(this.baseUrl, ["jobs", body.uuid], {
+    const res = await apiFetch(this.baseUrl, ["streams", body.uuid], {
       method: "PUT",
       body,
       auth,
     });
     switch (res.status) {
       case 409:
-        throw new ClientError({ type: "job put conflict", uuid: body.uuid });
+        throw new ClientError({ type: "stream create conflict", uuid: body.uuid });
       case 422:
-        throw new ClientError({ type: "job keys incomplete" });
+        throw new ClientError({ type: "stream keys incomplete" });
     }
     raiseForStatus(res);
-    return job.withNumber(z.number().parse(res.body));
+    return stream.withNumber(z.number().parse(res.body));
   }
 
-  async listJobs(masterKey: MasterKeyPair, authToken: AuthToken): Promise<Array<NumberedJob>> {
-    const res = await apiFetch(this.baseUrl, ["jobs"], {
+  async listStreams(
+    masterKey: MasterKeyPair,
+    authToken: AuthToken,
+  ): Promise<Array<NumberedStream>> {
+    const res = await apiFetch(this.baseUrl, ["streams"], {
       method: "GET",
       auth: authToken,
     });
     raiseForStatus(res);
-    const body = schemas.JobList.parse(res.body);
-    const jobsP = body.map(async ({ uuid, keys, number }) => {
+    const body = schemas.StreamList.parse(res.body);
+    const streamsP = body.map(async ({ uuid, keys, number }) => {
       const encryptedKey = keys.get(masterKey.uuid)!;
       const key = await AESKey.decryptKey(
         masterKey.encryptionKeyPrivate,
@@ -215,81 +222,86 @@ export class ApiClient {
           type: "ciphertext",
           data: encryptedKey,
         },
-        `job key/${uuid}`,
+        `stream key/${uuid}`,
       );
-      return new NumberedJob(uuid, key, number);
+      return new NumberedStream(uuid, key, number);
     });
-    return Promise.all(jobsP);
+    return Promise.all(streamsP);
   }
 
-  async getEventsByJobs(jobs: Job[], authToken: AuthToken): Promise<Map<string, JobEvent[]>> {
-    const requestBody: schemas.JobUUIDs = new Set(jobs.map((job) => job.uuid));
-    const res = await apiFetch(this.baseUrl, ["events", "by-jobs"], {
+  async getEventsByStreams(
+    streams: Stream[],
+    authToken: AuthToken,
+  ): Promise<Map<string, StreamEvent[]>> {
+    const requestBody: schemas.StreamUUIDs = new Set(streams.map((stream) => stream.uuid));
+    const res = await apiFetch(this.baseUrl, ["events", "by-streams"], {
       method: "POST",
       body: requestBody,
       auth: authToken,
     });
     raiseForStatus(res);
-    const responseBody = schemas.JobEvents.parse(res.body);
-    const jobsMap = new Map(jobs.map((job) => [job.uuid, job]));
+    const responseBody = schemas.StreamEvents.parse(res.body);
+    const streamsMap = new Map(streams.map((stream) => [stream.uuid, stream]));
     const eventPs = responseBody.events.map(async (event) => {
-      const job = jobsMap.get(event.job)!;
-      const decrypted = await job.key.decrypt({ type: "ciphertext", data: event.data });
+      const stream = streamsMap.get(event.stream)!;
+      const decrypted = await stream.key.decrypt({ type: "ciphertext", data: event.data });
       const decoded = mpDecoder.decode(decrypted.data);
-      return { uuid: event.uuid, data: decoded, job } satisfies JobEvent;
+      return { uuid: event.uuid, data: decoded, stream } satisfies StreamEvent;
     });
     const events = await Promise.all(eventPs);
-    const out: Map<string, JobEvent[]> = new Map();
+    const out: Map<string, StreamEvent[]> = new Map();
     for (const event of events) {
-      let jobEvents: JobEvent[] | undefined = out.get(event.job.uuid);
-      if (jobEvents === undefined) {
-        jobEvents = [];
-        out.set(event.job.uuid, jobEvents);
+      let streamEvents: StreamEvent[] | undefined = out.get(event.stream.uuid);
+      if (streamEvents === undefined) {
+        streamEvents = [];
+        out.set(event.stream.uuid, streamEvents);
       }
-      jobEvents.push(event);
+      streamEvents.push(event);
     }
-    for (const emptyJob of responseBody.emptyJobs) {
-      out.set(emptyJob, []);
+    for (const emptyStream of responseBody.emptyStreams) {
+      out.set(emptyStream, []);
     }
     return out;
   }
 
-  async addEvent(event: JobEvent, auth: AuthToken) {
+  async addEvent(event: StreamEvent, auth: AuthToken) {
     const encoded = mpEncoder.encode(event.data);
-    const encrypted = await event.job.key.encrypt({ type: "plaintext", data: encoded });
+    const encrypted = await event.stream.key.encrypt({ type: "plaintext", data: encoded });
     const res = await apiFetch(this.baseUrl, ["events"], {
       method: "POST",
       body: {
-        job: event.job.uuid,
+        stream: event.stream.uuid,
         uuid: event.uuid,
         data: encrypted.data,
-      } satisfies schemas.JobEvent,
+      } satisfies schemas.StreamEvent,
       auth,
     });
     if (res.status === 409) throw new ClientError({ type: "duplicate event", uuid: event.uuid });
     raiseForStatus(res);
   }
 
-  async putBlob(blob: JobBlob, auth: AuthToken) {
-    const encrypted = await blob.job.key.encrypt({ type: "plaintext", data: blob.data });
+  async putBlob(blob: StreamBlob, auth: AuthToken) {
+    const encrypted = await blob.stream.key.encrypt({ type: "plaintext", data: blob.data });
     const res = await apiFetch(this.baseUrl, ["blobs", blob.uuid], {
       method: "PUT",
       body: encrypted.data,
       auth,
     });
-    if (res.status === 409) throw new ClientError({ type: "blob put conflict", uuid: blob.uuid });
+    if (res.status === 409) {
+      throw new ClientError({ type: "blob create conflict", uuid: blob.uuid });
+    }
     raiseForStatus(res);
   }
 
-  async getBlob(uuid: string, job: Job, auth: AuthToken): Promise<JobBlob | undefined> {
+  async getBlob(uuid: string, stream: Stream, auth: AuthToken): Promise<StreamBlob | undefined> {
     const res = await apiFetch(this.baseUrl, ["blobs", uuid], { auth });
     if (res.status === 404) {
       return undefined;
     }
     raiseForStatus(res);
     const body = schemas.Bytes.parse(res.body);
-    const decrypted = await job.key.decrypt({ type: "ciphertext", data: body });
-    return { uuid, data: decrypted.data, job };
+    const decrypted = await stream.key.decrypt({ type: "ciphertext", data: body });
+    return { uuid, data: decrypted.data, stream };
   }
 
   private async eventsSocketMessageHandler(msgEvent: MessageEvent<Blob>) {
@@ -298,39 +310,43 @@ export class ApiClient {
     const socketEvent = schemas.SocketEvent.parse(decoded);
     for (const subscriber of this.subscribers) {
       switch (socketEvent.type) {
-        case "new job":
+        case "new stream":
           {
-            let jobKey: AESKey | undefined = undefined;
-            for (const [masterKeyUUID, encryptedJobKey] of socketEvent.job.keys.entries()) {
+            let streamKey: AESKey | undefined = undefined;
+            for (const [masterKeyUUID, encryptedStreamKey] of socketEvent.stream.keys.entries()) {
               const mk = subscriber.getMasterKey(masterKeyUUID);
               if (mk === undefined) continue;
-              jobKey = await AESKey.decryptKey(
+              streamKey = await AESKey.decryptKey(
                 mk.encryptionKeyPrivate,
                 {
                   type: "ciphertext",
-                  data: encryptedJobKey,
+                  data: encryptedStreamKey,
                 },
-                `job key/${socketEvent.job.uuid}`,
+                `stream key/${socketEvent.stream.uuid}`,
               );
               break;
             }
-            if (jobKey === undefined) continue;
-            const job = new NumberedJob(socketEvent.job.uuid, jobKey, socketEvent.job.number);
-            subscriber.onEvent({ type: "new job", job });
+            if (streamKey === undefined) continue;
+            const stream = new NumberedStream(
+              socketEvent.stream.uuid,
+              streamKey,
+              socketEvent.stream.number,
+            );
+            subscriber.onEvent({ type: "new stream", stream });
           }
           break;
-        case "job event":
+        case "stream event":
           {
-            const job = subscriber.getJob(socketEvent.event.job);
-            if (job === undefined) continue;
-            const decrypted = await job.key.decrypt({
+            const stream = subscriber.getStream(socketEvent.event.stream);
+            if (stream === undefined) continue;
+            const decrypted = await stream.key.decrypt({
               type: "ciphertext",
               data: socketEvent.event.data,
             });
             const decoded = mpDecoder.decode(decrypted.data);
             subscriber.onEvent({
-              type: "job event",
-              event: { uuid: socketEvent.event.uuid, data: decoded, job },
+              type: "stream event",
+              event: { uuid: socketEvent.event.uuid, data: decoded, stream },
             });
           }
           break;
@@ -558,7 +574,7 @@ export class AuthToken {
   }
 }
 
-export class Job {
+export class Stream {
   uuid: string;
   key: AESKey;
   constructor(uuid: string, key: AESKey) {
@@ -567,16 +583,16 @@ export class Job {
   }
 
   static async generate(uuid: string) {
-    const jobKey = await AESKey.generate();
-    return new Job(uuid, jobKey);
+    const streamKey = await AESKey.generate();
+    return new Stream(uuid, streamKey);
   }
 
-  withNumber(number: number): NumberedJob {
-    return new NumberedJob(this.uuid, this.key, number);
+  withNumber(number: number): NumberedStream {
+    return new NumberedStream(this.uuid, this.key, number);
   }
 }
 
-export class NumberedJob extends Job {
+export class NumberedStream extends Stream {
   number: number;
   constructor(uuid: string, key: AESKey, number: number) {
     super(uuid, key);
@@ -593,35 +609,35 @@ export class NumberedJob extends Job {
     return packed.toBase64();
   }
 
-  static async deserialize(serialize: string): Promise<NumberedJob> {
+  static async deserialize(serialize: string): Promise<NumberedStream> {
     const unpacked = mpDecoder.decode(Uint8Array.fromBase64(serialize)) as {
       number: number;
       uuid: string;
       key: Bytes;
     };
     const key = await AESKey.import({ type: "unencrypted key material", data: unpacked.key });
-    return new NumberedJob(unpacked.uuid, key, unpacked.number);
+    return new NumberedStream(unpacked.uuid, key, unpacked.number);
   }
 }
 
 export type SubscriptionEvent =
   | {
-      type: "new job";
-      job: NumberedJob;
+      type: "new stream";
+      stream: NumberedStream;
     }
   | {
-      type: "job event";
-      event: JobEvent;
+      type: "stream event";
+      event: StreamEvent;
     };
 
-export type JobEvent = {
+export type StreamEvent = {
   uuid: string;
   data: unknown;
-  job: Job;
+  stream: Stream;
 };
 
-export type JobBlob = {
+export type StreamBlob = {
   uuid: string;
   data: Bytes;
-  job: Job;
+  stream: Stream;
 };

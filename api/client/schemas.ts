@@ -20,45 +20,48 @@ export const MasterKey = MasterKeyPublic.extend({
 });
 export type MasterKey = z.infer<typeof MasterKey>;
 
-export const Job = z.object({
+export const Stream = z.object({
   uuid: z.uuidv4(),
   keys: z.map(z.uuidv4(), Bytes),
 });
-export type Job = z.infer<typeof Job>;
+export type Stream = z.infer<typeof Stream>;
 
-export const NumberedJob = Job.extend({ number: z.number() });
-export type NumberedJob = z.infer<typeof NumberedJob>;
+export const NumberedStream = Stream.extend({ number: z.number() });
+export type NumberedStream = z.infer<typeof NumberedStream>;
 
-export const JobList = z.array(NumberedJob);
-export type JobList = z.infer<typeof JobList>;
+export const StreamList = z.array(NumberedStream);
+export type StreamList = z.infer<typeof StreamList>;
 
-export const JobEvent = z.object({
-  job: z.uuidv4(),
+export const StreamEvent = z.object({
+  stream: z.uuidv4(),
   uuid: z.uuidv4(),
   data: Bytes,
 });
-export type JobEvent = z.infer<typeof JobEvent>;
+export type StreamEvent = z.infer<typeof StreamEvent>;
 
 export const SocketEvent = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("new job"), job: NumberedJob }),
-  z.object({ type: z.literal("job event"), event: JobEvent }),
+  z.object({ type: z.literal("new stream"), stream: NumberedStream }),
+  z.object({ type: z.literal("stream event"), event: StreamEvent }),
 ]);
 export type SocketEvent = z.infer<typeof SocketEvent>;
 
-export const JobEvents = z.object({ events: z.array(JobEvent), emptyJobs: z.set(z.uuidv4()) });
-export type JobEvents = z.infer<typeof JobEvents>;
+export const StreamEvents = z.object({
+  events: z.array(StreamEvent),
+  emptyStreams: z.set(z.uuidv4()),
+});
+export type StreamEvents = z.infer<typeof StreamEvents>;
 
-export const JobUUIDs = z.set(z.uuidv4());
-export type JobUUIDs = z.infer<typeof JobUUIDs>;
+export const StreamUUIDs = z.set(z.uuidv4());
+export type StreamUUIDs = z.infer<typeof StreamUUIDs>;
 
 export const EventStreamMessage = z.discriminatedUnion("type", [
   z.object({
-    type: z.literal("job event"),
-    event: JobEvent,
+    type: z.literal("stream event"),
+    event: StreamEvent,
   }),
   z.object({
-    type: z.literal("job creation"),
-    job: Job,
+    type: z.literal("stream creation"),
+    stream: Stream,
   }),
   z.object({
     type: z.literal("master key creation"),
@@ -68,10 +71,10 @@ export type EventStreamMessage = z.infer<typeof EventStreamMessage>;
 
 export const Permission = z.union([
   z.literal("add master key"),
-  z.literal("list jobs"),
-  z.literal("create jobs"),
-  z.literal("read job data"),
-  z.literal("write job data"),
+  z.literal("list streams"),
+  z.literal("create streams"),
+  z.literal("read stream data"),
+  z.literal("write stream data"),
 ]);
 export type Permission = z.infer<typeof Permission>;
 

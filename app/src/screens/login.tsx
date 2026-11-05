@@ -315,7 +315,7 @@ function PairingServerDisplay({
                 AuthToken.init({
                   masterKey,
                   expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 6 })),
-                  permissions: new Set(["create jobs", "read job data", "write job data"]),
+                  permissions: new Set(["create streams", "read stream data", "write stream data"]),
                 })
                   .then((authToken) => res(authToken))
                   .catch(console.error);

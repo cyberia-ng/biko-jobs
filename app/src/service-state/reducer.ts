@@ -8,7 +8,7 @@ export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "job action":
       return reduceJobAction(state, action.action);
-    case "create job": {
+    case "create stream": {
       return produce(state, (state) => {
         state.pendingJobNumbers.set(action.uuid, action.number);
       });

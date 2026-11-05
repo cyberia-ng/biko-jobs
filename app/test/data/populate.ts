@@ -4,10 +4,10 @@ import { join } from "node:path";
 import {
   ApiClient,
   AuthToken,
-  Job,
+  Stream,
   MasterKeyPassword,
-  type JobBlob,
-  type JobEvent,
+  type StreamBlob,
+  type StreamEvent,
 } from "@biko-jobs/api-client";
 import range from "lodash/range.js";
 import { fakerEN_GB as faker } from "@faker-js/faker";
@@ -18,19 +18,19 @@ function randomImage() {
   return images[Math.floor(Math.random() * images.length)]!;
 }
 
-async function randomJob() {
-  const job = await Job.generate(crypto.randomUUID());
+async function randomStream() {
+  const jobStream = await Stream.generate(crypto.randomUUID());
   const images = faker.helpers.multiple(randomImage, { count: { min: 1, max: 3 } });
-  const imageBlobs = images.map((image): JobBlob => ({
+  const imageBlobs = images.map((image): StreamBlob => ({
     uuid: crypto.randomUUID(),
     data: image,
-    job,
+    stream: jobStream,
   }));
   const createActionId = crypto.randomUUID();
-  const events: JobEvent[] = [
+  const events: StreamEvent[] = [
     {
       uuid: createActionId,
-      job,
+      stream: jobStream,
       data: {
         version: 2,
         uuid: createActionId,
@@ -39,7 +39,7 @@ async function randomJob() {
         ),
         event: {
           type: "upsert job",
-          uuid: job.uuid,
+          uuid: jobStream.uuid,
           tags: new Set(
             faker.helpers.multiple(() => faker.hacker.adjective(), { count: { min: 0, max: 3 } }),
           ),
@@ -61,20 +61,20 @@ async function randomJob() {
     const changeStatusActionId = crypto.randomUUID();
     events.push({
       uuid: changeStatusActionId,
-      job,
+      stream: jobStream,
       data: {
         version: 2,
         uuid: changeStatusActionId,
         timestamp: Temporal.Instant.from(faker.date.past().toISOString()),
         event: {
           type: "change job status",
-          uuid: job.uuid,
+          uuid: jobStream.uuid,
           status,
         },
       } satisfies JobAction,
     });
   }
-  return { job, blobs: imageBlobs, events };
+  return { job: jobStream, blobs: imageBlobs, events };
 }
 
 async function main() {
@@ -86,11 +86,13 @@ async function main() {
   const authToken = await AuthToken.init({
     masterKey: mk,
     expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
-    permissions: new Set(["create jobs", "write job data"]),
+    permissions: new Set(["create streams", "write stream data"]),
   });
-  const data = await Promise.all(faker.helpers.multiple(randomJob, { count: { min: 5, max: 20 } }));
+  const data = await Promise.all(
+    faker.helpers.multiple(randomStream, { count: { min: 5, max: 20 } }),
+  );
   for (const { job, blobs, events } of data) {
-    await client.addJob(job, [mk.publicKey], authToken);
+    await client.addStream(job, [mk.publicKey], authToken);
     await Promise.all(blobs.map((blob) => client.putBlob(blob, authToken)));
     for (const event of events) {
       await client.addEvent(event, authToken);

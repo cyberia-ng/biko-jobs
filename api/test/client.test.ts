@@ -1,13 +1,13 @@
 import {
   ApiClient,
   ClientError,
-  type JobEvent,
+  type StreamEvent,
   MasterKeyPair,
   type Bytes,
-  Job,
-  NumberedJob,
+  Stream,
+  NumberedStream,
   AuthToken,
-  type JobBlob,
+  type StreamBlob,
 } from "@biko-jobs/api-client";
 import { createApp } from "@biko-jobs/api/app.ts";
 import { expect, test, describe, beforeEach, afterEach, beforeAll } from "vitest";
@@ -31,7 +31,7 @@ describe("api client", () => {
   });
 
   beforeEach(async () => {
-    blobDirectory = mkdtempSync(join(tmpdir(), "biko-jobs-test-"));
+    blobDirectory = mkdtempSync(join(tmpdir(), "biko-streams-test-"));
     const app = await createApp({ initialMasterKey: masterKey, blobDirectory });
     port = Math.round(Math.random() * (65535 - 1024) + 1024);
     listener = await new Promise((res) => {
@@ -43,10 +43,10 @@ describe("api client", () => {
       expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
       permissions: new Set([
         "add master key",
-        "list jobs",
-        "create jobs",
-        "read job data",
-        "write job data",
+        "list streams",
+        "create streams",
+        "read stream data",
+        "write stream data",
       ]),
     });
   });
@@ -138,22 +138,22 @@ describe("api client", () => {
     });
 
     // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
-    test("adding new master key requires new encrypted job keys");
+    test("adding new master key requires new encrypted stream keys");
   });
 
-  describe("jobs", () => {
-    test("list jobs", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      const jobs = await client.listJobs(masterKey, authToken);
-      expect(jobs).toStrictEqual([new NumberedJob(job.uuid, job.key, 1)]);
+  describe("streams", () => {
+    test("list streams", async () => {
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      const streams = await client.listStreams(masterKey, authToken);
+      expect(streams).toStrictEqual([new NumberedStream(stream.uuid, stream.key, 1)]);
     });
 
-    test("create fails for duplicate jobs", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      await expect(client.addJob(job, [masterKey.publicKey], authToken)).rejects.toThrow(
-        new ClientError({ type: "job put conflict", uuid: job.uuid }),
+    test("create fails for duplicate streams", async () => {
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      await expect(client.addStream(stream, [masterKey.publicKey], authToken)).rejects.toThrow(
+        new ClientError({ type: "stream create conflict", uuid: stream.uuid }),
       );
     });
 
@@ -164,96 +164,96 @@ describe("api client", () => {
         "some password",
       );
       await client.addMasterKeyPair(otherMasterKey, authToken);
-      const job = await Job.generate(crypto.randomUUID());
-      await expect(client.addJob(job, [masterKey.publicKey], authToken)).rejects.toThrow(
-        new ClientError({ type: "job keys incomplete" }),
+      const stream = await Stream.generate(crypto.randomUUID());
+      await expect(client.addStream(stream, [masterKey.publicKey], authToken)).rejects.toThrow(
+        new ClientError({ type: "stream keys incomplete" }),
       );
     });
 
-    test("create returns numbered job", async () => {
-      const localJob = await Job.generate(crypto.randomUUID());
-      const numberedJob = await client.addJob(localJob, [masterKey.publicKey], authToken);
-      expect(numberedJob).toEqual(localJob.withNumber(1));
+    test("create returns numbered stream", async () => {
+      const localStream = await Stream.generate(crypto.randomUUID());
+      const numberedStream = await client.addStream(localStream, [masterKey.publicKey], authToken);
+      expect(numberedStream).toEqual(localStream.withNumber(1));
     });
   });
 
-  describe("job events", () => {
+  describe("stream events", () => {
     test("add an event", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      const event: JobEvent = { uuid: crypto.randomUUID(), data: "hello world", job };
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      const event: StreamEvent = { uuid: crypto.randomUUID(), data: "hello world", stream };
       await expect(client.addEvent(event, authToken)).resolves.not.toThrow();
     });
 
     test("duplicate UUID fails", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      const event = { uuid: crypto.randomUUID(), data: "hello world", job };
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      const event = { uuid: crypto.randomUUID(), data: "hello world", stream };
       await client.addEvent(event, authToken);
       await expect(client.addEvent(event, authToken)).rejects.toThrow(
         new ClientError({ type: "duplicate event", uuid: event.uuid }),
       );
     });
 
-    test("get events for all jobs for which we know the key", async () => {
-      const job1 = await Job.generate(crypto.randomUUID());
-      const job2 = await Job.generate(crypto.randomUUID());
-      await client.addJob(job1, [masterKey.publicKey], authToken);
-      await client.addJob(job2, [masterKey.publicKey], authToken);
-      const event1 = { uuid: crypto.randomUUID(), data: "hello world", job: job1 };
-      const event2 = { uuid: crypto.randomUUID(), data: "hola mundo", job: job2 };
+    test("get events for all streams for which we know the key", async () => {
+      const stream1 = await Stream.generate(crypto.randomUUID());
+      const stream2 = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream1, [masterKey.publicKey], authToken);
+      await client.addStream(stream2, [masterKey.publicKey], authToken);
+      const event1 = { uuid: crypto.randomUUID(), data: "hello world", stream: stream1 };
+      const event2 = { uuid: crypto.randomUUID(), data: "hola mundo", stream: stream2 };
       await client.addEvent(event1, authToken);
       await client.addEvent(event2, authToken);
-      const events = await client.getEventsByJobs([job1], authToken);
+      const events = await client.getEventsByStreams([stream1], authToken);
       expect(events.size).toBe(1);
-      expect(events.get(job1.uuid)).toStrictEqual([event1]);
+      expect(events.get(stream1.uuid)).toStrictEqual([event1]);
     });
 
-    test("get events for empty job", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      const events = await client.getEventsByJobs([job], authToken);
+    test("get events for empty stream", async () => {
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      const events = await client.getEventsByStreams([stream], authToken);
       expect(events.size).toBe(1);
-      expect(events.get(job.uuid)).toStrictEqual([]);
+      expect(events.get(stream.uuid)).toStrictEqual([]);
     });
   });
 
   describe("blobs", () => {
     test("put and read a blob", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      const blob: JobBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), job };
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      const blob: StreamBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), stream };
       await client.putBlob(blob, authToken);
-      const received = await client.getBlob(blob.uuid, job, authToken);
+      const received = await client.getBlob(blob.uuid, stream, authToken);
       expect(received).toStrictEqual(blob);
     });
 
     test("duplicate UUID fails", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      const blob: JobBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), job };
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      const blob: StreamBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), stream };
       await client.putBlob(blob, authToken);
       await expect(client.putBlob(blob, authToken)).rejects.toThrow(
-        new ClientError({ type: "blob put conflict", uuid: blob.uuid }),
+        new ClientError({ type: "blob create conflict", uuid: blob.uuid }),
       );
     });
 
     test("read non-existent blob", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      const received = await client.getBlob(crypto.randomUUID(), job, authToken);
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      const received = await client.getBlob(crypto.randomUUID(), stream, authToken);
       expect(received).toBe(undefined);
     });
   });
 
   describe("websocket events", () => {
     test("receives events", async () => {
-      const job = await Job.generate(crypto.randomUUID());
-      await client.addJob(job, [masterKey.publicKey], authToken);
-      const event1: JobEvent = { uuid: crypto.randomUUID(), data: "hello world", job };
-      const event2: JobEvent = { uuid: crypto.randomUUID(), data: "hola mundo", job };
+      const stream = await Stream.generate(crypto.randomUUID());
+      await client.addStream(stream, [masterKey.publicKey], authToken);
+      const event1: StreamEvent = { uuid: crypto.randomUUID(), data: "hello world", stream };
+      const event2: StreamEvent = { uuid: crypto.randomUUID(), data: "hola mundo", stream };
       const expectedEvents = [event1, event2];
-      let collectedEvents: JobEvent[] = [];
+      let collectedEvents: StreamEvent[] = [];
       let error: unknown = undefined;
       let doneCollectingEvents: () => void;
       const eventCollectionP = new Promise<void>((res) => {
@@ -263,10 +263,10 @@ describe("api client", () => {
       try {
         await new Promise<void>((res) => {
           unsubscribe = client.subscribeEvents({
-            getJob: () => job,
+            getStream: () => stream,
             getMasterKey: () => masterKey,
             onEvent: (event) => {
-              if (event.type !== "job event") return;
+              if (event.type !== "stream event") return;
               collectedEvents.push(event.event);
               if (collectedEvents.length === expectedEvents.length) {
                 doneCollectingEvents();
@@ -302,41 +302,41 @@ describe("api client", () => {
           await client.addMasterKeyPair(newMasterKey, badAuthToken);
         },
       ],
-      "list jobs": [
+      "list streams": [
         async (badAuthToken: AuthToken) => {
-          await client.listJobs(masterKey, badAuthToken);
+          await client.listStreams(masterKey, badAuthToken);
         },
       ],
-      "create jobs": [
+      "create streams": [
         async (badAuthToken: AuthToken) => {
-          const job = await Job.generate(crypto.randomUUID());
-          await client.addJob(job, [masterKey.publicKey], badAuthToken);
+          const stream = await Stream.generate(crypto.randomUUID());
+          await client.addStream(stream, [masterKey.publicKey], badAuthToken);
         },
       ],
-      "read job data": [
+      "read stream data": [
         async (badAuthToken: AuthToken) => {
-          const job = await Job.generate(crypto.randomUUID());
-          await client.addJob(job, [masterKey.publicKey], authToken);
-          await client.getEventsByJobs([job], badAuthToken);
+          const stream = await Stream.generate(crypto.randomUUID());
+          await client.addStream(stream, [masterKey.publicKey], authToken);
+          await client.getEventsByStreams([stream], badAuthToken);
         },
         async (badAuthToken: AuthToken) => {
-          const job = await Job.generate(crypto.randomUUID());
-          const blob: JobBlob = { uuid: crypto.randomUUID(), job, data: utf8("hello world") };
+          const stream = await Stream.generate(crypto.randomUUID());
+          const blob: StreamBlob = { uuid: crypto.randomUUID(), stream, data: utf8("hello world") };
           await client.putBlob(blob, authToken);
-          await client.getBlob(blob.uuid, job, badAuthToken);
+          await client.getBlob(blob.uuid, stream, badAuthToken);
         },
       ],
-      "write job data": [
+      "write stream data": [
         async (badAuthToken: AuthToken) => {
-          const job = await Job.generate(crypto.randomUUID());
-          await client.addJob(job, [masterKey.publicKey], authToken);
-          const event: JobEvent = { uuid: crypto.randomUUID(), data: "hello world", job };
+          const stream = await Stream.generate(crypto.randomUUID());
+          await client.addStream(stream, [masterKey.publicKey], authToken);
+          const event: StreamEvent = { uuid: crypto.randomUUID(), data: "hello world", stream };
           await client.addEvent(event, badAuthToken);
         },
         async (badAuthToken: AuthToken) => {
-          const job = await Job.generate(crypto.randomUUID());
-          await client.addJob(job, [masterKey.publicKey], authToken);
-          const blob: JobBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), job };
+          const stream = await Stream.generate(crypto.randomUUID());
+          await client.addStream(stream, [masterKey.publicKey], authToken);
+          const blob: StreamBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), stream };
           await client.putBlob(blob, badAuthToken);
         },
       ],

@@ -8,11 +8,11 @@ import type { Database } from "./database.ts";
 import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 import { z } from "zod";
 import {
-  JobEvent,
-  Job,
-  JobList,
-  JobUUIDs,
-  JobEvents,
+  StreamEvent,
+  Stream,
+  StreamList,
+  StreamUUIDs,
+  StreamEvents,
   SocketEvent,
   Bytes,
   MasterKey,
@@ -95,12 +95,15 @@ export function addRoutes(
     }
   });
 
-  app.put("/jobs/:uuid", verifier(db, "create jobs"), msgPackBody(Job), (req, res) => {
+  app.put("/streams/:uuid", verifier(db, "create streams"), msgPackBody(Stream), (req, res) => {
     try {
-      const job = req.body as Job;
-      const jobId = db.addJob(job);
-      onEvent({ type: "new job", job: { ...job, number: jobId } } satisfies SocketEvent);
-      res.status(201).send(jobId);
+      const stream = req.body as Stream;
+      const streamId = db.addStream(stream);
+      onEvent({
+        type: "new stream",
+        stream: { ...stream, number: streamId },
+      } satisfies SocketEvent);
+      res.status(201).send(streamId);
     } catch (e) {
       switch (e) {
         case "already exists":
@@ -115,21 +118,26 @@ export function addRoutes(
     }
   });
 
-  app.get("/jobs", verifier(db, "list jobs"), (_req, res) => {
-    const list: JobList = db.getJobs();
+  app.get("/streams", verifier(db, "list streams"), (_req, res) => {
+    const list: StreamList = db.getStreams();
     res.status(200).send(list);
   });
 
-  app.post("/events/by-jobs", verifier(db, "read job data"), msgPackBody(JobUUIDs), (req, res) => {
-    const events: JobEvents = db.getEventsByJobs(req.body as JobUUIDs);
-    res.status(200).send(events);
-  });
+  app.post(
+    "/events/by-streams",
+    verifier(db, "read stream data"),
+    msgPackBody(StreamUUIDs),
+    (req, res) => {
+      const events: StreamEvents = db.getEventsByStreams(req.body as StreamUUIDs);
+      res.status(200).send(events);
+    },
+  );
 
-  app.post("/events", verifier(db, "write job data"), msgPackBody(JobEvent), (req, res) => {
-    const event = req.body as JobEvent;
+  app.post("/events", verifier(db, "write stream data"), msgPackBody(StreamEvent), (req, res) => {
+    const event = req.body as StreamEvent;
     try {
       db.addEvent(event);
-      onEvent({ type: "job event", event });
+      onEvent({ type: "stream event", event });
       res.status(200).send();
     } catch (e) {
       if (e === "already exists") res.status(409).send();
@@ -139,7 +147,7 @@ export function addRoutes(
 
   app.put(
     "/blobs/:uuid",
-    verifier(db, "write job data"),
+    verifier(db, "write stream data"),
     msgPackBody(Bytes, 15 * 1024 * 1024),
     (req, res, next) => {
       blobStore
@@ -152,7 +160,7 @@ export function addRoutes(
     },
   );
 
-  app.get("/blobs/:uuid", verifier(db, "read job data"), (req, res, next) => {
+  app.get("/blobs/:uuid", verifier(db, "read stream data"), (req, res, next) => {
     blobStore
       .get(req.params.uuid as string)
       .then((blob) => {
