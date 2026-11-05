@@ -20,16 +20,17 @@ export const MasterKey = MasterKeyPublic.extend({
 });
 export type MasterKey = z.infer<typeof MasterKey>;
 
+export const StreamKeys = z.map(z.uuidv4(), Bytes);
+export type StreamKeys = z.infer<typeof StreamKeys>;
+
 export const Stream = z.object({
+  number: z.number(),
   uuid: z.uuidv4(),
-  keys: z.map(z.uuidv4(), Bytes),
+  keys: StreamKeys,
 });
 export type Stream = z.infer<typeof Stream>;
 
-export const NumberedStream = Stream.extend({ number: z.number() });
-export type NumberedStream = z.infer<typeof NumberedStream>;
-
-export const StreamList = z.array(NumberedStream);
+export const StreamList = z.array(Stream);
 export type StreamList = z.infer<typeof StreamList>;
 
 export const StreamEvent = z.object({
@@ -40,7 +41,7 @@ export const StreamEvent = z.object({
 export type StreamEvent = z.infer<typeof StreamEvent>;
 
 export const SocketEvent = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("new stream"), stream: NumberedStream }),
+  z.object({ type: z.literal("new stream"), stream: Stream }),
   z.object({ type: z.literal("stream event"), event: StreamEvent }),
 ]);
 export type SocketEvent = z.infer<typeof SocketEvent>;
@@ -50,9 +51,6 @@ export const StreamEvents = z.object({
   emptyStreams: z.set(z.uuidv4()),
 });
 export type StreamEvents = z.infer<typeof StreamEvents>;
-
-export const StreamUUIDs = z.set(z.uuidv4());
-export type StreamUUIDs = z.infer<typeof StreamUUIDs>;
 
 export const EventStreamMessage = z.discriminatedUnion("type", [
   z.object({

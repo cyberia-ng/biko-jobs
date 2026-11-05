@@ -1,12 +1,11 @@
 import type {
   StreamEvent,
-  Stream,
   StreamList,
-  StreamUUIDs,
   MasterKey,
   StreamEvents,
   Bytes,
   MasterKeyPublic,
+  StreamKeys,
 } from "@biko-jobs/api-client/schemas.ts";
 import { timingSafeEqual } from "crypto";
 import { readFileSync, readdirSync } from "fs";
@@ -79,7 +78,7 @@ function prepareStatements(db: DatabaseSync) {
         stream_events.data AS event_data
       FROM streams
       LEFT JOIN stream_events ON streams.id = stream_events.stream
-      WHERE streams.uuid IN (SELECT value FROM json_each(?))
+      WHERE streams.id IN (SELECT value FROM json_each(?))
       ORDER BY stream_events.id;`,
     ),
     insertEvent: db.prepare(
@@ -164,19 +163,19 @@ export class Database {
     };
   }
 
-  addStream(stream: Stream): number {
+  addStream(uuid: string, keys: StreamKeys): number {
     this.db.exec("BEGIN TRANSACTION;");
     try {
-      const streamId = this.statements.insertStream.get(stream.uuid)!.id as number;
+      const streamId = this.statements.insertStream.get(uuid)!.id as number;
       const masterKeys = this.statements.listMasterKeys.all() as Array<{
         id: number;
         uuid: string;
       }>;
-      if (masterKeys.length !== stream.keys.size) {
+      if (masterKeys.length !== keys.size) {
         throw "key mismatch";
       }
       for (const masterKey of masterKeys) {
-        const streamKey = stream.keys.get(masterKey.uuid);
+        const streamKey = keys.get(masterKey.uuid);
         if (streamKey === undefined) {
           throw "key mismatch";
         }
@@ -192,8 +191,8 @@ export class Database {
     }
   }
 
-  getEventsByStreams(streams: StreamUUIDs): StreamEvents {
-    const rows = this.statements.getEvents.all(JSON.stringify(Array.from(streams)));
+  getEventsByStreams(streamNumbers: Set<number>): StreamEvents {
+    const rows = this.statements.getEvents.all(JSON.stringify(Array.from(streamNumbers)));
     const events: StreamEvent[] = [];
     const emptyStreams: Set<string> = new Set();
     for (const { stream_uuid, event_uuid, event_data } of rows) {

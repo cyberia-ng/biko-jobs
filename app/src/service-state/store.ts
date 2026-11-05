@@ -7,7 +7,6 @@ import {
   ApiClient,
   AuthToken,
   Stream,
-  NumberedStream,
   type Bytes,
   type StreamBlob,
   type MasterKeyPair,
@@ -18,7 +17,7 @@ const AUTH_TOKEN_LIFETIME = Temporal.Duration.from({ minutes: 5 });
 
 export class Store {
   private state: State;
-  private streams: Map<string, NumberedStream>;
+  private streams: Map<string, Stream>;
   private masterKeys: MasterKeyPublic[];
   private client: ApiClient;
   private subscribers: Set<() => void>;
@@ -57,7 +56,7 @@ export class Store {
         if (!name.startsWith("ephemeral job stream/")) continue;
         const serialized = window.sessionStorage.getItem(name);
         if (serialized === null) continue;
-        const job = await NumberedStream.deserialize(serialized);
+        const job = await Stream.deserialize(serialized);
         this.streams.set(job.uuid, job);
       }
       for (const stream of this.streams.values()) {
@@ -123,8 +122,7 @@ export class Store {
 
   async createJob(uuid: string): Promise<void> {
     const authToken = await this.getAuthToken();
-    const localStream = await Stream.generate(uuid);
-    const stream = await this.client.addStream(localStream, this.masterKeys, authToken);
+    const stream = await this.client.addStream(uuid, this.masterKeys, authToken);
     if (this.loginState.type === "ephemeral") {
       const serialized = await stream.trustedSerialize();
       window.sessionStorage.setItem(`ephemeral job stream/${stream.uuid}`, serialized);

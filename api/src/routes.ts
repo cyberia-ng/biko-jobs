@@ -9,13 +9,12 @@ import { mpDecoder, mpEncoder } from "@biko-jobs/api-client/messagepack.ts";
 import { z } from "zod";
 import {
   StreamEvent,
-  Stream,
   StreamList,
-  StreamUUIDs,
   StreamEvents,
   SocketEvent,
   Bytes,
   MasterKey,
+  StreamKeys,
 } from "@biko-jobs/api-client/schemas.ts";
 import { verifier } from "./verification.ts";
 import type { BlobStore } from "./blob-store.ts";
@@ -95,13 +94,14 @@ export function addRoutes(
     }
   });
 
-  app.put("/streams/:uuid", verifier(db, "create streams"), msgPackBody(Stream), (req, res) => {
+  app.put("/streams/:uuid", verifier(db, "create streams"), msgPackBody(StreamKeys), (req, res) => {
     try {
-      const stream = req.body as Stream;
-      const streamId = db.addStream(stream);
+      const uuid = req.params.uuid as string;
+      const keys = req.body as StreamKeys;
+      const streamId = db.addStream(uuid, keys);
       onEvent({
         type: "new stream",
-        stream: { ...stream, number: streamId },
+        stream: { number: streamId, uuid, keys },
       } satisfies SocketEvent);
       res.status(201).send(streamId);
     } catch (e) {
@@ -123,15 +123,19 @@ export function addRoutes(
     res.status(200).send(list);
   });
 
-  app.post(
-    "/events/by-streams",
-    verifier(db, "read stream data"),
-    msgPackBody(StreamUUIDs),
-    (req, res) => {
-      const events: StreamEvents = db.getEventsByStreams(req.body as StreamUUIDs);
-      res.status(200).send(events);
-    },
-  );
+  app.get("/events", verifier(db, "read stream data"), (req, res) => {
+    let streams: Set<number>;
+    try {
+      const streamsStr = z.string().parse(req.query["streams"]);
+      const streamsData = Uint8Array.fromBase64(streamsStr);
+      const decoded = mpDecoder.decode(streamsData);
+      streams = z.set(z.number().int()).parse(decoded);
+    } catch (_e) {
+      return res.status(400).send();
+    }
+    const events: StreamEvents = db.getEventsByStreams(streams);
+    res.status(200).send(events);
+  });
 
   app.post("/events", verifier(db, "write stream data"), msgPackBody(StreamEvent), (req, res) => {
     const event = req.body as StreamEvent;

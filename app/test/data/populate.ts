@@ -18,8 +18,7 @@ function randomImage() {
   return images[Math.floor(Math.random() * images.length)]!;
 }
 
-async function randomStream() {
-  const jobStream = await Stream.generate(crypto.randomUUID());
+function randomJobData(jobStream: Stream) {
   const images = faker.helpers.multiple(randomImage, { count: { min: 1, max: 3 } });
   const imageBlobs = images.map((image): StreamBlob => ({
     uuid: crypto.randomUUID(),
@@ -74,7 +73,7 @@ async function randomStream() {
       } satisfies JobAction,
     });
   }
-  return { job: jobStream, blobs: imageBlobs, events };
+  return { blobs: imageBlobs, events };
 }
 
 async function main() {
@@ -88,11 +87,14 @@ async function main() {
     expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
     permissions: new Set(["create streams", "write stream data"]),
   });
-  const data = await Promise.all(
-    faker.helpers.multiple(randomStream, { count: { min: 5, max: 20 } }),
+  const streamUUIDs = faker.helpers.multiple(() => crypto.randomUUID(), {
+    count: { min: 5, max: 20 },
+  });
+  const streams = await Promise.all(
+    streamUUIDs.map((uuid) => client.addStream(uuid, [mk.publicKey], authToken)),
   );
-  for (const { job, blobs, events } of data) {
-    await client.addStream(job, [mk.publicKey], authToken);
+  for (const stream of streams) {
+    const { blobs, events } = randomJobData(stream);
     await Promise.all(blobs.map((blob) => client.putBlob(blob, authToken)));
     for (const event of events) {
       await client.addEvent(event, authToken);
