@@ -1,6 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
 import { migrateDb } from "@biko-jobs/api/database.ts";
-import { migrateBlobs } from "@biko-jobs/api/db-migrations/07-pre.ts";
 
 const dbFile = process.argv[2];
 if (dbFile === undefined) {
@@ -15,7 +14,7 @@ if (blobDirectory === undefined) {
 }
 
 const db = new DatabaseSync(dbFile);
-migrateDb(db, { 7: { pre: migrateBlobs(blobDirectory) } }).catch((e) => {
+migrateDb(db, {}).catch((e) => {
   console.error(e);
   process.exit(1);
 });
