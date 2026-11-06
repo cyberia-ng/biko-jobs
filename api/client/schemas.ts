@@ -23,9 +23,17 @@ export type MasterKey = z.infer<typeof MasterKey>;
 export const StreamKeys = z.map(z.uuidv4(), Bytes);
 export type StreamKeys = z.infer<typeof StreamKeys>;
 
+export const AddStreamRequest = z.object({
+  keys: StreamKeys,
+  name: z.nullable(z.string()),
+});
+export type AddStreamRequest = z.infer<typeof AddStreamRequest>;
+
+const StreamName = z.string();
+
 export const Stream = z.object({
   number: z.number(),
-  uuid: z.uuidv4(),
+  name: StreamName,
   keys: StreamKeys,
 });
 export type Stream = z.infer<typeof Stream>;
@@ -34,7 +42,7 @@ export const StreamList = z.array(Stream);
 export type StreamList = z.infer<typeof StreamList>;
 
 export const StreamEvent = z.object({
-  stream: z.uuidv4(),
+  stream: StreamName,
   uuid: z.uuidv4(),
   data: Bytes,
 });
@@ -48,7 +56,7 @@ export type SocketEvent = z.infer<typeof SocketEvent>;
 
 export const StreamEvents = z.object({
   events: z.array(StreamEvent),
-  emptyStreams: z.set(z.uuidv4()),
+  emptyStreams: z.set(StreamName),
 });
 export type StreamEvents = z.infer<typeof StreamEvents>;
 

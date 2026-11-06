@@ -38,7 +38,7 @@ function randomJobData(jobStream: Stream) {
         ),
         event: {
           type: "upsert job",
-          uuid: jobStream.uuid,
+          uuid: jobStream.name,
           tags: new Set(
             faker.helpers.multiple(() => faker.hacker.adjective(), { count: { min: 0, max: 3 } }),
           ),
@@ -67,7 +67,7 @@ function randomJobData(jobStream: Stream) {
         timestamp: Temporal.Instant.from(faker.date.past().toISOString()),
         event: {
           type: "change job status",
-          uuid: jobStream.uuid,
+          uuid: jobStream.name,
           status,
         },
       } satisfies JobAction,
@@ -87,11 +87,11 @@ async function main() {
     expiry: Temporal.Now.instant().add(Temporal.Duration.from({ hours: 1 })),
     permissions: new Set(["create streams", "write stream data"]),
   });
-  const streamUUIDs = faker.helpers.multiple(() => crypto.randomUUID(), {
+  const streamNames = faker.helpers.multiple(() => crypto.randomUUID(), {
     count: { min: 5, max: 20 },
   });
   const streams = await Promise.all(
-    streamUUIDs.map((uuid) => client.addStream(uuid, [mk.publicKey], authToken)),
+    streamNames.map((name) => client.addStream({ name, access: [mk.publicKey] }, authToken)),
   );
   for (const stream of streams) {
     const { blobs, events } = randomJobData(stream);

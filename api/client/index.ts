@@ -21,7 +21,7 @@ export type { Bytes } from "@biko-jobs/api-client/schemas.ts";
 export type ClientErrorInfo =
   | { type: "http error"; status: number }
   | { type: "websocket error"; event: Event }
-  | { type: "stream create conflict"; uuid: string }
+  | { type: "stream create conflict"; name: string }
   | { type: "blob create conflict"; uuid: string }
   | { type: "duplicate event"; uuid: string }
   | { type: "stream keys incomplete" }
@@ -42,6 +42,8 @@ export class ClientError extends Error {
       case "not authorized":
         break;
       case "stream create conflict":
+        message += ` ${info.name}`;
+        break;
       case "blob create conflict":
       case "duplicate event":
         message += ` ${info.uuid}`;
@@ -103,7 +105,7 @@ async function apiFetch(
 }
 
 type WebSocketSubscriber = {
-  getStream: (uuid: string) => Stream | undefined;
+  getStream: (name: string) => Stream | undefined;
   getMasterKey: (uuid: string) => MasterKeyPair | undefined;
   onConnect: () => void;
   onEvent: (event: SubscriptionEvent) => void;
@@ -167,30 +169,33 @@ export class ApiClient {
     raiseForStatus(res);
   }
 
-  async addStream(uuid: string, access: MasterKeyPublic[], auth: AuthToken): Promise<Stream> {
+  async addStream(request: AddStreamRequest, auth: AuthToken): Promise<Stream> {
     const streamKey = await AESKey.generate();
-    const encryptedStreamKeysArrayP = access.map(
+    const encryptedStreamKeysArrayP = request.access.map(
       async (mkp) =>
         [
           mkp.uuid,
-          (await streamKey.encryptKey(mkp.encryptionPublicKey, `stream key/${uuid}`)).data,
+          (await streamKey.encryptKey(mkp.encryptionPublicKey, `stream key/${request.name}`)).data,
         ] as const,
     );
     const encryptedStreamKeys = new Map(await Promise.all(encryptedStreamKeysArrayP));
-    const body: schemas.StreamKeys = encryptedStreamKeys;
-    const res = await apiFetch(this.baseUrl, ["streams", uuid], {
+    const body: schemas.AddStreamRequest = {
+      name: request.name ?? null,
+      keys: encryptedStreamKeys,
+    };
+    const res = await apiFetch(this.baseUrl, ["streams", request.name], {
       method: "PUT",
       body,
       auth,
     });
     switch (res.status) {
       case 409:
-        throw new ClientError({ type: "stream create conflict", uuid });
+        throw new ClientError({ type: "stream create conflict", name: request.name });
       case 422:
         throw new ClientError({ type: "stream keys incomplete" });
     }
     raiseForStatus(res);
-    return new Stream(uuid, streamKey, z.number().parse(res.body));
+    return new Stream(request.name, streamKey, z.number().parse(res.body));
   }
 
   async listStreams(masterKey: MasterKeyPair, authToken: AuthToken): Promise<Array<Stream>> {
@@ -200,7 +205,7 @@ export class ApiClient {
     });
     raiseForStatus(res);
     const body = schemas.StreamList.parse(res.body);
-    const streamsP = body.map(async ({ uuid, keys, number }) => {
+    const streamsP = body.map(async ({ name, keys, number }) => {
       const encryptedKey = keys.get(masterKey.uuid)!;
       const key = await AESKey.decryptKey(
         masterKey.encryptionKeyPrivate,
@@ -208,9 +213,9 @@ export class ApiClient {
           type: "ciphertext",
           data: encryptedKey,
         },
-        `stream key/${uuid}`,
+        `stream key/${name}`,
       );
-      return new Stream(uuid, key, number);
+      return new Stream(name, key, number);
     });
     return Promise.all(streamsP);
   }
@@ -228,7 +233,7 @@ export class ApiClient {
     });
     raiseForStatus(res);
     const responseBody = schemas.StreamEvents.parse(res.body);
-    const streamsMap = new Map(streams.map((stream) => [stream.uuid, stream]));
+    const streamsMap = new Map(streams.map((stream) => [stream.name, stream]));
     const eventPs = responseBody.events.map(async (event) => {
       const stream = streamsMap.get(event.stream)!;
       const decrypted = await stream.key.decrypt({ type: "ciphertext", data: event.data });
@@ -238,10 +243,10 @@ export class ApiClient {
     const events = await Promise.all(eventPs);
     const out: Map<string, StreamEvent[]> = new Map();
     for (const event of events) {
-      let streamEvents: StreamEvent[] | undefined = out.get(event.stream.uuid);
+      let streamEvents: StreamEvent[] | undefined = out.get(event.stream.name);
       if (streamEvents === undefined) {
         streamEvents = [];
-        out.set(event.stream.uuid, streamEvents);
+        out.set(event.stream.name, streamEvents);
       }
       streamEvents.push(event);
     }
@@ -257,7 +262,7 @@ export class ApiClient {
     const res = await apiFetch(this.baseUrl, ["events"], {
       method: "POST",
       body: {
-        stream: event.stream.uuid,
+        stream: event.stream.name,
         uuid: event.uuid,
         data: encrypted.data,
       } satisfies schemas.StreamEvent,
@@ -309,13 +314,13 @@ export class ApiClient {
                   type: "ciphertext",
                   data: encryptedStreamKey,
                 },
-                `stream key/${socketEvent.stream.uuid}`,
+                `stream key/${socketEvent.stream.name}`,
               );
               break;
             }
             if (streamKey === undefined) continue;
             const stream = new Stream(
-              socketEvent.stream.uuid,
+              socketEvent.stream.name,
               streamKey,
               socketEvent.stream.number,
             );
@@ -562,11 +567,11 @@ export class AuthToken {
 }
 
 export class Stream {
-  uuid: string;
+  name: string;
   key: AESKey;
   number: number;
   constructor(uuid: string, key: AESKey, number: number) {
-    this.uuid = uuid;
+    this.name = uuid;
     this.key = key;
     this.number = number;
   }
@@ -574,7 +579,7 @@ export class Stream {
   async trustedSerialize(): Promise<string> {
     const toPack = {
       number: this.number,
-      uuid: this.uuid,
+      name: this.name,
       key: (await this.key.trustedExport()).data,
     };
     const packed = mpEncoder.encode(toPack);
@@ -584,11 +589,11 @@ export class Stream {
   static async deserialize(serialize: string): Promise<Stream> {
     const unpacked = mpDecoder.decode(Uint8Array.fromBase64(serialize)) as {
       number: number;
-      uuid: string;
+      name: string;
       key: Bytes;
     };
     const key = await AESKey.import({ type: "unencrypted key material", data: unpacked.key });
-    return new Stream(unpacked.uuid, key, unpacked.number);
+    return new Stream(unpacked.name, key, unpacked.number);
   }
 }
 
@@ -612,4 +617,9 @@ export type StreamBlob = {
   uuid: string;
   data: Bytes;
   stream: Stream;
+};
+
+export type AddStreamRequest = {
+  name: string;
+  access: MasterKeyPublic[];
 };

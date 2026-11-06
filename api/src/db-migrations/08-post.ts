@@ -25,11 +25,11 @@ export async function dataMigration8Post(db: DatabaseSync) {
     );
     const selectStreamKeysByMasterKey = db.prepare(
       `SELECT
-        stream,
+        stream as stream_number,
         encrypted_stream_key,
-        streams.uuid as stream_uuid
+        streams.name as stream_name
       FROM stream_keys
-      LEFT JOIN streams ON stream_keys.stream = streams.id
+      LEFT JOIN streams ON stream_keys.stream = streams.number
       WHERE master_key = ?;`,
     );
     const updateStreamKey = db.prepare(
@@ -66,20 +66,24 @@ export async function dataMigration8Post(db: DatabaseSync) {
       }
       const encryptionPubKey = await X25519PublicKey.import(publicKey as Bytes);
       const streamKeyRows = selectStreamKeysByMasterKey.all(masterKeyId as number);
-      for (const { stream: streamId, encrypted_stream_key, stream_uuid } of streamKeyRows) {
+      for (const { stream_number, encrypted_stream_key, stream_name } of streamKeyRows) {
         const streamKey = await AESKey.decryptKey(
           encryptionPrivKey,
           {
             type: "ciphertext",
             data: encrypted_stream_key as Bytes,
           },
-          `job key/${stream_uuid as string}`,
+          `job key/${stream_name as string}`,
         );
         const newEncryptedStreamKey = await streamKey.encryptKey(
           encryptionPubKey,
-          `stream key/${stream_uuid as string}`,
+          `stream key/${stream_name as string}`,
         );
-        updateStreamKey.run(newEncryptedStreamKey.data, masterKeyId as number, streamId as number);
+        updateStreamKey.run(
+          newEncryptedStreamKey.data,
+          masterKeyId as number,
+          stream_number as number,
+        );
       }
     }
   } finally {

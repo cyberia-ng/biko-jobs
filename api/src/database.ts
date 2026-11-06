@@ -54,8 +54,8 @@ function prepareStatements(db: DatabaseSync) {
       WHERE uuid = ?;`,
     ),
     insertStream: db.prepare(
-      `INSERT INTO streams (uuid)
-      VALUES (?) RETURNING id;`,
+      `INSERT INTO streams (name)
+      VALUES (?) RETURNING number;`,
     ),
     insertStreamKey: db.prepare(
       `INSERT INTO stream_keys (stream, master_key, encrypted_stream_key)
@@ -63,27 +63,27 @@ function prepareStatements(db: DatabaseSync) {
     ),
     getStreams: db.prepare(
       `SELECT
-        streams.id AS stream_number,
-        streams.uuid AS uuid,
+        streams.number AS stream_number,
+        streams.name AS stream_name,
         stream_keys.encrypted_stream_key AS encrypted_stream_key,
         master_keys.uuid AS master_key_uuid
       FROM streams
-      LEFT JOIN stream_keys ON streams.id = stream_keys.stream
+      LEFT JOIN stream_keys ON streams.number = stream_keys.stream
       LEFT JOIN master_keys ON stream_keys.master_key = master_keys.id;`,
     ),
     getEvents: db.prepare(
       `SELECT
-        streams.uuid AS stream_uuid,
+        streams.name AS stream_name,
         stream_events.uuid AS event_uuid,
         stream_events.data AS event_data
       FROM streams
-      LEFT JOIN stream_events ON streams.id = stream_events.stream
-      WHERE streams.id IN (SELECT value FROM json_each(?))
+      LEFT JOIN stream_events ON streams.number = stream_events.stream
+      WHERE streams.number IN (SELECT value FROM json_each(?))
       ORDER BY stream_events.id;`,
     ),
     insertEvent: db.prepare(
       `INSERT INTO stream_events (stream, uuid, data)
-      SELECT id, ?, ? FROM streams WHERE streams.uuid = ?;`,
+      SELECT number, ?, ? FROM streams WHERE streams.name = ?;`,
     ),
     getMasterSigningKey: db.prepare(`SELECT signing_public_key FROM master_keys WHERE uuid = ?;`),
   };
@@ -163,10 +163,10 @@ export class Database {
     };
   }
 
-  addStream(uuid: string, keys: StreamKeys): number {
+  addStream(name: string, keys: StreamKeys): number {
     this.db.exec("BEGIN TRANSACTION;");
     try {
-      const streamId = this.statements.insertStream.get(uuid)!.id as number;
+      const streamNumber = this.statements.insertStream.get(name)!.number as number;
       const masterKeys = this.statements.listMasterKeys.all() as Array<{
         id: number;
         uuid: string;
@@ -179,10 +179,10 @@ export class Database {
         if (streamKey === undefined) {
           throw "key mismatch";
         }
-        this.statements.insertStreamKey.run(streamId, masterKey.id, streamKey);
+        this.statements.insertStreamKey.run(streamNumber, masterKey.id, streamKey);
       }
       this.db.exec("COMMIT;");
-      return streamId;
+      return streamNumber;
     } catch (e) {
       this.db.exec("ROLLBACK;");
       if ((e as any).errstr === "constraint failed") {
@@ -195,12 +195,12 @@ export class Database {
     const rows = this.statements.getEvents.all(JSON.stringify(Array.from(streamNumbers)));
     const events: StreamEvent[] = [];
     const emptyStreams: Set<string> = new Set();
-    for (const { stream_uuid, event_uuid, event_data } of rows) {
+    for (const { stream_name, event_uuid, event_data } of rows) {
       if (event_uuid === null || event_data === null) {
-        emptyStreams.add(stream_uuid as string);
+        emptyStreams.add(stream_name as string);
       } else {
         events.push({
-          stream: stream_uuid as string,
+          stream: stream_name as string,
           uuid: event_uuid as string,
           data: event_data as Bytes,
         });
@@ -213,16 +213,19 @@ export class Database {
     const streams = new Map<string, { number: number; keys: Map<string, Bytes> }>();
     const rows = this.statements.getStreams.all();
     for (const row of rows) {
-      const uuid = row.uuid as string;
-      let streamData = streams.get(uuid);
+      const name = row.stream_name as string;
+      let streamData = streams.get(name);
       if (streamData === undefined) {
-        streamData = { number: row.stream_number as number, keys: new Map() };
-        streams.set(uuid, streamData);
+        streamData = {
+          number: row.stream_number as number,
+          keys: new Map(),
+        };
+        streams.set(name, streamData);
       }
       streamData.keys.set(row.master_key_uuid as string, row.encrypted_stream_key as Bytes);
     }
     return Array.from(
-      streams.entries().map(([uuid, { number, keys }]) => ({ number, uuid, keys })),
+      streams.entries().map(([name, { number, keys }]) => ({ number, name, keys })),
     );
   }
 

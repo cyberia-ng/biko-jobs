@@ -10,7 +10,7 @@ export function reducer(state: State, action: Action): State {
       return reduceJobAction(state, action.action);
     case "create stream": {
       return produce(state, (state) => {
-        state.pendingJobNumbers.set(action.uuid, action.number);
+        state.pendingJobNumbers.set(action.name, action.number);
       });
     }
   }

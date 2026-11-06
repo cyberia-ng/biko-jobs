@@ -45,8 +45,8 @@ export class Store {
         await this.getAuthToken(),
       );
       for (const stream of streams) {
-        this.streams.set(stream.uuid, stream);
-        this.reduce({ type: "create stream", uuid: stream.uuid, number: stream.number });
+        this.streams.set(stream.name, stream);
+        this.reduce({ type: "create stream", name: stream.name, number: stream.number });
       }
       this.callSubscribers();
     } else if (this.loginState.type === "ephemeral") {
@@ -57,10 +57,10 @@ export class Store {
         const serialized = window.sessionStorage.getItem(name);
         if (serialized === null) continue;
         const job = await Stream.deserialize(serialized);
-        this.streams.set(job.uuid, job);
+        this.streams.set(job.name, job);
       }
       for (const stream of this.streams.values()) {
-        this.reduce({ type: "create stream", uuid: stream.uuid, number: stream.number });
+        this.reduce({ type: "create stream", name: stream.name, number: stream.number });
       }
       this.callSubscribers();
     }
@@ -120,15 +120,15 @@ export class Store {
     }
   }
 
-  async createJob(uuid: string): Promise<void> {
+  async createJob(name: string): Promise<void> {
     const authToken = await this.getAuthToken();
-    const stream = await this.client.addStream(uuid, this.masterKeys, authToken);
+    const stream = await this.client.addStream({ name, access: this.masterKeys }, authToken);
     if (this.loginState.type === "ephemeral") {
       const serialized = await stream.trustedSerialize();
-      window.sessionStorage.setItem(`ephemeral job stream/${stream.uuid}`, serialized);
+      window.sessionStorage.setItem(`ephemeral job stream/${stream.name}`, serialized);
     }
-    this.streams.set(stream.uuid, stream);
-    this.reduce({ type: "create stream", uuid: stream.uuid, number: stream.number });
+    this.streams.set(stream.name, stream);
+    this.reduce({ type: "create stream", name: stream.name, number: stream.number });
     this.callSubscribers();
   }
 
@@ -143,10 +143,10 @@ export class Store {
         onEvent: (event) => {
           switch (event.type) {
             case "new stream":
-              this.streams.set(event.stream.uuid, event.stream);
+              this.streams.set(event.stream.name, event.stream);
               this.reduce({
                 type: "create stream",
-                uuid: event.stream.uuid,
+                name: event.stream.name,
                 number: event.stream.number,
               });
               break;

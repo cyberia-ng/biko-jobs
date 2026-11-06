@@ -141,17 +141,30 @@ describe("api client", () => {
   });
 
   describe("streams", () => {
-    test("list streams", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+    test("create and list streams", async () => {
+      const stream1 = await client.addStream(
+        { name: "hello", access: [masterKey.publicKey] },
+        authToken,
+      );
+      const stream2 = await client.addStream(
+        { name: "world", access: [masterKey.publicKey] },
+        authToken,
+      );
       const streams = await client.listStreams(masterKey, authToken);
-      expect(streams).toStrictEqual([new Stream(stream.uuid, stream.key, 1)]);
+      expect(streams).toStrictEqual([
+        new Stream(stream1.name, stream1.key, 1),
+        new Stream(stream2.name, stream2.key, 2),
+      ]);
     });
 
-    test("create fails for duplicate streams", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
-      await expect(client.addStream(stream.uuid, [masterKey.publicKey], authToken)).rejects.toThrow(
-        new ClientError({ type: "stream create conflict", uuid: stream.uuid }),
+    test("create fails for duplicate stream names", async () => {
+      const stream = await client.addStream(
+        { name: "some name", access: [masterKey.publicKey] },
+        authToken,
       );
+      await expect(
+        client.addStream({ name: stream.name, access: [masterKey.publicKey] }, authToken),
+      ).rejects.toThrow(new ClientError({ type: "stream create conflict", name: stream.name }));
     });
 
     test("create fails without encryption by all known master keys", async () => {
@@ -162,20 +175,26 @@ describe("api client", () => {
       );
       await client.addMasterKeyPair(otherMasterKey, authToken);
       await expect(
-        client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken),
+        client.addStream({ name: crypto.randomUUID(), access: [masterKey.publicKey] }, authToken),
       ).rejects.toThrow(new ClientError({ type: "stream keys incomplete" }));
     });
   });
 
   describe("stream events", () => {
     test("add an event", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+      const stream = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
       const event: StreamEvent = { uuid: crypto.randomUUID(), data: "hello world", stream };
       await expect(client.addEvent(event, authToken)).resolves.not.toThrow();
     });
 
     test("duplicate UUID fails", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+      const stream = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
       const event = { uuid: crypto.randomUUID(), data: "hello world", stream };
       await client.addEvent(event, authToken);
       await expect(client.addEvent(event, authToken)).rejects.toThrow(
@@ -184,28 +203,40 @@ describe("api client", () => {
     });
 
     test("get events for all streams for which we know the key", async () => {
-      const stream1 = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
-      const stream2 = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+      const stream1 = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
+      const stream2 = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
       const event1 = { uuid: crypto.randomUUID(), data: "hello world", stream: stream1 };
       const event2 = { uuid: crypto.randomUUID(), data: "hola mundo", stream: stream2 };
       await client.addEvent(event1, authToken);
       await client.addEvent(event2, authToken);
       const events = await client.getEventsByStreams([stream1], authToken);
       expect(events.size).toBe(1);
-      expect(events.get(stream1.uuid)).toStrictEqual([event1]);
+      expect(events.get(stream1.name)).toStrictEqual([event1]);
     });
 
     test("get events for empty stream", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+      const stream = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
       const events = await client.getEventsByStreams([stream], authToken);
       expect(events.size).toBe(1);
-      expect(events.get(stream.uuid)).toStrictEqual([]);
+      expect(events.get(stream.name)).toStrictEqual([]);
     });
   });
 
   describe("blobs", () => {
     test("put and read a blob", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+      const stream = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
       const blob: StreamBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), stream };
       await client.putBlob(blob, authToken);
       const received = await client.getBlob(blob.uuid, stream, authToken);
@@ -213,7 +244,10 @@ describe("api client", () => {
     });
 
     test("duplicate UUID fails", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+      const stream = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
       const blob: StreamBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), stream };
       await client.putBlob(blob, authToken);
       await expect(client.putBlob(blob, authToken)).rejects.toThrow(
@@ -222,7 +256,10 @@ describe("api client", () => {
     });
 
     test("read non-existent blob", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+      const stream = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
       const received = await client.getBlob(crypto.randomUUID(), stream, authToken);
       expect(received).toBe(undefined);
     });
@@ -230,7 +267,10 @@ describe("api client", () => {
 
   describe("websocket events", () => {
     test("receives events", async () => {
-      const stream = await client.addStream(crypto.randomUUID(), [masterKey.publicKey], authToken);
+      const stream = await client.addStream(
+        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+        authToken,
+      );
       const event1: StreamEvent = { uuid: crypto.randomUUID(), data: "hello world", stream };
       const event2: StreamEvent = { uuid: crypto.randomUUID(), data: "hola mundo", stream };
       const expectedEvents = [event1, event2];
@@ -290,22 +330,23 @@ describe("api client", () => {
       ],
       "create streams": [
         async (badAuthToken: AuthToken) => {
-          await client.addStream(crypto.randomUUID(), [masterKey.publicKey], badAuthToken);
+          await client.addStream(
+            { name: crypto.randomUUID(), access: [masterKey.publicKey] },
+            badAuthToken,
+          );
         },
       ],
       "read stream data": [
         async (badAuthToken: AuthToken) => {
           const stream = await client.addStream(
-            crypto.randomUUID(),
-            [masterKey.publicKey],
+            { name: crypto.randomUUID(), access: [masterKey.publicKey] },
             authToken,
           );
           await client.getEventsByStreams([stream], badAuthToken);
         },
         async (badAuthToken: AuthToken) => {
           const stream = await client.addStream(
-            crypto.randomUUID(),
-            [masterKey.publicKey],
+            { name: crypto.randomUUID(), access: [masterKey.publicKey] },
             authToken,
           );
           const blob: StreamBlob = { uuid: crypto.randomUUID(), stream, data: utf8("hello world") };
@@ -316,8 +357,7 @@ describe("api client", () => {
       "write stream data": [
         async (badAuthToken: AuthToken) => {
           const stream = await client.addStream(
-            crypto.randomUUID(),
-            [masterKey.publicKey],
+            { name: crypto.randomUUID(), access: [masterKey.publicKey] },
             authToken,
           );
           const event: StreamEvent = { uuid: crypto.randomUUID(), data: "hello world", stream };
@@ -325,8 +365,7 @@ describe("api client", () => {
         },
         async (badAuthToken: AuthToken) => {
           const stream = await client.addStream(
-            crypto.randomUUID(),
-            [masterKey.publicKey],
+            { name: crypto.randomUUID(), access: [masterKey.publicKey] },
             authToken,
           );
           const blob: StreamBlob = { uuid: crypto.randomUUID(), data: utf8("hello world"), stream };

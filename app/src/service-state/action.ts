@@ -7,7 +7,7 @@ export type AnyVersionJobAction = JobActionV1 | JobActionV2;
 export type JobAction = JobActionV2;
 
 export type Action =
-  | { type: "create stream"; uuid: string; number: number }
+  | { type: "create stream"; name: string; number: number }
   | { type: "job action"; action: JobAction };
 export type Image = ImageV1;
 export const allStatuses = allStatusesV2;
