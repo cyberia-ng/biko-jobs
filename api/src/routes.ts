@@ -14,7 +14,7 @@ import {
   SocketEvent,
   Bytes,
   MasterKey,
-  StreamKeys,
+  AddStreamRequest,
 } from "@biko-jobs/api-client/schemas.ts";
 import { verifier } from "./verification.ts";
 import type { BlobStore } from "./blob-store.ts";
@@ -94,29 +94,34 @@ export function addRoutes(
     }
   });
 
-  app.put("/streams/:uuid", verifier(db, "create streams"), msgPackBody(StreamKeys), (req, res) => {
-    try {
-      const uuid = req.params.uuid as string;
-      const keys = req.body as StreamKeys;
-      const streamId = db.addStream(uuid, keys);
-      onEvent({
-        type: "new stream",
-        stream: { number: streamId, uuid, keys },
-      } satisfies SocketEvent);
-      res.status(201).send(streamId);
-    } catch (e) {
-      switch (e) {
-        case "already exists":
-          res.status(409).send();
-          break;
-        case "key mismatch":
-          res.status(422).send();
-          break;
-        default:
-          throw e;
+  app.put(
+    "/streams/:uuid",
+    verifier(db, "create streams"),
+    msgPackBody(AddStreamRequest),
+    (req, res) => {
+      try {
+        const uuid = req.params.uuid as string;
+        const addStreamReq = req.body as AddStreamRequest;
+        const streamId = db.addStream(uuid, addStreamReq.keys, addStreamReq.name);
+        onEvent({
+          type: "new stream",
+          stream: { number: streamId, uuid, keys: addStreamReq.keys, name: null },
+        } satisfies SocketEvent);
+        res.status(201).send(streamId);
+      } catch (e) {
+        switch (e) {
+          case "already exists":
+            res.status(409).send();
+            break;
+          case "key mismatch":
+            res.status(422).send();
+            break;
+          default:
+            throw e;
+        }
       }
-    }
-  });
+    },
+  );
 
   app.get("/streams", verifier(db, "list streams"), (_req, res) => {
     const list: StreamList = db.getStreams();

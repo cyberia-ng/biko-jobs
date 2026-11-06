@@ -31,3 +31,10 @@ insert into stream_events (id, stream, uuid, data)
 drop table job_events;
 drop table job_keys;
 drop table jobs;
+
+create table stream_names (
+  id integer primary key asc,
+  stream integer references streams (id),
+  name text
+);
+create unique index stream_names_name on stream_names (name);

@@ -91,7 +91,7 @@ async function main() {
     count: { min: 5, max: 20 },
   });
   const streams = await Promise.all(
-    streamUUIDs.map((uuid) => client.addStream(uuid, [mk.publicKey], authToken)),
+    streamUUIDs.map((uuid) => client.addStream({ uuid, access: [mk.publicKey] }, authToken)),
   );
   for (const stream of streams) {
     const { blobs, events } = randomJobData(stream);

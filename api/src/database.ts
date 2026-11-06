@@ -57,6 +57,10 @@ function prepareStatements(db: DatabaseSync) {
       `INSERT INTO streams (uuid)
       VALUES (?) RETURNING id;`,
     ),
+    insertStreamName: db.prepare(
+      `INSERT INTO stream_names (stream, name)
+      VALUES (?, ?);`,
+    ),
     insertStreamKey: db.prepare(
       `INSERT INTO stream_keys (stream, master_key, encrypted_stream_key)
       VALUES (?, ?, ?);`,
@@ -66,10 +70,13 @@ function prepareStatements(db: DatabaseSync) {
         streams.id AS stream_number,
         streams.uuid AS uuid,
         stream_keys.encrypted_stream_key AS encrypted_stream_key,
-        master_keys.uuid AS master_key_uuid
+        master_keys.uuid AS master_key_uuid,
+        stream_names.name AS stream_name
       FROM streams
       LEFT JOIN stream_keys ON streams.id = stream_keys.stream
-      LEFT JOIN master_keys ON stream_keys.master_key = master_keys.id;`,
+      LEFT JOIN master_keys ON stream_keys.master_key = master_keys.id
+      LEFT JOIN stream_names ON streams.id = stream_names.stream
+      ;`,
     ),
     getEvents: db.prepare(
       `SELECT
@@ -163,7 +170,7 @@ export class Database {
     };
   }
 
-  addStream(uuid: string, keys: StreamKeys): number {
+  addStream(uuid: string, keys: StreamKeys, name: string | null): number {
     this.db.exec("BEGIN TRANSACTION;");
     try {
       const streamId = this.statements.insertStream.get(uuid)!.id as number;
@@ -180,6 +187,9 @@ export class Database {
           throw "key mismatch";
         }
         this.statements.insertStreamKey.run(streamId, masterKey.id, streamKey);
+      }
+      if (name !== null) {
+        this.statements.insertStreamName.run(streamId, name);
       }
       this.db.exec("COMMIT;");
       return streamId;
@@ -210,19 +220,26 @@ export class Database {
   }
 
   getStreams(): StreamList {
-    const streams = new Map<string, { number: number; keys: Map<string, Bytes> }>();
+    const streams = new Map<
+      string,
+      { number: number; keys: Map<string, Bytes>; name: string | null }
+    >();
     const rows = this.statements.getStreams.all();
     for (const row of rows) {
       const uuid = row.uuid as string;
       let streamData = streams.get(uuid);
       if (streamData === undefined) {
-        streamData = { number: row.stream_number as number, keys: new Map() };
+        streamData = {
+          number: row.stream_number as number,
+          keys: new Map(),
+          name: row.stream_name as string | null,
+        };
         streams.set(uuid, streamData);
       }
       streamData.keys.set(row.master_key_uuid as string, row.encrypted_stream_key as Bytes);
     }
     return Array.from(
-      streams.entries().map(([uuid, { number, keys }]) => ({ number, uuid, keys })),
+      streams.entries().map(([uuid, { number, keys, name }]) => ({ number, uuid, keys, name })),
     );
   }
 

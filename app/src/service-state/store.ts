@@ -122,7 +122,7 @@ export class Store {
 
   async createJob(uuid: string): Promise<void> {
     const authToken = await this.getAuthToken();
-    const stream = await this.client.addStream(uuid, this.masterKeys, authToken);
+    const stream = await this.client.addStream({ uuid, access: this.masterKeys }, authToken);
     if (this.loginState.type === "ephemeral") {
       const serialized = await stream.trustedSerialize();
       window.sessionStorage.setItem(`ephemeral job stream/${stream.uuid}`, serialized);

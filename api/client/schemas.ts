@@ -23,10 +23,17 @@ export type MasterKey = z.infer<typeof MasterKey>;
 export const StreamKeys = z.map(z.uuidv4(), Bytes);
 export type StreamKeys = z.infer<typeof StreamKeys>;
 
+export const AddStreamRequest = z.object({
+  keys: StreamKeys,
+  name: z.nullable(z.string()),
+});
+export type AddStreamRequest = z.infer<typeof AddStreamRequest>;
+
 export const Stream = z.object({
   number: z.number(),
   uuid: z.uuidv4(),
   keys: StreamKeys,
+  name: z.nullable(z.string()),
 });
 export type Stream = z.infer<typeof Stream>;
 
