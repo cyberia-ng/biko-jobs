@@ -3,7 +3,6 @@ import type { allStatuses, Image } from "./action.ts";
 export type State = {
   processedJobActions: Set<string>;
   jobs: Map<string, Job>;
-  pendingJobNumbers: Map<string, number>;
 };
 
 export type Job = {
@@ -28,5 +27,4 @@ export type Job = {
 export const initialState: State = {
   processedJobActions: new Set(),
   jobs: new Map(),
-  pendingJobNumbers: new Map(),
 };

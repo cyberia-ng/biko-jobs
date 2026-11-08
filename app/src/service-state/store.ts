@@ -46,7 +46,6 @@ export class Store {
       );
       for (const stream of streams) {
         this.streams.set(stream.name, stream);
-        this.reduce({ type: "create stream", name: stream.name, number: stream.number });
       }
       this.callSubscribers();
     } else if (this.loginState.type === "ephemeral") {
@@ -58,9 +57,6 @@ export class Store {
         if (serialized === null) continue;
         const job = await Stream.deserialize(serialized);
         this.streams.set(job.name, job);
-      }
-      for (const stream of this.streams.values()) {
-        this.reduce({ type: "create stream", name: stream.name, number: stream.number });
       }
       this.callSubscribers();
     }
@@ -74,17 +70,18 @@ export class Store {
     for (const jobEvents of events.values()) {
       for (const event of jobEvents) {
         const jobAction = event.data as AnyVersionJobAction;
-        this.reduceJobAction(jobAction);
+        this.reduceJobAction(jobAction, event.stream.number);
       }
     }
     this.callSubscribers();
   }
 
-  private reduceJobAction(jobAction: AnyVersionJobAction) {
+  private reduceJobAction(jobAction: AnyVersionJobAction, streamNumber: number) {
     const migrated = migrateAction(jobAction);
     const action: Action = {
       type: "job action",
       action: migrated,
+      jobNumber: streamNumber,
     };
     this.reduce(action);
   }
@@ -128,7 +125,6 @@ export class Store {
       window.sessionStorage.setItem(`ephemeral job stream/${stream.name}`, serialized);
     }
     this.streams.set(stream.name, stream);
-    this.reduce({ type: "create stream", name: stream.name, number: stream.number });
     this.callSubscribers();
   }
 
@@ -144,15 +140,10 @@ export class Store {
           switch (event.type) {
             case "new stream":
               this.streams.set(event.stream.name, event.stream);
-              this.reduce({
-                type: "create stream",
-                name: event.stream.name,
-                number: event.stream.number,
-              });
               break;
             case "stream event":
               const action = event.event.data as AnyVersionJobAction;
-              this.reduceJobAction(action);
+              this.reduceJobAction(action, event.event.stream.number);
           }
           this.callSubscribers();
         },
@@ -207,7 +198,7 @@ export class Store {
     if (stream === undefined) {
       throw new Error("attempted to dispatch an action for a job stream that does not exist");
     }
-    this.reduce({ type: "job action", action });
+    this.reduce({ type: "job action", action, jobNumber: stream.number });
     this.callSubscribers();
     await this.client.addEvent({ uuid: action.uuid, data: action, stream }, authToken);
   }

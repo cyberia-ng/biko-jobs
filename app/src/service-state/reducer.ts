@@ -7,16 +7,11 @@ import { assertNever } from "../assert-never.ts";
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "job action":
-      return reduceJobAction(state, action.action);
-    case "create stream": {
-      return produce(state, (state) => {
-        state.pendingJobNumbers.set(action.name, action.number);
-      });
-    }
+      return reduceJobAction(state, action.action, action.jobNumber);
   }
 }
 
-function reduceJobAction(state: State, action: JobAction): State {
+function reduceJobAction(state: State, action: JobAction, jobNumber: number): State {
   return produce(state, (state) => {
     if (state.processedJobActions.has(action.uuid)) {
       return;
@@ -26,11 +21,6 @@ function reduceJobAction(state: State, action: JobAction): State {
     const job = state.jobs.get(event.uuid);
     switch (event.type) {
       case "upsert job":
-        const jobNumber = state.pendingJobNumbers.get(event.uuid) ?? job?.number;
-        state.pendingJobNumbers.delete(event.uuid);
-        if (jobNumber === undefined) {
-          return state;
-        }
         state.jobs.set(event.uuid, {
           uuid: event.uuid,
           number: jobNumber,
