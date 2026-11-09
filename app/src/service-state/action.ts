@@ -1,35 +1,40 @@
-import type { ActionV1 as JobActionV1, ImageV1 } from "./job-actions/v1.ts";
-import { allStatusesV2 } from "./job-actions/v2.ts";
-import type { ActionV2 as JobActionV2 } from "./job-actions/v2.ts";
+import type { ActionV1 as StreamActionV1, ImageV1 } from "./stream-actions/v1.ts";
+import { allStatusesV2 } from "./stream-actions/v2.ts";
+import type { ActionV2 as StreamActionV2 } from "./stream-actions/v2.ts";
+import type { ActionV3 as StreamActionV3 } from "./stream-actions/v3.ts";
 
-export type AnyVersionJobAction = JobActionV1 | JobActionV2;
+export type AnyVersionStreamAction = StreamActionV1 | StreamActionV2 | StreamActionV3;
 
-export type JobAction = JobActionV2;
+export type StreamAction = StreamActionV3;
 
-export type Action = { type: "job action"; action: JobAction; jobNumber: number };
+export type WrappedStreamAction = {
+  actionUUID: string;
+  streamName: string;
+  streamNumber: number;
+  inner: StreamActionV3;
+};
 export type Image = ImageV1;
 export const allStatuses = allStatusesV2;
 
-const withNow = (event: JobAction["event"]): JobAction => ({
-  version: 2,
-  uuid: crypto.randomUUID(),
+type JobAction = Extract<StreamAction, { type: "job action" }>["jobAction"];
+const jobNow = (event: JobAction): StreamAction => ({
+  version: 3,
+  type: "job action",
   timestamp: Temporal.Now.instant(),
-  event,
+  jobAction: event,
 });
 
-type Event<T extends string> = Omit<Extract<JobAction["event"], { type: T }>, "type">;
+type JobActionOf<T extends string> = Omit<Extract<JobAction, { type: T }>, "type">;
 
-export const upsertJob = (f: Event<"upsert job">) => withNow({ type: "upsert job", ...f });
+export const upsertJob = (f: JobActionOf<"upsert job">) => jobNow({ type: "upsert job", ...f });
 
-export const changeJobStatus = (f: Event<"change job status">) =>
-  withNow({ type: "change job status", ...f });
+export const changeJobStatus = (status: (typeof allStatuses)[number]) =>
+  jobNow({ type: "change job status", status });
 
-export const deleteJob = (f: Event<"delete job">) => withNow({ type: "delete job", ...f });
+export const deleteJob = () => jobNow({ type: "delete job" });
 
-export const addJobTag = (f: Event<"add job tag">) => withNow({ type: "add job tag", ...f });
+export const addJobTag = (tag: string) => jobNow({ type: "add job tag", tag });
 
-export const removeJobTag = (f: Event<"remove job tag">) =>
-  withNow({ type: "remove job tag", ...f });
+export const removeJobTag = (tag: string) => jobNow({ type: "remove job tag", tag });
 
-export const setJobArchived = (f: Event<"set job archived">) =>
-  withNow({ type: "set job archived", ...f });
+export const setJobArchived = (archived: boolean) => jobNow({ type: "set job archived", archived });

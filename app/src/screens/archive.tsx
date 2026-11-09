@@ -34,7 +34,7 @@ export function Archive() {
         icon="archive"
         onAction={(jobs) => {
           for (const job of jobs) {
-            dispatch(setJobArchived({ uuid: job.uuid, archived: true }));
+            dispatch(setJobArchived(true), job.uuid);
           }
         }}
       />
@@ -46,7 +46,7 @@ export function Archive() {
         icon="box-arrow-up"
         onAction={(jobs) => {
           for (const job of jobs) {
-            dispatch(setJobArchived({ uuid: job.uuid, archived: false }));
+            dispatch(setJobArchived(false), job.uuid);
           }
         }}
       />

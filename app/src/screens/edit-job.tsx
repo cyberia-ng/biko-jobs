@@ -1,7 +1,7 @@
 import { useContext, useReducer, useState, type ReactNode } from "react";
 import { ImageBlob } from "../components/blob-loader.tsx";
 import { AppContext } from "../context.ts";
-import { upsertJob, type Image, type JobAction } from "../service-state/action.ts";
+import { upsertJob, type Image, type StreamAction } from "../service-state/action.ts";
 import { Tags } from "../components/tag-control.tsx";
 import type { Job } from "../service-state/state.ts";
 import omit from "lodash/omit.js";
@@ -24,7 +24,7 @@ import {
 } from "../components/modal.tsx";
 
 type EditJobAction = Omit<
-  Extract<JobAction["event"], { type: "upsert job" }>,
+  Extract<Extract<StreamAction, { type: "job action" }>["jobAction"], { type: "upsert job" }>,
   "type" | "images"
 > & {
   images: PhotosT;
@@ -58,11 +58,11 @@ export function EditJob(props: { new_?: boolean }) {
   if (service === undefined) {
     return <Page>not connected</Page>;
   }
-  function submit(jobAction: EditJobAction) {
+  function submit(jobAction: EditJobAction, jobUUID: string) {
     (async () => {
       setLoading(true);
       if (isNew) {
-        await service.createJob(jobAction.uuid);
+        await service.createJob(jobUUID);
       }
       const images: Image[] = [];
       for (const photo of jobAction.images) {
@@ -70,7 +70,7 @@ export function EditJob(props: { new_?: boolean }) {
           case "new":
             const blobUUID = crypto.randomUUID();
             const data = await photo.blob.bytes();
-            await service.putBlob(blobUUID, jobAction.uuid, data);
+            await service.putBlob(blobUUID, jobUUID, data);
             images.push({ type: "image/jpeg", blobId: blobUUID });
             break;
           case "existing":
@@ -78,8 +78,8 @@ export function EditJob(props: { new_?: boolean }) {
             break;
         }
       }
-      const action: JobAction = upsertJob({ ...omit(jobAction, "images"), images });
-      service.dispatch(action);
+      const action: StreamAction = upsertJob({ ...omit(jobAction, "images"), images });
+      service.dispatch(action, jobUUID);
       if (isNew) {
         setFormReset(!formReset);
       }
@@ -172,7 +172,7 @@ function EditJobForm({
   onUnsaved,
 }: {
   job?: Job;
-  onSubmit: (job: EditJobAction) => void;
+  onSubmit: (job: EditJobAction, jobUUID: string) => void;
   onReset?: () => void;
   disabled: boolean;
   onUnsaved: () => void;
@@ -190,14 +190,13 @@ function EditJobForm({
   }
   function submit() {
     const jobAction: EditJobAction = {
-      uuid: job?.uuid ?? crypto.randomUUID(),
       tags: formData.tags,
       customerName: formData.name,
       customerPhoneNumber: formData.phoneNumber,
       description: formData.description,
       images: formData.photos,
     };
-    onSubmit(jobAction);
+    onSubmit(jobAction, job?.uuid ?? crypto.randomUUID());
   }
   return (
     <div>

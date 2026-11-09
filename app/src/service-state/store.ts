@@ -1,5 +1,5 @@
-import type { Action, AnyVersionJobAction, JobAction } from "./action.ts";
-import { migrateAction } from "./job-actions/migrate.ts";
+import type { WrappedStreamAction, AnyVersionStreamAction, StreamAction } from "./action.ts";
+import { migrateAction } from "./stream-actions/migrate.ts";
 import { reducer } from "./reducer.ts";
 import { initialState, type State } from "./state.ts";
 import { type State as LoginState } from "../login-state.ts";
@@ -38,7 +38,7 @@ export class Store {
     this.subscribers = new Set();
   }
 
-  private async getJobs() {
+  private async getStreams() {
     if (this.loginState.type === "master key pair") {
       const streams = await this.client.listStreams(
         this.loginState.masterKey,
@@ -55,38 +55,39 @@ export class Store {
         if (!name.startsWith("ephemeral job stream/")) continue;
         const serialized = window.sessionStorage.getItem(name);
         if (serialized === null) continue;
-        const job = await Stream.deserialize(serialized);
-        this.streams.set(job.name, job);
+        const stream = await Stream.deserialize(serialized);
+        this.streams.set(stream.name, stream);
       }
       this.callSubscribers();
     }
   }
 
-  private async getJobEvents() {
+  private async getStreamEvents() {
     const events = await this.client.getEventsByStreams(
       Array.from(this.streams.values()),
       await this.getAuthToken(),
     );
-    for (const jobEvents of events.values()) {
-      for (const event of jobEvents) {
-        const jobAction = event.data as AnyVersionJobAction;
-        this.reduceJobAction(jobAction, event.stream.number);
+    for (const streamEvents of events.values()) {
+      for (const event of streamEvents) {
+        const action = event.data as AnyVersionStreamAction;
+        this.reduceStreamAction(action, event.stream, event.uuid);
       }
     }
     this.callSubscribers();
   }
 
-  private reduceJobAction(jobAction: AnyVersionJobAction, streamNumber: number) {
-    const migrated = migrateAction(jobAction);
-    const action: Action = {
-      type: "job action",
-      action: migrated,
-      jobNumber: streamNumber,
+  private reduceStreamAction(action: AnyVersionStreamAction, stream: Stream, actionUUID: string) {
+    const migrated = migrateAction(action);
+    const wrappedAction: WrappedStreamAction = {
+      actionUUID,
+      streamName: stream.name,
+      streamNumber: stream.number,
+      inner: migrated,
     };
-    this.reduce(action);
+    this.reduce(wrappedAction);
   }
 
-  private reduce(action: Action) {
+  private reduce(action: WrappedStreamAction) {
     this.state = reducer(this.state, action);
   }
 
@@ -117,9 +118,23 @@ export class Store {
     }
   }
 
-  async createJob(name: string): Promise<void> {
+  async getMechanicsStream(): Promise<Stream> {
+    const existing = this.streams.get("mechanics");
+    if (existing !== undefined) return existing;
+    const newStream = await this.client.addStream(
+      {
+        name: "mechanics",
+        access: this.masterKeys,
+      },
+      await this.getAuthToken(),
+    );
+    this.streams.set("mechanics", newStream);
+    return newStream;
+  }
+
+  async createJobStream(uuid: string): Promise<void> {
     const authToken = await this.getAuthToken();
-    const stream = await this.client.addStream({ name, access: this.masterKeys }, authToken);
+    const stream = await this.client.addStream({ name: uuid, access: this.masterKeys }, authToken);
     if (this.loginState.type === "ephemeral") {
       const serialized = await stream.trustedSerialize();
       window.sessionStorage.setItem(`ephemeral job stream/${stream.name}`, serialized);
@@ -142,8 +157,8 @@ export class Store {
               this.streams.set(event.stream.name, event.stream);
               break;
             case "stream event":
-              const action = event.event.data as AnyVersionJobAction;
-              this.reduceJobAction(action, event.event.stream.number);
+              const action = event.event.data as AnyVersionStreamAction;
+              this.reduceStreamAction(action, event.event.stream, event.event.uuid);
           }
           this.callSubscribers();
         },
@@ -186,35 +201,51 @@ export class Store {
     await this.client.syncSocketState();
     this.state = initialState;
     if (loginState.login !== undefined) {
-      await this.getJobs();
-      await this.getJobEvents();
+      await this.getStreams();
+      await this.getStreamEvents();
     }
     this.callSubscribers();
   }
 
-  async dispatch(action: JobAction) {
-    const authToken = await this.getAuthToken();
-    let stream = this.streams.get(action.event.uuid);
+  async dispatch(action: StreamAction, streamName: string) {
+    let stream: Stream | undefined;
+    switch (action.type) {
+      case "job action": {
+        stream = this.streams.get(streamName);
+        break;
+      }
+      case "mechanic list action": {
+        stream = await this.getMechanicsStream();
+      }
+    }
     if (stream === undefined) {
-      throw new Error("attempted to dispatch an action for a job stream that does not exist");
+      throw new Error("attempted to dispatch an action for a stream that does not exist");
     }
-    this.reduce({ type: "job action", action, jobNumber: stream.number });
+    const authToken = await this.getAuthToken();
+    const actionUUID = crypto.randomUUID();
+    const wrapped: WrappedStreamAction = {
+      actionUUID,
+      streamName: stream.name,
+      streamNumber: stream.number,
+      inner: action,
+    };
+    this.reduce(wrapped);
     this.callSubscribers();
-    await this.client.addEvent({ uuid: action.uuid, data: action, stream }, authToken);
+    await this.client.addEvent({ uuid: actionUUID, data: action, stream }, authToken);
   }
 
-  async getBlob(blobUUID: string, jobUUID: string): Promise<Bytes | undefined> {
-    const job = this.streams.get(jobUUID);
-    if (job === undefined) {
+  async getBlob(blobUUID: string, streamName: string): Promise<Bytes | undefined> {
+    const stream = this.streams.get(streamName);
+    if (stream === undefined) {
       return undefined;
     }
-    const blob = await this.client.getBlob(blobUUID, job, await this.getAuthToken());
+    const blob = await this.client.getBlob(blobUUID, stream, await this.getAuthToken());
     return blob?.data;
   }
 
-  async putBlob(blobUUID: string, jobUUID: string, data: Bytes) {
+  async putBlob(blobUUID: string, streamName: string, data: Bytes) {
     const authToken = await this.getAuthToken();
-    const stream = this.streams.get(jobUUID);
+    const stream = this.streams.get(streamName);
     if (stream === undefined) {
       throw new Error("no such job");
     }

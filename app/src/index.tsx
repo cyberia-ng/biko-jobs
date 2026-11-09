@@ -130,9 +130,12 @@ function App({ apiClient }: { apiClient: ApiClient }) {
       () => ({
         state: serviceState,
         createJob: (uuid: string) =>
-          withLoading(`creating job ${uuid}`, serviceStore.createJob(uuid)),
-        dispatch: (action) =>
-          withLoading(`dispatching event: ${action.event.type}`, serviceStore.dispatch(action)),
+          withLoading(`creating job ${uuid}`, serviceStore.createJobStream(uuid)),
+        dispatch: (action, streamName) =>
+          withLoading(
+            `dispatching event: ${action.type === "job action" ? action.jobAction.type : action.type}`,
+            serviceStore.dispatch(action, streamName),
+          ),
         getBlob: (blobUUID: string, jobUUID: string) =>
           withLoading(
             `getting blob: ${blobUUID} in job ${jobUUID}`,

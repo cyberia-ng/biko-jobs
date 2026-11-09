@@ -11,7 +11,7 @@ import {
 } from "@biko-jobs/api-client";
 import range from "lodash/range.js";
 import { fakerEN_GB as faker } from "@faker-js/faker";
-import { allStatuses, type JobAction } from "../../src/service-state/action.ts";
+import { allStatuses, type StreamAction } from "../../src/service-state/action.ts";
 
 const images = range(1, 5 + 1).map((n) => readFileSync(join(import.meta.dirname, `img${n}.jpg`)));
 function randomImage() {
@@ -31,14 +31,13 @@ function randomJobData(jobStream: Stream) {
       uuid: createActionId,
       stream: jobStream,
       data: {
-        version: 2,
-        uuid: createActionId,
+        version: 3,
+        type: "job action",
         timestamp: Temporal.Instant.from(
           faker.date.recent({ days: { min: 0, max: 7 } }).toISOString(),
         ),
-        event: {
+        jobAction: {
           type: "upsert job",
-          uuid: jobStream.name,
           tags: new Set(
             faker.helpers.multiple(() => faker.hacker.adjective(), { count: { min: 0, max: 3 } }),
           ),
@@ -52,7 +51,7 @@ function randomJobData(jobStream: Stream) {
             blobId: blob.uuid,
           })),
         },
-      } satisfies JobAction,
+      } satisfies StreamAction,
     },
   ];
   const status = faker.helpers.maybe(() => faker.helpers.arrayElement(allStatuses.slice(1)));
@@ -62,15 +61,14 @@ function randomJobData(jobStream: Stream) {
       uuid: changeStatusActionId,
       stream: jobStream,
       data: {
-        version: 2,
-        uuid: changeStatusActionId,
+        version: 3,
+        type: "job action",
         timestamp: Temporal.Instant.from(faker.date.past().toISOString()),
-        event: {
+        jobAction: {
           type: "change job status",
-          uuid: jobStream.name,
           status,
         },
-      } satisfies JobAction,
+      } satisfies StreamAction,
     });
   }
   return { blobs: imageBlobs, events };

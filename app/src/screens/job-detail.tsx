@@ -43,7 +43,7 @@ export function JobDetail() {
           onDismiss={() => setModalState(null)}
           onConfirm={() => {
             setModalState(null);
-            session?.dispatch(deleteJob({ uuid }));
+            session?.dispatch(deleteJob(), uuid);
             navigate(basicScreen("kanban"));
           }}
         >
@@ -104,8 +104,8 @@ export function JobDetail() {
           <div className="job-detail-tags fs-4">
             <Tags
               tags={job.tags}
-              onAddTag={(tag) => session?.dispatch(addJobTag({ uuid: job.uuid, tag }))}
-              onDeleteTag={(tag) => session?.dispatch(removeJobTag({ uuid: job.uuid, tag }))}
+              onAddTag={(tag) => session?.dispatch(addJobTag(tag), job.uuid)}
+              onDeleteTag={(tag) => session?.dispatch(removeJobTag(tag), job.uuid)}
             />
           </div>
           <hr />
@@ -133,12 +133,7 @@ function Status(props: { job: Job }) {
         if (e.target.value === props.job.status) {
           return;
         }
-        session?.dispatch(
-          changeJobStatus({
-            uuid: props.job.uuid,
-            status: e.target.value as Job["status"],
-          }),
-        );
+        session?.dispatch(changeJobStatus(e.target.value as Job["status"]), props.job.uuid);
       }}
     >
       {allStatuses.map((status) => (

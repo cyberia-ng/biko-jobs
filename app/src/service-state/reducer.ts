@@ -1,78 +1,82 @@
 import { produce } from "immer";
-import type { Action, JobAction } from "./action.ts";
+import type { WrappedStreamAction } from "./action.ts";
 import type { State } from "./state.ts";
 import pick from "lodash/pick.js";
 import { assertNever } from "../assert-never.ts";
 
-export function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case "job action":
-      return reduceJobAction(state, action.action, action.jobNumber);
-  }
-}
-
-function reduceJobAction(state: State, action: JobAction, jobNumber: number): State {
+export function reducer(state: State, action: WrappedStreamAction): State {
   return produce(state, (state) => {
-    if (state.processedJobActions.has(action.uuid)) {
+    if (state.processedJobActions.has(action.actionUUID)) {
       return;
     }
-    state.processedJobActions.add(action.uuid);
-    const { event } = action;
-    const job = state.jobs.get(event.uuid);
-    switch (event.type) {
+    state.processedJobActions.add(action.actionUUID);
+    const { inner } = action;
+    if (inner.type !== "job action") {
+      return; // TODO
+    }
+    const jobUUID = action.streamName;
+    const job = state.jobs.get(jobUUID);
+    const { jobAction, timestamp } = inner;
+    switch (jobAction.type) {
       case "upsert job":
-        state.jobs.set(event.uuid, {
-          uuid: event.uuid,
-          number: jobNumber,
+        state.jobs.set(jobUUID, {
+          uuid: jobUUID,
+          number: action.streamNumber,
           status: job?.status ?? "triaged",
           archived: job?.archived ?? false,
           timestamps: {
-            creation: job?.timestamps.creation ?? action.timestamp,
+            creation: job?.timestamps.creation ?? inner.timestamp,
             working: job?.timestamps.working,
             completed: job?.timestamps.completed,
             cancelled: job?.timestamps.cancelled,
             hasComplexMovement: job?.timestamps.hasComplexMovement ?? false,
           },
-          ...pick(event, ["customerName", "customerPhoneNumber", "description", "tags", "images"]),
+          ...pick(jobAction, [
+            "customerName",
+            "customerPhoneNumber",
+            "description",
+            "tags",
+            "images",
+          ]),
         });
         break;
       case "add job tag":
-        state.jobs.get(event.uuid)?.tags.add(event.tag);
+        job?.tags.add(jobAction.tag);
         break;
       case "remove job tag":
-        state.jobs.get(event.uuid)?.tags.delete(event.tag);
+        job?.tags.delete(jobAction.tag);
         break;
       case "change job status":
-        if (job !== undefined && job.status !== event.status) {
-          switch (event.status) {
+        if (job !== undefined && job.status !== jobAction.status) {
+          switch (jobAction.status) {
             case "working":
-              job.timestamps.working = job.timestamps.working ?? action.timestamp;
+              job.timestamps.working = job.timestamps.working ?? timestamp;
               if (job.status !== "triaged") job.timestamps.hasComplexMovement = true;
               break;
             case "complete":
-              job.timestamps.completed = job.timestamps.completed ?? action.timestamp;
+              job.timestamps.completed = job.timestamps.completed ?? timestamp;
               if (job.status !== "working") job.timestamps.hasComplexMovement = true;
               break;
             case "cancelled":
-              job.timestamps.cancelled = job.timestamps.cancelled ?? action.timestamp;
+              job.timestamps.cancelled = job.timestamps.cancelled ?? timestamp;
               if (job.status === "complete") {
                 job.timestamps.hasComplexMovement = true;
               }
               break;
           }
-          job.status = event.status;
+          job.status = jobAction.status;
         }
         break;
       case "delete job":
-        state.jobs.delete(event.uuid);
+        state.jobs.delete(jobUUID);
         break;
       case "set job archived":
         if (job !== undefined) {
-          job.archived = event.archived;
+          job.archived = jobAction.archived;
         }
         break;
       default:
-        assertNever(event);
+        assertNever(jobAction);
     }
   });
 }
