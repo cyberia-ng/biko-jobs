@@ -12,9 +12,15 @@ type JobActionV3 = {
     | Omit<UpsertJobV2, "uuid" | "tags">
     | Omit<ChangeJobStatusV2, "uuid">
     | Omit<DeleteJobV1, "uuid">
-    | Omit<SetJobArchivedV2, "uuid">;
+    | Omit<SetJobArchivedV2, "uuid">
+    | SetJobBlockedV3;
 };
 type MechanicListActionV3 = { type: "mechanic list action" };
+
+type SetJobBlockedV3 = {
+  type: "set job blocked";
+  blocked: false | string;
+};
 
 export function migrateFromV2(action: ActionV2): ActionV3[] {
   if (action.event.type === "add job tag" || action.event.type === "remove job tag") return [];

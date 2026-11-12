@@ -14,6 +14,7 @@ export type Job = {
   status: (typeof allStatuses)[number];
   images: Image[];
   archived: boolean;
+  blocked: false | string;
   timestamps: {
     creation: Temporal.Instant;
     working: Temporal.Instant | undefined;

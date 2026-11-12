@@ -31,6 +31,7 @@ export function reducer(state: State, action: WrappedStreamAction): State {
             cancelled: job?.timestamps.cancelled,
             hasComplexMovement: job?.timestamps.hasComplexMovement ?? false,
           },
+          blocked: job?.blocked ?? false,
           ...pick(jobAction, ["customerName", "customerPhoneNumber", "description", "images"]),
         });
         break;
@@ -61,6 +62,11 @@ export function reducer(state: State, action: WrappedStreamAction): State {
       case "set job archived":
         if (job !== undefined) {
           job.archived = jobAction.archived;
+        }
+        break;
+      case "set job blocked":
+        if (job !== undefined) {
+          job.blocked = jobAction.blocked;
         }
         break;
       default:

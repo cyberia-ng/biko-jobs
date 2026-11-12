@@ -51,11 +51,10 @@ function randomJobData(jobStream: Stream) {
       } satisfies StreamAction,
     },
   ];
-  const status = faker.helpers.maybe(() => faker.helpers.arrayElement(allStatuses.slice(1)));
-  if (status !== undefined) {
-    const changeStatusActionId = crypto.randomUUID();
+  const status = faker.helpers.arrayElement(allStatuses);
+  if (status !== "triaged") {
     events.push({
-      uuid: changeStatusActionId,
+      uuid: crypto.randomUUID(),
       stream: jobStream,
       data: {
         version: 3,
@@ -64,6 +63,22 @@ function randomJobData(jobStream: Stream) {
         jobAction: {
           type: "change job status",
           status,
+        },
+      } satisfies StreamAction,
+    });
+  }
+  const blocked = faker.helpers.maybe(() => faker.company.buzzPhrase());
+  if (blocked !== undefined) {
+    events.push({
+      uuid: crypto.randomUUID(),
+      stream: jobStream,
+      data: {
+        version: 3,
+        type: "job action",
+        timestamp: Temporal.Instant.from(faker.date.past().toISOString()),
+        jobAction: {
+          type: "set job blocked",
+          blocked,
         },
       } satisfies StreamAction,
     });
