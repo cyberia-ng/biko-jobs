@@ -34,3 +34,6 @@ export const changeJobStatus = (status: (typeof allStatuses)[number]) =>
 export const deleteJob = () => jobNow({ type: "delete job" });
 
 export const setJobArchived = (archived: boolean) => jobNow({ type: "set job archived", archived });
+
+export const setJobBlocked = (blocked: false | string) =>
+  jobNow({ type: "set job blocked", blocked });

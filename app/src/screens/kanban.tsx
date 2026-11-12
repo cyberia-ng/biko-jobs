@@ -42,15 +42,22 @@ function Column(props: { title: string; statuses: Job["status"][] }) {
               navigate(jobDetail(job.uuid));
             }}
           >
-            <div className="row gx-2 mx-1 mb-2 border rounded overflow-hidden">
+            <div
+              className={`row gx-2 mx-1 mb-2 border rounded overflow-hidden ${job.blocked !== false ? "text-secondary" : ""}`}
+            >
               <div className="col-4 ps-0">
-                {job.images.length > 0 && (
-                  <ImageBlob
-                    jobUUID={job.uuid}
-                    blobUUID={job.images[0]!.blobId}
-                    type={job.images[0]!.type}
-                  />
-                )}
+                <div className="h-100 w-100 overflow-hidden position-relative">
+                  {job.blocked !== false && (
+                    <div className="position-absolute h-100 w-100 top-0 left-0 bg-secondary-subtle opacity-75"></div>
+                  )}
+                  {job.images.length > 0 && (
+                    <ImageBlob
+                      jobUUID={job.uuid}
+                      blobUUID={job.images[0]!.blobId}
+                      type={job.images[0]!.type}
+                    />
+                  )}
+                </div>
               </div>
               <div className="col d-flex flex-column">
                 <div className="mt-1 mb-0 d-flex">
@@ -61,6 +68,13 @@ function Column(props: { title: string; statuses: Job["status"][] }) {
                     <h4>#{job.number}</h4>
                   </div>
                 </div>
+                {job.blocked !== false && (
+                  <div className="d-flex">
+                    <div className="bg-danger-subtle text-danger-emphasis rounded-pill px-2">
+                      blocked
+                    </div>
+                  </div>
+                )}
                 <div className="mt-1 flex-grow-1">
                   <div className="h-100 job-description">
                     {job.description.replace(/\n/g, " | ")}
