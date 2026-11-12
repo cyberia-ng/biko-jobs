@@ -77,14 +77,15 @@ export class Store {
   }
 
   private reduceStreamAction(action: AnyVersionStreamAction, stream: Stream, actionUUID: string) {
-    const migrated = migrateAction(action);
-    const wrappedAction: WrappedStreamAction = {
+    const wrappedActions = migrateAction(action).map((migrated) => ({
       actionUUID,
       streamName: stream.name,
       streamNumber: stream.number,
       inner: migrated,
-    };
-    this.reduce(wrappedAction);
+    }));
+    for (const action of wrappedActions) {
+      this.reduce(action);
+    }
   }
 
   private reduce(action: WrappedStreamAction) {

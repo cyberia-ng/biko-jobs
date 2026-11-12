@@ -61,18 +61,6 @@ function Column(props: { title: string; statuses: Job["status"][] }) {
                     <h4>#{job.number}</h4>
                   </div>
                 </div>
-                {job.tags.size !== 0 && (
-                  <div className="d-flex flex-wrap gap-1 fs-6">
-                    {Array.from(job.tags).map((tag) => (
-                      <div
-                        key={tag}
-                        className="kanban-tag px-2 bg-info-subtle text-info-emphasis rounded-pill"
-                      >
-                        {tag}
-                      </div>
-                    ))}
-                  </div>
-                )}
                 <div className="mt-1 flex-grow-1">
                   <div className="h-100 job-description">
                     {job.description.replace(/\n/g, " | ")}

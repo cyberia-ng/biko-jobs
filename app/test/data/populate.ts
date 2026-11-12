@@ -38,9 +38,6 @@ function randomJobData(jobStream: Stream) {
         ),
         jobAction: {
           type: "upsert job",
-          tags: new Set(
-            faker.helpers.multiple(() => faker.hacker.adjective(), { count: { min: 0, max: 3 } }),
-          ),
           customerName: faker.person.firstName(),
           customerPhoneNumber: faker.phone.number(),
           description: faker.helpers

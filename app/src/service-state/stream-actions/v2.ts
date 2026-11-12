@@ -50,7 +50,7 @@ export type SetJobArchivedV2 = {
   archived: boolean;
 };
 
-export function migrateFromV1(action: ActionV1): ActionV2 {
+export function migrateFromV1(action: ActionV1): ActionV2[] {
   const uuid = crypto.randomUUID(); // Non-deterministic
 
   let event: ActionV2["event"];
@@ -68,10 +68,12 @@ export function migrateFromV1(action: ActionV1): ActionV2 {
       event = action.event;
       break;
   }
-  return {
-    version: 2,
-    uuid,
-    ...omit(action, "event"),
-    event,
-  };
+  return [
+    {
+      version: 2,
+      uuid,
+      ...omit(action, "event"),
+      event,
+    },
+  ];
 }

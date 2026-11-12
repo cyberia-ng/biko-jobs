@@ -12,7 +12,6 @@ export type Job = {
   customerPhoneNumber: string;
   description: string;
   status: (typeof allStatuses)[number];
-  tags: Set<string>;
   images: Image[];
   archived: boolean;
   timestamps: {

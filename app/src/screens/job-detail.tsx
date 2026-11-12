@@ -11,15 +11,8 @@ import {
   ModalHeader,
   ModalTitle,
 } from "../components/modal.tsx";
-import { Tags } from "../components/tag-control.tsx";
 import { TimeAgo } from "../components/time-ago.tsx";
-import {
-  addJobTag,
-  allStatuses,
-  changeJobStatus,
-  deleteJob,
-  removeJobTag,
-} from "../service-state/action.ts";
+import { allStatuses, changeJobStatus, deleteJob } from "../service-state/action.ts";
 import type { Job } from "../service-state/state.ts";
 import { basicScreen, editJob } from "../navigation-state.ts";
 
@@ -99,14 +92,6 @@ export function JobDetail() {
           <hr />
           <div>
             <Status job={job} />
-          </div>
-          <hr />
-          <div className="job-detail-tags fs-4">
-            <Tags
-              tags={job.tags}
-              onAddTag={(tag) => session?.dispatch(addJobTag(tag), job.uuid)}
-              onDeleteTag={(tag) => session?.dispatch(removeJobTag(tag), job.uuid)}
-            />
           </div>
           <hr />
           <div style={{ whiteSpace: "pre-wrap" }}>{job.description}</div>

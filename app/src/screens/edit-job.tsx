@@ -2,7 +2,6 @@ import { useContext, useReducer, useState, type ReactNode } from "react";
 import { ImageBlob } from "../components/blob-loader.tsx";
 import { AppContext } from "../context.ts";
 import { upsertJob, type Image, type StreamAction } from "../service-state/action.ts";
-import { Tags } from "../components/tag-control.tsx";
 import type { Job } from "../service-state/state.ts";
 import omit from "lodash/omit.js";
 import {
@@ -141,24 +140,14 @@ type FormData = {
   name: string;
   phoneNumber: string;
   description: string;
-  tags: Set<string>;
   photos: PhotosT;
 };
-type FormAction =
-  | ({ type: "partial" } & Partial<Omit<FormData, "tags">>)
-  | { type: "add tag"; tag: string }
-  | { type: "remove tag"; tag: string };
+type FormAction = { type: "partial" } & Partial<FormData>;
 function formReducer(state: FormData, action: FormAction): FormData {
   return produce(state, (state) => {
     switch (action.type) {
       case "partial":
         Object.assign(state, omit(action, "type"));
-        break;
-      case "add tag":
-        state.tags.add(action.tag);
-        break;
-      case "remove tag":
-        state.tags.delete(action.tag);
         break;
     }
   });
@@ -181,7 +170,6 @@ function EditJobForm({
     name: job?.customerName ?? "",
     phoneNumber: job?.customerPhoneNumber ?? "",
     description: job?.description ?? "",
-    tags: job?.tags ?? new Set(),
     photos: job?.images.map((image) => ({ type: "existing" as const, image, job: job.uuid })) ?? [],
   });
   function dispatchFormData(action: FormAction) {
@@ -190,7 +178,6 @@ function EditJobForm({
   }
   function submit() {
     const jobAction: EditJobAction = {
-      tags: formData.tags,
       customerName: formData.name,
       customerPhoneNumber: formData.phoneNumber,
       description: formData.description,
@@ -238,14 +225,6 @@ function EditJobForm({
             value={formData.description}
             disabled={disabled}
             onChange={(e) => dispatchFormData({ type: "partial", description: e.target.value })}
-          />
-        </div>
-        <div className="mb-3 edit-job-tags">
-          <Tags
-            tags={formData.tags}
-            onAddTag={(tag) => dispatchFormData({ type: "add tag", tag })}
-            onDeleteTag={(tag) => dispatchFormData({ type: "remove tag", tag })}
-            disabled={disabled}
           />
         </div>
         <Photos

@@ -31,20 +31,8 @@ export function reducer(state: State, action: WrappedStreamAction): State {
             cancelled: job?.timestamps.cancelled,
             hasComplexMovement: job?.timestamps.hasComplexMovement ?? false,
           },
-          ...pick(jobAction, [
-            "customerName",
-            "customerPhoneNumber",
-            "description",
-            "tags",
-            "images",
-          ]),
+          ...pick(jobAction, ["customerName", "customerPhoneNumber", "description", "images"]),
         });
-        break;
-      case "add job tag":
-        job?.tags.add(jobAction.tag);
-        break;
-      case "remove job tag":
-        job?.tags.delete(jobAction.tag);
         break;
       case "change job status":
         if (job !== undefined && job.status !== jobAction.status) {
