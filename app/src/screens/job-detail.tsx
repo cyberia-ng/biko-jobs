@@ -12,78 +12,81 @@ import {
   ModalTitle,
 } from "../components/modal.tsx";
 import { TimeAgo } from "../components/time-ago.tsx";
-import { allStatuses, changeJobStatus, deleteJob, setJobBlocked } from "../service-state/action.ts";
+import {
+  allStatuses,
+  changeJobStatus,
+  deleteJob,
+  setJobBlocked,
+  type Status,
+} from "../service-state/action.ts";
 import type { Job } from "../service-state/state.ts";
 import { basicScreen, editJob } from "../navigation-state.ts";
 
 export function JobDetail() {
-  const { service: session, navigationState, navigate } = useContext(AppContext);
-  const [deleteModalState, setDeleteModalState] = useState<null | "delete job">(null);
+  const { service, navigationState, navigate } = useContext(AppContext);
   if (navigationState.screen !== "job detail") {
     return <></>;
   }
-  const uuid = navigationState.uuid;
-  const job = session?.state.jobs.get(uuid);
-  if (job === undefined) {
+  const job_ = service?.state.jobs.get(navigationState.uuid);
+  if (job_ === undefined) {
     return <></>;
   }
+  const job = job_;
   function onBlock(reason: string) {
-    session.dispatch(setJobBlocked(reason), uuid);
+    service.dispatch(setJobBlocked(reason), job.uuid);
   }
   function onUnblock() {
-    session.dispatch(setJobBlocked(false), uuid);
+    service.dispatch(setJobBlocked(false), job.uuid);
+  }
+  function onBack() {
+    navigate(basicScreen("kanban"));
+  }
+  function onDelete() {
+    service.dispatch(deleteJob(), job.uuid);
+    navigate(basicScreen("kanban"));
+  }
+  function onEdit() {
+    navigate(editJob(job.uuid));
+  }
+  function onStatusChange(status: Status) {
+    service.dispatch(changeJobStatus(status), job.uuid);
   }
   return (
+    <JobDetailInner
+      job={job_}
+      onBack={onBack}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      onBlock={onBlock}
+      onUnblock={onUnblock}
+      onStatusChange={onStatusChange}
+    />
+  );
+}
+
+function JobDetailInner({
+  job,
+  onBack,
+  onEdit,
+  onDelete,
+  onBlock,
+  onUnblock,
+  onStatusChange,
+}: {
+  job: Job;
+  onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onBlock: (reason: string) => void;
+  onUnblock: () => void;
+  onStatusChange: (status: Status) => void;
+}) {
+  return (
     <div className="fs-4">
-      {deleteModalState === "delete job" && (
-        <Modal
-          onDismiss={() => setDeleteModalState(null)}
-          onConfirm={() => {
-            setDeleteModalState(null);
-            session?.dispatch(deleteJob(), uuid);
-            navigate(basicScreen("kanban"));
-          }}
-        >
-          <ModalHeader>
-            <ModalTitle>Confirm deletion</ModalTitle>
-            <ModalCloseButton />
-          </ModalHeader>
-          <ModalBody>Really delete this job?</ModalBody>
-          <ModalFooter>
-            <ModalDismissButton>Cancel</ModalDismissButton>
-            <ModalConfirmButton className="btn btn-danger">Delete</ModalConfirmButton>
-          </ModalFooter>
-        </Modal>
-      )}
       <div className="m-2 row">
         <div className="col-12 col-md-6 bg-white rounded shadow-sm p-2">
-          <div className="mb-4">
-            <div className="d-flex">
-              <div className="flex-grow-1">
-                <button
-                  className="btn btn-primary fs-4 me-2"
-                  onClick={() => navigate(basicScreen("kanban"))}
-                >
-                  <i className="bi bi-caret-left-fill" />
-                  Back
-                </button>
-              </div>
-              <button
-                className="btn btn-secondary me-2 fs-4"
-                onClick={() => navigate(editJob(uuid))}
-              >
-                <i className="bi bi-pencil me-2" />
-                Edit job
-              </button>
-              <button
-                className="btn btn-danger fs-4"
-                onClick={() => setDeleteModalState("delete job")}
-              >
-                <i className="bi bi-trash me-1" />
-                Delete job
-              </button>
-            </div>
-          </div>
+          <TopButtons onBack={onBack} onEdit={onEdit} onDelete={onDelete} />
+          <hr />
           <div className="d-flex">
             <div className="flex-grow-1">
               <h3>{job.customerName}</h3>
@@ -97,9 +100,7 @@ export function JobDetail() {
             {job.timestamps.creation.toLocaleString()} (<TimeAgo time={job.timestamps.creation} />)
           </div>
           <hr />
-          <div>
-            <Status job={job} />
-          </div>
+          <Status job={job} onChange={onStatusChange} />
           <hr />
           <Block job={job} onBlock={onBlock} onUnblock={onUnblock} />
           <hr />
@@ -117,29 +118,76 @@ export function JobDetail() {
   );
 }
 
-function Status(props: { job: Job }) {
-  const { service: session } = useContext(AppContext);
+function TopButtons({
+  onBack,
+  onEdit,
+  onDelete,
+}: {
+  onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [modalState, setModalState] = useState<null | "delete job">(null);
   return (
-    <select
-      value={props.job.status}
-      className="form-select fs-4 bg-primary-subtle"
-      onChange={(e) => {
-        if (e.target.value === props.job.status) {
-          return;
-        }
-        session?.dispatch(changeJobStatus(e.target.value as Job["status"]), props.job.uuid);
-      }}
-    >
-      {allStatuses.map((status) => (
-        <option key={status} value={status}>
-          {statusText(status)}
-        </option>
-      ))}
-    </select>
+    <div className="d-flex">
+      {modalState === "delete job" && (
+        <Modal
+          onDismiss={() => setModalState(null)}
+          onConfirm={() => {
+            setModalState(null);
+            onDelete();
+          }}
+        >
+          <ModalHeader>
+            <ModalTitle>Confirm deletion</ModalTitle>
+            <ModalCloseButton />
+          </ModalHeader>
+          <ModalBody>Really delete this job?</ModalBody>
+          <ModalFooter>
+            <ModalDismissButton>Cancel</ModalDismissButton>
+            <ModalConfirmButton className="btn btn-danger">Delete</ModalConfirmButton>
+          </ModalFooter>
+        </Modal>
+      )}
+      <div className="flex-grow-1">
+        <button className="btn btn-primary fs-4 me-2" onClick={() => onBack()}>
+          <i className="bi bi-caret-left-fill" />
+          Back
+        </button>
+      </div>
+      <button className="btn btn-secondary me-2 fs-4" onClick={() => onEdit()}>
+        <i className="bi bi-pencil me-2" />
+        Edit job
+      </button>
+      <button className="btn btn-danger fs-4" onClick={() => setModalState("delete job")}>
+        <i className="bi bi-trash me-1" />
+        Delete job
+      </button>
+    </div>
   );
 }
 
-function statusText(status: Job["status"]): string {
+function Status({ job, onChange }: { job: Job; onChange: (status: Status) => void }) {
+  return (
+    <div>
+      <select
+        value={job.status}
+        className="form-select fs-4 bg-primary-subtle"
+        onChange={(e) => {
+          if (e.target.value !== job.status) onChange(e.target.value as Status);
+        }}
+      >
+        {allStatuses.map((status) => (
+          <option key={status} value={status}>
+            {statusText(status)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function statusText(status: Status): string {
   switch (status) {
     case "triaged":
       return "Triaged";

@@ -15,6 +15,7 @@ export type WrappedStreamAction = {
 };
 export type Image = ImageV1;
 export const allStatuses = allStatusesV2;
+export type Status = (typeof allStatuses)[number];
 
 type JobAction = Extract<StreamAction, { type: "job action" }>["jobAction"];
 const jobNow = (event: JobAction): StreamAction => ({
