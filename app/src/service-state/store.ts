@@ -12,6 +12,7 @@ import {
   type MasterKeyPair,
   type MasterKeyPublic,
 } from "@biko-jobs/api-client";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 const AUTH_TOKEN_LIFETIME = Temporal.Duration.from({ minutes: 5 });
 
@@ -274,4 +275,15 @@ async function generateAuthToken(masterKey: MasterKeyPair): Promise<AuthToken> {
 
 function multiplyDuration(duration: Temporal.Duration, multiplier: number) {
   return Temporal.Duration.from({ microseconds: duration.total("microseconds") * multiplier });
+}
+
+export function useService(apiClient: ApiClient, onAsyncError: (e: unknown) => void) {
+  const store = useMemo(() => {
+    return new Store(apiClient, onAsyncError);
+  }, [apiClient, onAsyncError]);
+  const state = useSyncExternalStore(
+    useCallback((cb) => store.subscribe(cb), [store]),
+    useCallback(() => store.getSnapshot(), [store]),
+  );
+  return [state, store] as const;
 }

@@ -1,10 +1,10 @@
 import { createContext } from "react";
 import type { State as ServiceState } from "./service-state/state.ts";
 import type { StreamAction } from "./service-state/action.ts";
-import type { State as NavigationState } from "./navigation-state.ts";
+import type { State as NavigationState } from "./navigation/state.ts";
 import type { ApiClient, Bytes } from "@biko-jobs/api-client";
 import type { Action as LoginAction, State as LoginState } from "./login-state.ts";
-import type { addNavigationHook } from "./utilities/use-hash-location.ts";
+import type { Store as NavigationStore } from "./navigation/store.ts";
 
 export type AppContextT = {
   loginState: LoginState;
@@ -19,7 +19,7 @@ export type AppContextT = {
   loading: boolean;
   navigationState: NavigationState;
   navigate: (state: NavigationState) => void;
-  addNavigationHook: typeof addNavigationHook;
+  addNavigationHook: typeof NavigationStore.prototype.addHook;
   refresh: () => void;
   apiClient: ApiClient;
 };

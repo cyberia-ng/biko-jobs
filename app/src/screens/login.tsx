@@ -12,7 +12,7 @@ import {
   ClientChannel as PairingClientChannel,
   ServerChannel as PairingServerChannel,
 } from "@biko-jobs/api-client/pairing.ts";
-import { basicScreen, login as navigationLogin, serialize } from "../navigation-state.ts";
+import { basicScreen, login as navigationLogin, serialize } from "../navigation/state.ts";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Modal,

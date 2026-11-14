@@ -20,7 +20,7 @@ import {
   type Status,
 } from "../service-state/action.ts";
 import type { Job } from "../service-state/state.ts";
-import { basicScreen, editJob } from "../navigation-state.ts";
+import { basicScreen, editJob } from "../navigation/state.ts";
 
 export function JobDetail() {
   const { service, navigationState, navigate } = useContext(AppContext);

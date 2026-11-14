@@ -1,6 +1,6 @@
 import { useContext, type ReactNode } from "react";
 import { AppContext } from "../context.ts";
-import { basicScreen, login } from "../navigation-state.ts";
+import { basicScreen, login } from "../navigation/state.ts";
 
 export function Nav() {
   const { loginState, loading, navigationState, navigate, refresh } = useContext(AppContext);

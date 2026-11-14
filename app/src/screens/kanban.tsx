@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { TimeAgo } from "../components/time-ago.tsx";
 import { AppContext } from "../context.ts";
 import type { Job } from "../service-state/state.ts";
-import { jobDetail } from "../navigation-state.ts";
+import { jobDetail } from "../navigation/state.ts";
 import { Thumbnail } from "../components/thumbnail.tsx";
 
 export function Kanban() {

@@ -1,35 +1,21 @@
 import "./styles.scss";
 import "temporal-polyfill/global";
-import {
-  StrictMode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { StrictMode, useCallback, useEffect, useMemo, useReducer, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./screens/kanban.tsx";
 import { Nav } from "./components/nav.tsx";
-import {
-  deserialize,
-  initialState as initialNavigationState,
-  serialize,
-} from "./navigation-state.ts";
 import { EditJob } from "./screens/edit-job.tsx";
 import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
-import { Store as ServiceStore } from "./service-state/store.ts";
+import { useService } from "./service-state/store.ts";
 import { enableMapSet, produce } from "immer";
 import { assertNever } from "./utilities/assert-never.ts";
 import { Export } from "./screens/export.tsx";
-import { useHashLocation } from "./utilities/use-hash-location.ts";
-import type { State as NavigationState } from "./navigation-state.ts";
 import { ApiClient, MasterKeyPassword } from "@biko-jobs/api-client";
 import { initialState as initialLoginState, reducer as loginReducer } from "./login-state.ts";
 import { Login } from "./screens/login.tsx";
 import { Archive } from "./screens/archive.tsx";
+import { useNavigation } from "./navigation/store.ts";
 
 enableMapSet();
 
@@ -50,12 +36,7 @@ window.onload = () => {
 };
 
 function App({ apiClient }: { apiClient: ApiClient }) {
-  const [hash, navigateHash, addNavigationHook] = useHashLocation();
-  const navigationState = useMemo(() => deserialize(hash) ?? initialNavigationState, [hash]);
-  const navigate = useCallback(
-    (state: NavigationState) => navigateHash(serialize(state)),
-    [navigateHash],
-  );
+  const [navigationState, navigationStore] = useNavigation();
   const [loginState, dispatchLoginState] = useReducer(loginReducer, initialLoginState);
 
   const [loadingIds, dispatchLoading] = useReducer(
@@ -82,12 +63,9 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     [dispatchLoading],
   );
 
-  const serviceStore = useMemo(() => {
-    return new ServiceStore(apiClient, console.error.bind(console));
-  }, [apiClient]);
-  const serviceState = useSyncExternalStore(
-    useCallback((cb) => serviceStore.subscribe(cb), [serviceStore]),
-    useCallback(() => serviceStore.getSnapshot(), [serviceStore]),
+  const [serviceState, serviceStore] = useService(
+    apiClient,
+    useCallback((e) => console.error(e), []),
   );
   const refresh = useCallback(() => {
     withLoading(
@@ -151,8 +129,8 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     ),
     loading: loadingIds.size !== 0,
     navigationState,
-    navigate,
-    addNavigationHook,
+    navigate: (state) => navigationStore.navigate(state),
+    addNavigationHook: (hook) => navigationStore.addHook(hook),
     refresh,
     apiClient,
   };

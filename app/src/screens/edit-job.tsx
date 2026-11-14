@@ -4,11 +4,7 @@ import { AppContext } from "../context.ts";
 import { upsertJob, type Image, type StreamAction } from "../service-state/action.ts";
 import type { Job } from "../service-state/state.ts";
 import omit from "lodash/omit.js";
-import {
-  deserialize,
-  initialState as initialNavigationState,
-  jobDetail,
-} from "../navigation-state.ts";
+import { jobDetail } from "../navigation/state.ts";
 import { Page } from "../components/page.tsx";
 import { produce } from "immer";
 import {
@@ -45,7 +41,7 @@ export function EditJob(props: { new_?: boolean }) {
     const unhook = addNavigationHook(({ to, unhook }) => {
       function override() {
         unhook();
-        navigate(deserialize(to) ?? initialNavigationState);
+        navigate(to);
       }
       function cancel() {
         setUnsaved({ type: "dirty", unhook });
