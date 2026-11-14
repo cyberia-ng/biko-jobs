@@ -52,6 +52,21 @@ function randomImage(images: Image[]): Image {
 }
 
 function randomJobData(jobStream: Stream, allImages: Image[]) {
+  function jobAction(
+    action: Extract<StreamAction, { type: "job action" }>["jobAction"],
+    timestamp?: Temporal.Instant,
+  ): StreamEvent {
+    return {
+      uuid: crypto.randomUUID(),
+      stream: jobStream,
+      data: {
+        version: 3,
+        type: "job action",
+        timestamp: timestamp ?? Temporal.Instant.from(faker.date.past().toISOString()),
+        jobAction: action,
+      },
+    };
+  }
   const images = faker.helpers
     .multiple(() => randomImage(allImages), {
       count: { min: 1, max: 3 },
@@ -68,69 +83,42 @@ function randomJobData(jobStream: Stream, allImages: Image[]) {
         stream: jobStream,
       } satisfies StreamBlob,
     }));
-  const createActionId = crypto.randomUUID();
   const events: StreamEvent[] = [
-    {
-      uuid: createActionId,
-      stream: jobStream,
-      data: {
-        version: 3,
-        type: "job action",
-        timestamp: Temporal.Instant.from(
-          faker.date.recent({ days: { min: 0, max: 7 } }).toISOString(),
-        ),
-        jobAction: {
-          type: "upsert job",
-          customerName: faker.person.firstName(),
-          customerPhoneNumber: faker.phone.number(),
-          description: faker.helpers
-            .multiple(() => faker.company.buzzPhrase(), { count: { min: 1, max: 5 } })
-            .join("\n"),
-          images: images.map(({ imageBlob, thumbnailBlob }) => ({
-            type: "image/jpeg",
-            blobId: imageBlob.uuid,
-            ...faker.helpers.maybe(() => ({
+    jobAction(
+      {
+        type: "upsert job",
+        customerName: faker.person.firstName(),
+        customerPhoneNumber: faker.phone.number(),
+        description: faker.helpers
+          .multiple(() => faker.company.buzzPhrase(), { count: { min: 1, max: 5 } })
+          .join("\n"),
+        images: images.map(({ imageBlob, thumbnailBlob }) => ({
+          type: "image/jpeg",
+          blobId: imageBlob.uuid,
+          ...faker.helpers.maybe(
+            () => ({
               thumbnail: {
                 type: "image/jpeg",
                 blobId: thumbnailBlob.uuid,
               },
-            })),
-          })),
-        },
-      } satisfies StreamAction,
-    },
+            }),
+            { probability: 0.8 },
+          ),
+        })),
+      },
+      Temporal.Instant.from(faker.date.recent({ days: { min: 0, max: 7 } }).toISOString()),
+    ),
   ];
   const status = faker.helpers.arrayElement(allStatuses);
   if (status !== "triaged") {
-    events.push({
-      uuid: crypto.randomUUID(),
-      stream: jobStream,
-      data: {
-        version: 3,
-        type: "job action",
-        timestamp: Temporal.Instant.from(faker.date.past().toISOString()),
-        jobAction: {
-          type: "change job status",
-          status,
-        },
-      } satisfies StreamAction,
-    });
+    events.push(jobAction({ type: "change job status", status }));
   }
   const blocked = faker.helpers.maybe(() => faker.company.buzzPhrase());
   if (blocked !== undefined) {
-    events.push({
-      uuid: crypto.randomUUID(),
-      stream: jobStream,
-      data: {
-        version: 3,
-        type: "job action",
-        timestamp: Temporal.Instant.from(faker.date.past().toISOString()),
-        jobAction: {
-          type: "set job blocked",
-          blocked,
-        },
-      } satisfies StreamAction,
-    });
+    events.push(jobAction({ type: "set job blocked", blocked }));
+  }
+  if (Math.random() < 0.2) {
+    events.push(jobAction({ type: "set job archived", archived: true }));
   }
   return { blobs: images.flatMap((image) => [image.imageBlob, image.thumbnailBlob]), events };
 }
