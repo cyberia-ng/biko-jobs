@@ -25,11 +25,12 @@ export function Archive() {
     },
   } = useContext(AppContext);
   const [archived, current] = partition(Array.from(jobs.values()), (job) => job.archived);
+  const done = current.filter((job) => job.status === "complete" || job.status === "cancelled");
   return (
     <Page>
       <JobsDisplay
-        jobs={current}
-        title="Current jobs"
+        jobs={done}
+        title="Current completed/cancelled jobs"
         verb="Archive"
         icon="archive"
         onAction={(jobs) => {

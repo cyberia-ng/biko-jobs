@@ -28,11 +28,11 @@ export function Nav() {
         <i className="bi bi-archive fs-1" />
       </NavItem>
       <NavItem
-        disabled={loginState?.login === undefined}
-        active={navigationState.screen === "export"}
-        onClick={() => navigate(basicScreen("export"))}
+        disabled={loginState?.login?.type !== "master key"}
+        active={navigationState.screen === "bulk actions"}
+        onClick={() => navigate(basicScreen("bulk actions"))}
       >
-        <i className="bi bi-box-arrow-up-right fs-1" />
+        <i className="bi bi-collection fs-1" />
       </NavItem>
       <div className="flex-grow-1"></div>
       {loading && (

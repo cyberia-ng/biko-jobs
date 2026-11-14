@@ -1,5 +1,5 @@
-const MAX_WIDTH = 300;
-const MAX_HEIGHT = 300;
+const MAX_WIDTH = 400;
+const MAX_HEIGHT = 400;
 const QUALITY = 0.8;
 
 export async function makeThumbnail(url: string) {

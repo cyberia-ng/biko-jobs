@@ -19,8 +19,8 @@ async function loadImages() {
   for (let i = 1; i <= 5; i++) {
     const fullSize = readFileSync(join(import.meta.dirname, `img${i}.jpg`));
     // Params should match those in make-thumbnail.ts
-    const MAX_WIDTH = 300;
-    const MAX_HEIGHT = 300;
+    const MAX_WIDTH = 400;
+    const MAX_HEIGHT = 400;
     const QUALITY = 0.8;
     const sharpImg = sharp(fullSize);
     const meta = await sharpImg.metadata();

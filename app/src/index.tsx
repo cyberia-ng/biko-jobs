@@ -10,12 +10,12 @@ import { AppContext, type AppContextT } from "./context.ts";
 import { useService } from "./service-state/store.ts";
 import { enableMapSet, produce } from "immer";
 import { assertNever } from "./utilities/assert-never.ts";
-import { Export } from "./screens/export.tsx";
 import { ApiClient, MasterKeyPassword } from "@biko-jobs/api-client";
 import { initialState as initialLoginState, reducer as loginReducer } from "./login-state.ts";
 import { Login } from "./screens/login.tsx";
 import { Archive } from "./screens/archive.tsx";
 import { useNavigation } from "./navigation/store.ts";
+import { BulkActions } from "./screens/bulk-actions.tsx";
 
 enableMapSet();
 
@@ -149,14 +149,14 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     case "edit job":
       screen = <EditJob />;
       break;
-    case "export":
-      screen = <Export />;
-      break;
     case "login":
       screen = <Login />;
       break;
     case "archive":
       screen = <Archive />;
+      break;
+    case "bulk actions":
+      screen = <BulkActions />;
       break;
     default:
       assertNever(navigationState);

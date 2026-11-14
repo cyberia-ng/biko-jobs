@@ -2,13 +2,13 @@ import { assertNever } from "../utilities/assert-never.ts";
 
 export type State =
   | {
-      screen: "kanban" | "new job" | "export" | "archive";
+      screen: "kanban" | "new job" | "archive" | "bulk actions";
     }
   | { screen: "job detail"; uuid: string }
   | { screen: "edit job"; uuid: string }
   | { screen: "login"; pairingRequestId: string | undefined };
 
-export const basicScreen = (screen: "kanban" | "new job" | "export" | "archive"): State => ({
+export const basicScreen = (screen: "kanban" | "new job" | "archive" | "bulk actions"): State => ({
   screen,
 });
 
@@ -34,10 +34,10 @@ export function deserialize(hash: string): State | undefined {
       return basicScreen("kanban");
     case "new-job":
       return basicScreen("new job");
-    case "export":
-      return basicScreen("export");
     case "archive":
       return basicScreen("archive");
+    case "bulk-actions":
+      return basicScreen("bulk actions");
     case "job-detail": {
       const uuid = components.shift();
       if (uuid === undefined) return undefined;
@@ -65,9 +65,6 @@ export function serialize(state: State): string {
     case "new job":
       components.push("new-job");
       break;
-    case "export":
-      components.push("export");
-      break;
     case "login":
       components.push("login");
       if (state.pairingRequestId !== undefined) components.push(state.pairingRequestId);
@@ -82,6 +79,9 @@ export function serialize(state: State): string {
     case "edit job":
       components.push("edit-job");
       components.push(state.uuid);
+      break;
+    case "bulk actions":
+      components.push("bulk-actions");
       break;
     default:
       assertNever(state);
