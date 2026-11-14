@@ -73,6 +73,7 @@ export function EditJob(props: { new_?: boolean }) {
             await service.putBlob(blobUUID, jobUUID, data);
             images.push({ type: "image/jpeg", blobId: blobUUID });
             shouldReload = true;
+            URL.revokeObjectURL(photo.url);
             break;
           case "existing":
             images.push(photo.image);
