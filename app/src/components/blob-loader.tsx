@@ -1,5 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import { AppContext } from "../context.ts";
+import { ImageNotFound } from "./image-not-found.tsx";
 
 export function Spinner() {
   return (
@@ -52,11 +53,7 @@ export function ImageBlob({
         </div>
       );
     case "not found":
-      return (
-        <div className="h-100 d-flex">
-          <i className="bi bi-file-earmark-x fs-1 m-auto" />
-        </div>
-      );
+      return <ImageNotFound />;
     default:
       return <img src={state.url} className="img-fluid h-100 w-100 object-fit-cover" />;
   }

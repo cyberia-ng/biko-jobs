@@ -4,7 +4,7 @@ import type { StreamAction } from "./service-state/action.ts";
 import type { State as NavigationState } from "./navigation-state.ts";
 import type { ApiClient, Bytes } from "@biko-jobs/api-client";
 import type { Action as LoginAction, State as LoginState } from "./login-state.ts";
-import type { addNavigationHook } from "./use-hash-location.ts";
+import type { addNavigationHook } from "./utilities/use-hash-location.ts";
 
 export type AppContextT = {
   loginState: LoginState;

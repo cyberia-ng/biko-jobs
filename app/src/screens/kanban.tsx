@@ -1,9 +1,9 @@
 import { useContext } from "react";
-import { ImageBlob } from "../components/blob-loader.tsx";
 import { TimeAgo } from "../components/time-ago.tsx";
 import { AppContext } from "../context.ts";
 import type { Job } from "../service-state/state.ts";
 import { jobDetail } from "../navigation-state.ts";
+import { Thumbnail } from "../components/thumbnail.tsx";
 
 export function Kanban() {
   return (
@@ -50,13 +50,7 @@ function Column(props: { title: string; statuses: Job["status"][] }) {
                   {job.blocked !== false && (
                     <div className="position-absolute h-100 w-100 top-0 left-0 bg-secondary-subtle opacity-75"></div>
                   )}
-                  {job.images.length > 0 && (
-                    <ImageBlob
-                      jobUUID={job.uuid}
-                      blobUUID={job.images[0]!.blobId}
-                      type={job.images[0]!.type}
-                    />
-                  )}
+                  <Thumbnail job={job} />
                 </div>
               </div>
               <div className="col d-flex flex-column">

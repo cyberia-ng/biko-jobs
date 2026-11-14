@@ -2,7 +2,7 @@ import { produce } from "immer";
 import type { WrappedStreamAction } from "./action.ts";
 import type { State } from "./state.ts";
 import pick from "lodash/pick.js";
-import { assertNever } from "../assert-never.ts";
+import { assertNever } from "../utilities/assert-never.ts";
 
 export function reducer(state: State, action: WrappedStreamAction): State {
   return produce(state, (state) => {

@@ -9,22 +9,65 @@ import {
   type StreamBlob,
   type StreamEvent,
 } from "@biko-jobs/api-client";
-import range from "lodash/range.js";
 import { fakerEN_GB as faker } from "@faker-js/faker";
 import { allStatuses, type StreamAction } from "../../src/service-state/action.ts";
+import sharp from "sharp";
 
-const images = range(1, 5 + 1).map((n) => readFileSync(join(import.meta.dirname, `img${n}.jpg`)));
-function randomImage() {
+type Image = { fullSize: Buffer<ArrayBuffer>; thumbnail: Buffer<ArrayBuffer> };
+async function loadImages() {
+  const out: Image[] = [];
+  for (let i = 1; i <= 5; i++) {
+    const fullSize = readFileSync(join(import.meta.dirname, `img${i}.jpg`));
+    // Params should match those in make-thumbnail.ts
+    const MAX_WIDTH = 300;
+    const MAX_HEIGHT = 300;
+    const QUALITY = 0.8;
+    const sharpImg = sharp(fullSize);
+    const meta = await sharpImg.metadata();
+    let { width, height } = meta;
+    if (width > height) {
+      if (width > MAX_WIDTH) {
+        height = Math.round((height * MAX_WIDTH) / width);
+        width = MAX_WIDTH;
+      }
+    } else {
+      if (height > MAX_HEIGHT) {
+        width = Math.round((width * MAX_HEIGHT) / height);
+        height = MAX_HEIGHT;
+      }
+    }
+    const thumbnail = Buffer.from(
+      await sharpImg
+        .autoOrient()
+        .resize({ width, height })
+        .jpeg({ quality: Math.round(QUALITY * 100) })
+        .toBuffer(),
+    );
+    out.push({ fullSize, thumbnail });
+  }
+  return out;
+}
+function randomImage(images: Image[]): Image {
   return images[Math.floor(Math.random() * images.length)]!;
 }
 
-function randomJobData(jobStream: Stream) {
-  const images = faker.helpers.multiple(randomImage, { count: { min: 1, max: 3 } });
-  const imageBlobs = images.map((image): StreamBlob => ({
-    uuid: crypto.randomUUID(),
-    data: image,
-    stream: jobStream,
-  }));
+function randomJobData(jobStream: Stream, allImages: Image[]) {
+  const images = faker.helpers
+    .multiple(() => randomImage(allImages), {
+      count: { min: 1, max: 3 },
+    })
+    .map((image) => ({
+      imageBlob: {
+        uuid: crypto.randomUUID(),
+        data: image.fullSize,
+        stream: jobStream,
+      } satisfies StreamBlob,
+      thumbnailBlob: {
+        uuid: crypto.randomUUID(),
+        data: image.thumbnail,
+        stream: jobStream,
+      } satisfies StreamBlob,
+    }));
   const createActionId = crypto.randomUUID();
   const events: StreamEvent[] = [
     {
@@ -43,9 +86,15 @@ function randomJobData(jobStream: Stream) {
           description: faker.helpers
             .multiple(() => faker.company.buzzPhrase(), { count: { min: 1, max: 5 } })
             .join("\n"),
-          images: imageBlobs.map((blob) => ({
+          images: images.map(({ imageBlob, thumbnailBlob }) => ({
             type: "image/jpeg",
-            blobId: blob.uuid,
+            blobId: imageBlob.uuid,
+            ...faker.helpers.maybe(() => ({
+              thumbnail: {
+                type: "image/jpeg",
+                blobId: thumbnailBlob.uuid,
+              },
+            })),
           })),
         },
       } satisfies StreamAction,
@@ -83,7 +132,7 @@ function randomJobData(jobStream: Stream) {
       } satisfies StreamAction,
     });
   }
-  return { blobs: imageBlobs, events };
+  return { blobs: images.flatMap((image) => [image.imageBlob, image.thumbnailBlob]), events };
 }
 
 async function main() {
@@ -103,8 +152,9 @@ async function main() {
   const streams = await Promise.all(
     streamNames.map((name) => client.addStream({ name, access: [mk.publicKey] }, authToken)),
   );
+  const allImages = await loadImages();
   for (const stream of streams) {
-    const { blobs, events } = randomJobData(stream);
+    const { blobs, events } = randomJobData(stream, allImages);
     await Promise.all(blobs.map((blob) => client.putBlob(blob, authToken)));
     for (const event of events) {
       await client.addEvent(event, authToken);

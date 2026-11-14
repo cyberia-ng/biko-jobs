@@ -2,7 +2,6 @@ import { useContext, useReducer, useState } from "react";
 import { Page } from "../components/page.tsx";
 import { AppContext } from "../context.ts";
 import type { Job } from "../service-state/state.ts";
-import { ImageBlob } from "../components/blob-loader.tsx";
 import { produce } from "immer";
 import { setJobArchived } from "../service-state/action.ts";
 import partition from "lodash/partition.js";
@@ -16,6 +15,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from "../components/modal.tsx";
+import { Thumbnail } from "../components/thumbnail.tsx";
 
 export function Archive() {
   const {
@@ -160,13 +160,7 @@ export function JobsDisplay({
                     />
                   </div>
                   <div style={{ height: "10rem" }}>
-                    {job.images.length > 0 && (
-                      <ImageBlob
-                        jobUUID={job.uuid}
-                        blobUUID={job.images[0]!.blobId}
-                        type={job.images[0]!.type}
-                      />
-                    )}
+                    <Thumbnail job={job} />
                   </div>
                   <div className="p-2">
                     <div>

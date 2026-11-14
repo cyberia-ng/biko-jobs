@@ -9,6 +9,7 @@ export type StatusV1 = (typeof allStatusesV1)[number];
 export type ImageV1 = {
   type: string;
   blobId: string;
+  thumbnail?: { type: string; blobId: string };
 };
 
 export type NewJobV1 = {

@@ -1,6 +1,6 @@
 import { AuthToken, type MasterKeyPair, type MasterKeyPublic } from "@biko-jobs/api-client";
 import { produce } from "immer";
-import { assertNever } from "./assert-never.ts";
+import { assertNever } from "./utilities/assert-never.ts";
 
 export type State = {
   masterKeys: MasterKeyPublic[] | undefined;

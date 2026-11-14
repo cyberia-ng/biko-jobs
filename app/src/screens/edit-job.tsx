@@ -21,6 +21,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from "../components/modal.tsx";
+import { makeThumbnail } from "../utilities/make-thumbnail.ts";
 
 type EditJobAction = Omit<
   Extract<Extract<StreamAction, { type: "job action" }>["jobAction"], { type: "upsert job" }>,
@@ -71,7 +72,14 @@ export function EditJob(props: { new_?: boolean }) {
             const blobUUID = crypto.randomUUID();
             const data = await photo.blob.bytes();
             await service.putBlob(blobUUID, jobUUID, data);
-            images.push({ type: "image/jpeg", blobId: blobUUID });
+            const thumbnail = await makeThumbnail(photo.url);
+            const thumbnailUUID = crypto.randomUUID();
+            await service.putBlob(thumbnailUUID, jobUUID, await thumbnail.blob.bytes());
+            images.push({
+              type: "image/jpeg",
+              blobId: blobUUID,
+              thumbnail: { type: thumbnail.type, blobId: thumbnailUUID },
+            });
             shouldReload = true;
             URL.revokeObjectURL(photo.url);
             break;

@@ -1,7 +1,7 @@
 import { type DeleteJobV1 } from "./v1.ts";
 import type { ActionV2, ChangeJobStatusV2, SetJobArchivedV2, UpsertJobV2 } from "./v2.ts";
 
-export type ActionV3 = Omit<ActionV2, "event" | "version" | "uuid" | "timestamp"> & {
+export type ActionV3 = {
   version: 3;
 } & (JobActionV3 | MechanicListActionV3);
 
