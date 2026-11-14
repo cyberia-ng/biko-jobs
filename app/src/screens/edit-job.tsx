@@ -33,7 +33,7 @@ export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
   const { service, navigate, navigationState, addNavigationHook } = useContext(AppContext);
   const [loading, setLoading] = useState<boolean>(false);
-  const [formReset, setFormReset] = useState(false);
+  const [reloadForm, triggerReloadForm] = useReducer((prev) => !prev, false);
   const [unsaved, setUnsaved] = useState<
     | { type: "clean" }
     | { type: "dirty"; unhook: () => void }
@@ -64,6 +64,7 @@ export function EditJob(props: { new_?: boolean }) {
         await service.createJob(jobUUID);
       }
       const images: Image[] = [];
+      let shouldReload = isNew;
       for (const photo of jobAction.images) {
         switch (photo.type) {
           case "new":
@@ -71,6 +72,7 @@ export function EditJob(props: { new_?: boolean }) {
             const data = await photo.blob.bytes();
             await service.putBlob(blobUUID, jobUUID, data);
             images.push({ type: "image/jpeg", blobId: blobUUID });
+            shouldReload = true;
             break;
           case "existing":
             images.push(photo.image);
@@ -79,9 +81,7 @@ export function EditJob(props: { new_?: boolean }) {
       }
       const action: StreamAction = upsertJob({ ...omit(jobAction, "images"), images });
       service.dispatch(action, jobUUID);
-      if (isNew) {
-        setFormReset(!formReset);
-      }
+      if (shouldReload) triggerReloadForm();
       if (unsaved.type === "dirty") unsaved.unhook();
       setUnsaved({ type: "clean" });
       setLoading(false);
@@ -92,10 +92,10 @@ export function EditJob(props: { new_?: boolean }) {
   if (isNew) {
     content = (
       <EditJobForm
-        key={formReset ? "" : " "}
+        key={reloadForm ? "" : " "}
         onSubmit={submit}
         disabled={loading}
-        onReset={() => setFormReset(!formReset)}
+        onReset={() => triggerReloadForm()}
         onUnsaved={handleUnsaved}
       />
     );
@@ -109,7 +109,7 @@ export function EditJob(props: { new_?: boolean }) {
     } else {
       content = (
         <EditJobForm
-          key={job.uuid}
+          key={reloadForm ? "" : " "}
           job={job}
           onSubmit={submit}
           disabled={loading}
