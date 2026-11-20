@@ -1,6 +1,4 @@
 - Wrong password notif
 - Job assignment
 - Error surfacing
-- History nav
-- Session export
-- Session delete
+- Connection instability
