@@ -1,4 +1,4 @@
-import type { Job } from "../service-state/state.ts";
+import type { Job } from "../service-state/persistent/state.ts";
 import { ImageBlob } from "./blob-loader.tsx";
 import { ImageNotFound } from "./image-not-found.tsx";
 

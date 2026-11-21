@@ -29,14 +29,15 @@ export async function makeThumbnail(url: string) {
     throw new Error("canvas context was null");
   }
   ctx.drawImage(img, 0, 0, width, height);
-  return new Promise<{ type: string; blob: Blob }>((res, rej) => {
+  const blob = await new Promise<Blob>((res, rej) => {
     canvas.toBlob(
       (blob) => {
         if (blob === null) return rej(new Error("canvas blob was null"));
-        res({ type: "image/jpeg", blob });
+        res(blob);
       },
       "image/jpeg",
       QUALITY,
     );
   });
+  return { type: "image/jpeg", data: await blob.bytes() };
 }

@@ -18,38 +18,43 @@ import {
   deleteJob,
   setJobBlocked,
   type Status,
-} from "../service-state/action.ts";
-import type { Job } from "../service-state/state.ts";
+  type StreamAction,
+} from "../service-state/persistent/action.ts";
+import type { Job } from "../service-state/persistent/state.ts";
 import { basicScreen, editJob } from "../navigation/state.ts";
+import { streamAction } from "../service-state/reducer.ts";
 
 export function JobDetail() {
-  const { service, navigationState, navigate } = useContext(AppContext);
+  const { state, dispatch: dispatchOuter, navigationState, navigate } = useContext(AppContext);
+  function dispatch(action: StreamAction, streamName: string) {
+    dispatchOuter(streamAction(streamName, action));
+  }
   if (navigationState.screen !== "job detail") {
     return <></>;
   }
-  const job_ = service?.state.jobs.get(navigationState.uuid);
+  const job_ = state.persistent.jobs.get(navigationState.uuid);
   if (job_ === undefined) {
     return <></>;
   }
   const job = job_;
   function onBlock(reason: string) {
-    service.dispatch(setJobBlocked(reason), job.uuid);
+    dispatch(setJobBlocked(reason), job.uuid);
   }
   function onUnblock() {
-    service.dispatch(setJobBlocked(false), job.uuid);
+    dispatch(setJobBlocked(false), job.uuid);
   }
   function onBack() {
     navigate(basicScreen("kanban"));
   }
   function onDelete() {
-    service.dispatch(deleteJob(), job.uuid);
+    dispatch(deleteJob(), job.uuid);
     navigate(basicScreen("kanban"));
   }
   function onEdit() {
     navigate(editJob(job.uuid));
   }
   function onStatusChange(status: Status) {
-    service.dispatch(changeJobStatus(status), job.uuid);
+    dispatch(changeJobStatus(status), job.uuid);
   }
   return (
     <JobDetailInner

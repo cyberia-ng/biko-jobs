@@ -19,13 +19,12 @@ export function ImageBlob({
   blobUUID: string;
   type: string;
 }) {
-  const { service } = useContext(AppContext);
+  const { getBlob } = useContext(AppContext);
   const [state, setState] = useState<
     { type: "loading" | "not found" } | { type: "loaded"; url: string }
   >({ type: "loading" });
   useEffect(() => {
-    service
-      ?.getBlob(blobUUID, jobUUID)
+    getBlob(jobUUID, blobUUID)
       .then((data) => {
         if (data === undefined) {
           setState({ type: "not found" });
@@ -36,7 +35,7 @@ export function ImageBlob({
         }
       })
       .catch(console.error);
-  }, [service, setState, jobUUID, blobUUID, type]);
+  }, [getBlob, jobUUID, blobUUID, type]);
   useEffect(
     () => () => {
       if (state.type === "loaded") URL.revokeObjectURL(state.url);

@@ -3,7 +3,6 @@ import { AppContext } from "../context.ts";
 import {
   AuthToken,
   MasterKeyPair,
-  MasterKeyPassword,
   MasterKeyPublic,
 } from "@biko-jobs/api-client";
 import { Page } from "../components/page.tsx";
@@ -27,49 +26,30 @@ import {
 import { updateCanvas } from "jdenticon";
 import { assertNever } from "../utilities/assert-never.ts";
 
-type LoginResult = "ready" | "loading" | "wrong password";
-
 export function Login() {
-  const { loginState, navigationState, login, navigate, apiClient } = useContext(AppContext);
-  const [loginResult, setLoginResult] = useState<LoginResult>("ready");
+  const { state, dispatch, navigationState, navigate } = useContext(AppContext);
+  const { loginState } = state;
   const [pairingState, setPairingState] = useState<
     { masterKey: MasterKeyPair; requestId: string } | undefined
   >(undefined);
-  const onPairingAccepted = useCallback(
-    (authToken: AuthToken) => {
-      login({ type: "log in to ephemeral session", authToken });
-      navigate(basicScreen("new job"));
-    },
-    [login, navigate],
-  );
-  if (loginState.masterKeys === undefined) {
+  const onPairingAccepted = useCallback((/*authToken: AuthToken*/) => {
+    // login({ type: "log in to ephemeral session", authToken });
+    navigate(basicScreen("new job"));
+  }, [navigate]);
+  if (loginState.masterKeys === "not loaded") {
     return (
       <Page>
         <Spinner />
       </Page>
     );
   }
-  const savedCredentials = new Map(
-    loginState.masterKeys.flatMap((mk) => {
-      const password = window.localStorage.getItem(`saved password/${mk.uuid}`);
-      return password !== null ? [[mk.uuid, password] as const] : [];
-    }),
-  );
   function submit(key: MasterKeyPublic, password: string) {
-    setLoginResult("loading");
-    MasterKeyPassword.init(key, password)
-      .then((mkPassword) => apiClient.getMasterKeyPair(mkPassword))
-      .then((keyPair) => {
-        window.localStorage.setItem(`saved password/${keyPair.uuid}`, password);
-        return keyPair;
-      })
-      .then((keyPair) => login({ type: "log in with key pair", masterKey: keyPair }))
-      .then(() => setLoginResult("ready"))
-      .catch(() => setLoginResult("wrong password"));
+    dispatch({ type: "login/begin password login flow", masterKey: key, password });
   }
   let connected: MasterKeyPair | "ephemeral" | undefined;
   switch (loginState.login?.type) {
     case undefined:
+    case "loading":
       connected = undefined;
       break;
     case "ephemeral":
@@ -79,6 +59,7 @@ export function Login() {
       connected = loginState.login.masterKey;
       break;
   }
+  const loading = loginState.login?.type === "loading";
   return (
     <Page>
       <div>
@@ -87,9 +68,8 @@ export function Login() {
         <LoginForm
           masterKeys={loginState.masterKeys}
           onSubmit={submit}
-          savedCredentials={savedCredentials}
           connected={connected}
-          loginResult={loginResult}
+          loading={loading}
         />
       </div>
       {connected instanceof MasterKeyPair && (
@@ -128,39 +108,41 @@ export function Login() {
 export function LoginForm({
   masterKeys,
   onSubmit,
-  savedCredentials,
   connected,
-  loginResult,
+  loading,
 }: {
-  masterKeys: MasterKeyPublic[];
+  masterKeys: Array<{ key: MasterKeyPublic; savedPassword: string | undefined }>;
   onSubmit: (key: MasterKeyPublic, password: string) => void;
-  savedCredentials: Map<string, string>;
   connected: MasterKeyPair | "ephemeral" | undefined;
-  loginResult: LoginResult;
+  loading: boolean;
 }) {
-  const [selectedKey, setSelectedKey] = useState<MasterKeyPublic | undefined>(undefined);
+  const [selectedKey, setSelectedKey] = useState<
+    { key: MasterKeyPublic; savedPassword: string | undefined } | undefined
+  >(undefined);
   function submit(password: string) {
     if (selectedKey === undefined) {
       return;
     }
-    onSubmit(selectedKey, password);
+    onSubmit(selectedKey.key, password);
   }
   return (
     <>
       <KeyList
-        keys={masterKeys}
-        selected={selectedKey}
+        keys={masterKeys.map(({ key }) => key)}
+        selected={selectedKey?.key}
         connected={connected}
-        onSelect={setSelectedKey}
+        onSelect={(uuid) => setSelectedKey(masterKeys.find((k) => k.key.uuid === uuid))}
       />
       {selectedKey !== undefined && (
         <div className="mt-2">
           <Credentials
-            key={selectedKey?.uuid}
-            savedPassword={savedCredentials.get(selectedKey.uuid)}
+            key={selectedKey?.key.uuid}
+            savedPassword={selectedKey?.savedPassword}
             onSubmit={submit}
-            connected={connected instanceof MasterKeyPair && connected.uuid === selectedKey.uuid}
-            loginResult={loginResult}
+            connected={
+              connected instanceof MasterKeyPair && connected.uuid === selectedKey.key.uuid
+            }
+            loading={loading}
           />
         </div>
       )}
@@ -177,7 +159,7 @@ export function KeyList({
   keys: MasterKeyPublic[];
   selected: MasterKeyPublic | "ephemeral" | undefined;
   connected: MasterKeyPair | "ephemeral" | undefined;
-  onSelect: (key: MasterKeyPublic) => void;
+  onSelect: (keyUUID: string) => void;
 }) {
   return (
     <>
@@ -190,7 +172,7 @@ export function KeyList({
             key={key.uuid}
             onClick={(e) => {
               e.preventDefault();
-              onSelect(key);
+              onSelect(key.uuid);
             }}
           >
             {connected instanceof MasterKeyPublic && connected.uuid === key.uuid && (
@@ -213,12 +195,12 @@ export function Credentials({
   savedPassword,
   onSubmit,
   connected,
-  loginResult,
+  loading,
 }: {
   savedPassword: string | undefined;
   onSubmit: (password: string) => void;
   connected: boolean;
-  loginResult: LoginResult;
+  loading: boolean;
 }) {
   const [passwordReveal, setPasswordReveal] = useState(false);
   const [password, setPassword] = useState(savedPassword ?? "");
@@ -235,7 +217,7 @@ export function Credentials({
             id="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            disabled={loginResult === "loading" || connected}
+            disabled={loading || connected}
           />
           <button
             type="button"
@@ -259,21 +241,22 @@ export function Credentials({
           <button
             type="submit"
             className="btn btn-primary fs-4"
-            disabled={password.length === 0 || loginResult === "loading"}
+            disabled={password.length === 0 || loading}
             onClick={() => onSubmit(password)}
           >
             Connect
           </button>
         )}
-        {loginResult === "loading" && (
+        {loading && (
           <div className="ms-2">
             <Spinner />
           </div>
         )}
       </div>
-      {loginResult === "wrong password" && (
+      {/* TODO surface wrong password */}
+      {/*loginResult === "wrong password" && (
         <div className="mt-3 alert alert-danger">Wrong password</div>
-      )}
+      )*/}
     </form>
   );
 }

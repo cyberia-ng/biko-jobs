@@ -10,7 +10,7 @@ import {
   type StreamEvent,
 } from "@biko-jobs/api-client";
 import { fakerEN_GB as faker } from "@faker-js/faker";
-import { allStatuses, type StreamAction } from "../../src/service-state/action.ts";
+import { allStatuses, type StreamAction } from "../../src/service-state/persistent/action.ts";
 import sharp from "sharp";
 
 type Image = { fullSize: Buffer<ArrayBuffer>; thumbnail: Buffer<ArrayBuffer> };

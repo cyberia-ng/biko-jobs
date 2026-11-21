@@ -1,9 +1,9 @@
 import { useContext, useReducer, useState } from "react";
 import { Page } from "../components/page.tsx";
 import { AppContext } from "../context.ts";
-import type { Job } from "../service-state/state.ts";
+import type { Job } from "../service-state/persistent/state.ts";
 import { produce } from "immer";
-import { setJobArchived } from "../service-state/action.ts";
+import { setJobArchived, type StreamAction } from "../service-state/persistent/action.ts";
 import partition from "lodash/partition.js";
 import {
   Modal,
@@ -16,14 +16,14 @@ import {
   ModalTitle,
 } from "../components/modal.tsx";
 import { Thumbnail } from "../components/thumbnail.tsx";
+import { streamAction } from "../service-state/reducer.ts";
 
 export function Archive() {
-  const {
-    service: {
-      state: { jobs },
-      dispatch,
-    },
-  } = useContext(AppContext);
+  const { state, dispatch: dispatchOuter } = useContext(AppContext);
+  function dispatch(action: StreamAction, jobUUID: string) {
+    dispatchOuter(streamAction(jobUUID, action));
+  }
+  const jobs = state.persistent.jobs;
   const [archived, current] = partition(Array.from(jobs.values()), (job) => job.archived);
   const done = current.filter((job) => job.status === "complete" || job.status === "cancelled");
   return (

@@ -1,8 +1,8 @@
 import { useContext, useReducer, useState, type ReactNode } from "react";
 import { ImageBlob } from "../components/blob-loader.tsx";
 import { AppContext } from "../context.ts";
-import { upsertJob, type Image, type StreamAction } from "../service-state/action.ts";
-import type { Job } from "../service-state/state.ts";
+import { type StreamAction, upsertJob, type Image } from "../service-state/persistent/action.ts";
+import type { Job } from "../service-state/persistent/state.ts";
 import omit from "lodash/omit.js";
 import { jobDetail } from "../navigation/state.ts";
 import { Page } from "../components/page.tsx";
@@ -18,6 +18,9 @@ import {
   ModalTitle,
 } from "../components/modal.tsx";
 import { makeThumbnail } from "../utilities/make-thumbnail.ts";
+import type { BlobUUID } from "../service-state/state.ts";
+import type { Bytes } from "@biko-jobs/api-client";
+import { streamAction } from "../service-state/reducer.ts";
 
 type EditJobAction = Omit<
   Extract<Extract<StreamAction, { type: "job action" }>["jobAction"], { type: "upsert job" }>,
@@ -28,8 +31,8 @@ type EditJobAction = Omit<
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
-  const { service, navigate, navigationState, addNavigationHook } = useContext(AppContext);
-  const [loading, setLoading] = useState<boolean>(false);
+  const { state, dispatch, navigate, navigationState, addNavigationHook } = useContext(AppContext);
+  const loading = state.outbox.length !== 0;
   const [reloadForm, triggerReloadForm] = useReducer((prev) => !prev, false);
   const [unsaved, setUnsaved] = useState<
     | { type: "clean" }
@@ -51,46 +54,31 @@ export function EditJob(props: { new_?: boolean }) {
     });
     setUnsaved({ type: "dirty", unhook });
   }
-  if (service === undefined) {
-    return <Page>not connected</Page>;
-  }
   function submit(jobAction: EditJobAction, jobUUID: string) {
-    (async () => {
-      setLoading(true);
-      if (isNew) {
-        await service.createJob(jobUUID);
+    if (isNew) {
+      dispatch({ type: "persistent/create stream", name: jobUUID });
+    }
+    const images: Image[] = [];
+    const newImageBlobs: Map<BlobUUID, Bytes> = new Map();
+    let shouldReload = isNew;
+    for (const photo of jobAction.images) {
+      switch (photo.type) {
+        case "new":
+          newImageBlobs.set(photo.main.blobUUID, photo.main.data);
+          newImageBlobs.set(photo.thumbnail.blobUUID, photo.thumbnail.data);
+          shouldReload = true;
+          URL.revokeObjectURL(photo.url);
+          break;
+        case "existing":
+          images.push(photo.image);
+          break;
       }
-      const images: Image[] = [];
-      let shouldReload = isNew;
-      for (const photo of jobAction.images) {
-        switch (photo.type) {
-          case "new":
-            const blobUUID = crypto.randomUUID();
-            const data = await photo.blob.bytes();
-            await service.putBlob(blobUUID, jobUUID, data);
-            const thumbnail = await makeThumbnail(photo.url);
-            const thumbnailUUID = crypto.randomUUID();
-            await service.putBlob(thumbnailUUID, jobUUID, await thumbnail.blob.bytes());
-            images.push({
-              type: "image/jpeg",
-              blobId: blobUUID,
-              thumbnail: { type: thumbnail.type, blobId: thumbnailUUID },
-            });
-            shouldReload = true;
-            URL.revokeObjectURL(photo.url);
-            break;
-          case "existing":
-            images.push(photo.image);
-            break;
-        }
-      }
-      const action: StreamAction = upsertJob({ ...omit(jobAction, "images"), images });
-      service.dispatch(action, jobUUID);
-      if (shouldReload) triggerReloadForm();
-      if (unsaved.type === "dirty") unsaved.unhook();
-      setUnsaved({ type: "clean" });
-      setLoading(false);
-    })().catch(console.error);
+    }
+    const action: StreamAction = upsertJob({ ...omit(jobAction, "images"), images });
+    dispatch(streamAction(jobUUID, action, newImageBlobs));
+    if (shouldReload) triggerReloadForm();
+    if (unsaved.type === "dirty") unsaved.unhook();
+    setUnsaved({ type: "clean" });
   }
   let content: ReactNode;
   let job: Job | undefined = undefined;
@@ -108,7 +96,7 @@ export function EditJob(props: { new_?: boolean }) {
     if (navigationState.screen !== "edit job") {
       throw new Error("unreachable");
     }
-    job = service.state.jobs.get(navigationState.uuid);
+    job = state.persistent.jobs.get(navigationState.uuid);
     if (job === undefined) {
       content = "Job does not exist";
     } else {
@@ -264,7 +252,13 @@ function EditJobForm({
 
 type Photo =
   | { type: "existing"; image: Image; job: string }
-  | { type: "new"; uuid: string; blob: Blob; url: string };
+  | {
+      type: "new";
+      key: string;
+      main: { blobUUID: BlobUUID; data: Bytes; type: string };
+      thumbnail: { blobUUID: BlobUUID; data: Bytes; type: string };
+      url: string;
+    };
 type PhotosT = Array<Photo>;
 function Photos({
   photos,
@@ -284,15 +278,26 @@ function Photos({
       onChange(photos.filter((p) => p !== photo));
     }
   }
-  function addPhoto(blob: Blob) {
+  async function addPhoto(blob: Blob) {
     const uuid = crypto.randomUUID();
     const url = URL.createObjectURL(blob);
-    onChange([...photos, { type: "new", uuid, blob, url }]);
+    const { data: thumbnailData, type: thumbnailType } = await makeThumbnail(url);
+    const mainData = await blob.bytes();
+    onChange([
+      ...photos,
+      {
+        type: "new",
+        key: uuid,
+        main: { blobUUID: crypto.randomUUID(), data: mainData, type: blob.type },
+        thumbnail: { blobUUID: crypto.randomUUID(), data: thumbnailData, type: thumbnailType },
+        url,
+      },
+    ]);
   }
   function photoId(photo: Photo) {
     switch (photo.type) {
       case "new":
-        return photo.uuid;
+        return photo.key;
       case "existing":
         return photo.image.blobId;
     }
@@ -341,7 +346,7 @@ function Photos({
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file !== undefined) {
-              addPhoto(file);
+              addPhoto(file).catch(console.error);
             }
           }}
           disabled={disabled}

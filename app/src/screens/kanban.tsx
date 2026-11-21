@@ -1,7 +1,7 @@
 import { useContext } from "react";
 import { TimeAgo } from "../components/time-ago.tsx";
 import { AppContext } from "../context.ts";
-import type { Job } from "../service-state/state.ts";
+import type { Job } from "../service-state/persistent/state.ts";
 import { jobDetail } from "../navigation/state.ts";
 import { Thumbnail } from "../components/thumbnail.tsx";
 
@@ -20,8 +20,8 @@ export function Kanban() {
 }
 
 function Column(props: { title: string; statuses: Job["status"][] }) {
-  const { service: session, navigate } = useContext(AppContext);
-  const jobs = Array.from(session?.state.jobs.values() ?? []).filter(
+  const { state, navigate } = useContext(AppContext);
+  const jobs = Array.from(state.persistent.jobs.values() ?? []).filter(
     (job) => !job.archived && props.statuses.includes(job.status),
   );
   return (

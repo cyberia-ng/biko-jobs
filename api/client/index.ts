@@ -607,10 +607,10 @@ export type SubscriptionEvent =
       event: StreamEvent;
     };
 
-export type StreamEvent = {
+export type StreamEvent<T = unknown> = {
   uuid: string;
-  data: unknown;
   stream: Stream;
+  data: T;
 };
 
 export type StreamBlob = {

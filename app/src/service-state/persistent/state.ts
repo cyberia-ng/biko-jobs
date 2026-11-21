@@ -1,0 +1,30 @@
+import type { allStatuses, Image } from "./action.ts";
+
+export type State = {
+  processedJobActions: Set<string>;
+  jobs: Map<string, Job>;
+};
+
+export type Job = {
+  uuid: string;
+  number: number;
+  customerName: string;
+  customerPhoneNumber: string;
+  description: string;
+  status: (typeof allStatuses)[number];
+  images: Image[];
+  archived: boolean;
+  blocked: false | string;
+  timestamps: {
+    creation: Temporal.Instant;
+    working: Temporal.Instant | undefined;
+    completed: Temporal.Instant | undefined;
+    cancelled: Temporal.Instant | undefined;
+    hasComplexMovement: boolean;
+  };
+};
+
+export const initialState: State = {
+  processedJobActions: new Set(),
+  jobs: new Map(),
+};

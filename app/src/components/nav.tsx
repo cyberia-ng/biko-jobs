@@ -3,32 +3,33 @@ import { AppContext } from "../context.ts";
 import { basicScreen, login } from "../navigation/state.ts";
 
 export function Nav() {
-  const { loginState, loading, navigationState, navigate, refresh } = useContext(AppContext);
+  const { navigationState, navigate, state, dispatch } = useContext(AppContext);
+  const loading = state.outbox.length !== 0;
   return (
     <div className="shadow top-0 position-sticky bg-dark nav nav-pills d-flex flex-row flex-sm-column custom-nav align-items-center flex-nowrap">
       <NavItem
-        disabled={loginState?.login === undefined}
+        disabled={state.loginState.login.type === "not logged in"}
         active={navigationState.screen === "kanban"}
         onClick={() => navigate(basicScreen("kanban"))}
       >
         <i className="bi bi-layout-three-columns fs-1" />
       </NavItem>
       <NavItem
-        disabled={loginState?.login === undefined}
+        disabled={state.loginState.login.type === "not logged in"}
         active={navigationState.screen === "new job"}
         onClick={() => navigate(basicScreen("new job"))}
       >
         <i className="bi bi-plus-circle fs-1" />
       </NavItem>
       <NavItem
-        disabled={loginState?.login?.type !== "master key"}
+        disabled={state.loginState.login?.type !== "master key"}
         active={navigationState.screen === "archive"}
         onClick={() => navigate(basicScreen("archive"))}
       >
         <i className="bi bi-archive fs-1" />
       </NavItem>
       <NavItem
-        disabled={loginState?.login?.type !== "master key"}
+        disabled={state.loginState?.login?.type !== "master key"}
         active={navigationState.screen === "bulk actions"}
         onClick={() => navigate(basicScreen("bulk actions"))}
       >
@@ -47,7 +48,7 @@ export function Nav() {
       <NavItem onClick={() => navigate(login(undefined))}>
         <i className="bi bi-key fs-1" />
       </NavItem>
-      <NavItem onClick={() => refresh()}>
+      <NavItem onClick={() => dispatch({ type: "refresh" })}>
         <i className="bi bi-arrow-clockwise fs-1" />
       </NavItem>
     </div>

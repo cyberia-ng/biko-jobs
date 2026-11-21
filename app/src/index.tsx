@@ -1,21 +1,29 @@
 import "./styles.scss";
 import "temporal-polyfill/global";
-import { StrictMode, useCallback, useEffect, useMemo, useReducer, type ReactNode } from "react";
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./screens/kanban.tsx";
 import { Nav } from "./components/nav.tsx";
 import { EditJob } from "./screens/edit-job.tsx";
 import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
-import { useService } from "./service-state/store.ts";
-import { enableMapSet, produce } from "immer";
+import { Store as ServiceStore } from "./service-state/store.ts";
+import { enableMapSet } from "immer";
 import { assertNever } from "./utilities/assert-never.ts";
-import { ApiClient, MasterKeyPassword } from "@biko-jobs/api-client";
-import { initialState as initialLoginState, reducer as loginReducer } from "./login-state.ts";
+import { ApiClient } from "@biko-jobs/api-client";
 import { Login } from "./screens/login.tsx";
 import { Archive } from "./screens/archive.tsx";
+import { makeEffector } from "./service-state/effects.ts";
 import { useNavigation } from "./navigation/store.ts";
 import { BulkActions } from "./screens/bulk-actions.tsx";
+import { initialState } from "./service-state/state.ts";
 
 enableMapSet();
 
@@ -37,102 +45,43 @@ window.onload = () => {
 
 function App({ apiClient }: { apiClient: ApiClient }) {
   const [navigationState, navigationStore] = useNavigation();
-  const [loginState, dispatchLoginState] = useReducer(loginReducer, initialLoginState);
 
-  const [loadingIds, dispatchLoading] = useReducer(
-    (state: Set<string>, [add, id]: [boolean, string]) =>
-      produce(state, (state) => {
-        if (add) state.add(id);
-        else state.delete(id);
-      }),
-    new Set(),
+  const serviceStore = useMemo(() => {
+    return new ServiceStore(
+      makeEffector(apiClient),
+      apiClient.getBlob.bind(apiClient),
+      initialState,
+    );
+  }, [apiClient]);
+  const state = useSyncExternalStore(
+    useCallback((cb) => serviceStore.subscribe(cb), [serviceStore]),
+    useCallback(() => serviceStore.getSnapshot(), [serviceStore]),
   );
-  const withLoading = useCallback(
-    async <T,>(description: string, p: Promise<T>): Promise<T | undefined> => {
-      if (p === undefined) return;
-      const id = crypto.randomUUID();
-      dispatchLoading([true, id]);
-      try {
-        return await p;
-      } catch (e) {
-        console.error("loading promise rejection", description, e); // TODO error surfacing
-      } finally {
-        dispatchLoading([false, id]);
-      }
-    },
-    [dispatchLoading],
-  );
-
-  const [serviceState, serviceStore] = useService(
-    apiClient,
-    useCallback((e) => console.error(e), []),
-  );
-  const refresh = useCallback(() => {
-    withLoading(
-      "refresh",
-      (async () => {
-        const mks = await apiClient.listMasterKeys();
-        dispatchLoginState({ type: "update master keys list", masterKeys: mks });
-      })(),
-    ).catch(console.error);
-  }, [withLoading, apiClient, dispatchLoginState]);
-  useEffect(() => {
-    withLoading("refresh store", serviceStore.refresh(loginState)).catch(console.error);
-  }, [serviceStore, loginState, withLoading]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
 
   if (import.meta.env.DEV) {
     useEffect(() => {
-      if (loginState.login !== undefined) return;
+      if (state.loginState.login.type !== "not logged in") return;
       if (navigationState.screen === "login" && navigationState.pairingRequestId !== undefined) {
         return;
       }
-      const masterKey = loginState.masterKeys?.find((mk) => mk.name === "some name");
+      if (state.loginState.masterKeys === "not loaded") return;
+      const masterKey = state.loginState.masterKeys.find((mk) => mk.key.name === "some name");
       if (masterKey === undefined) return;
-      withLoading(
-        "dev autologin",
-        MasterKeyPassword.init(masterKey, "some password")
-          .then((mkPassword) => apiClient.getMasterKeyPair(mkPassword))
-          .then((mk) => dispatchLoginState({ type: "log in with key pair", masterKey: mk })),
-      ).catch(console.error);
-    }, [apiClient, loginState, navigationState, withLoading]);
+      serviceStore.dispatch({
+        type: "login/begin password login flow",
+        masterKey: masterKey.key,
+        password: "some password",
+      });
+    }, [state, navigationState, serviceStore]);
   }
 
   const context: AppContextT = {
-    loginState,
-    login: dispatchLoginState,
-    service: useMemo(
-      () => ({
-        state: serviceState,
-        createJob: (uuid: string) =>
-          withLoading(`creating job ${uuid}`, serviceStore.createJobStream(uuid)),
-        dispatch: (action, streamName) =>
-          withLoading(
-            `dispatching event: ${action.type === "job action" ? action.jobAction.type : action.type}`,
-            serviceStore.dispatch(action, streamName),
-          ),
-        getBlob: (blobUUID: string, jobUUID: string) =>
-          withLoading(
-            `getting blob: ${blobUUID} in job ${jobUUID}`,
-            serviceStore.getBlob(blobUUID, jobUUID),
-          ),
-        putBlob: (blobUUID, jobUUID, data) =>
-          withLoading(
-            `writing blob: ${blobUUID} in job ${jobUUID}`,
-            serviceStore.putBlob(blobUUID, jobUUID, data),
-          ),
-      }),
-      [serviceState, serviceStore, withLoading],
-    ),
-    loading: loadingIds.size !== 0,
+    state,
+    dispatch: useMemo(() => serviceStore.dispatch.bind(serviceStore), [serviceStore]),
+    getBlob: useMemo(() => serviceStore.getBlob.bind(serviceStore), [serviceStore]),
     navigationState,
     navigate: (state) => navigationStore.navigate(state),
     addNavigationHook: (hook) => navigationStore.addHook(hook),
-    refresh,
-    apiClient,
   };
 
   let screen: ReactNode;

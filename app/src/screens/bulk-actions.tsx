@@ -1,9 +1,9 @@
-import { useContext, useReducer, useState } from "react";
+import { useContext, useState } from "react";
 import { Page } from "../components/page.tsx";
 import { AppContext } from "../context.ts";
-import type { Job } from "../service-state/state.ts";
+import type { Job } from "../service-state/persistent/state.ts";
 import { unparse } from "papaparse";
-import { changeJobStatus, upsertJob, type StreamAction } from "../service-state/action.ts";
+import { changeJobStatus, type StreamAction } from "../service-state/persistent/action.ts";
 import {
   Modal,
   ModalBody,
@@ -14,13 +14,14 @@ import {
   ModalHeader,
   ModalTitle,
 } from "../components/modal.tsx";
-import type { Bytes } from "@biko-jobs/api-client";
-import { makeThumbnail } from "../utilities/make-thumbnail.ts";
-import { Spinner } from "../components/blob-loader.tsx";
+import { streamAction } from "../service-state/reducer.ts";
 
 export function BulkActions() {
-  const { service } = useContext(AppContext);
-  const jobs = Array.from(service.state.jobs.values());
+  const { state, dispatch: dispatchOuter } = useContext(AppContext);
+  const jobs = Array.from(state.persistent.jobs.values());
+  function dispatch(action: StreamAction, jobUUID: string) {
+    dispatchOuter(streamAction(jobUUID, action));
+  }
   return (
     <Page>
       <div
@@ -30,13 +31,7 @@ export function BulkActions() {
         }}
       >
         <Export jobs={jobs} />
-        <CancelRemainingTriagedJobs jobs={jobs} dispatch={service.dispatch} />
-        <RegenerateThumbnails
-          jobs={jobs}
-          dispatch={service.dispatch}
-          getBlob={service.getBlob}
-          putBlob={service.putBlob}
-        />
+        <CancelRemainingTriagedJobs jobs={jobs} dispatch={dispatch} />
       </div>
     </Page>
   );
@@ -125,108 +120,6 @@ function CancelRemainingTriagedJobs({
       <div>
         <button type="button" className="btn btn-primary" onClick={() => setShowConfirm(true)}>
           Cancel
-        </button>
-      </div>
-    </>
-  );
-}
-
-function RegenerateThumbnails({
-  jobs,
-  dispatch,
-  getBlob,
-  putBlob,
-}: {
-  jobs: Job[];
-  dispatch: (action: StreamAction, jobUUID: string) => void;
-  getBlob: (blobUUID: string, jobUUID: string) => Promise<Bytes | undefined>;
-  putBlob: (blobUUID: string, jobUUID: string, data: Bytes) => Promise<void>;
-}) {
-  const [modalState, setModalState] = useState<
-    { type: "hidden" | "confirm" | "loading" } | { type: "error"; error: Error }
-  >({ type: "hidden" });
-  const [progress, dispatchProgress] = useReducer(
-    (p, a: "increment" | "reset") => (a === "increment" ? p + 1 : 0),
-    0,
-  );
-  const wouldRegenerateCount = jobs.filter((job) => job.images.length > 0).length;
-  function onConfirm() {
-    (async () => {
-      setModalState({ type: "loading" });
-      for (const job of jobs) {
-        const [image, ...rest] = job.images;
-        if (image === undefined) continue;
-        const imageBytes = await getBlob(image.blobId, job.uuid);
-        if (imageBytes === undefined) continue;
-        const blob = new Blob([imageBytes], { type: image.type });
-        const url = URL.createObjectURL(blob);
-        const thumbnail = await makeThumbnail(url);
-        const thumbnailBytes = await thumbnail.blob.bytes();
-        const thumbnailUUID = crypto.randomUUID();
-        await putBlob(thumbnailUUID, job.uuid, thumbnailBytes);
-        dispatch(
-          upsertJob({
-            ...job,
-            images: [
-              { ...image, thumbnail: { type: "image/jpeg", blobId: thumbnailUUID } },
-              ...rest,
-            ],
-          }),
-          job.uuid,
-        );
-        dispatchProgress("increment");
-      }
-      setModalState({ type: "hidden" });
-      dispatchProgress("reset");
-    })().catch((error) => {
-      setModalState({ type: "error", error });
-      dispatchProgress("reset");
-    });
-  }
-  return (
-    <>
-      <div>
-        {modalState.type !== "hidden" && (
-          <Modal onDismiss={() => setModalState({ type: "hidden" })} onConfirm={onConfirm}>
-            <ModalHeader>
-              <ModalTitle>Regenerate thumbnails</ModalTitle>
-              <ModalCloseButton />
-            </ModalHeader>
-            <ModalBody>
-              {modalState.type === "confirm" && <>Regenerate {wouldRegenerateCount} thumbnails?</>}
-              {modalState.type === "loading" && (
-                <div className="text-center">
-                  <div>
-                    <Spinner />
-                  </div>
-                  <div>
-                    {progress} / {wouldRegenerateCount}
-                  </div>
-                </div>
-              )}
-              {modalState.type === "error" && (
-                <div className="alert alert-danger">Error: {modalState.error.message}</div>
-              )}
-            </ModalBody>
-            <ModalFooter>
-              <ModalConfirmButton
-                disabled={modalState.type === "loading" || modalState.type === "error"}
-              >
-                Confirm
-              </ModalConfirmButton>
-              <ModalDismissButton>Cancel</ModalDismissButton>
-            </ModalFooter>
-          </Modal>
-        )}
-        Regenerate job thumbnails
-      </div>
-      <div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => setModalState({ type: "confirm" })}
-        >
-          Regenerate
         </button>
       </div>
     </>

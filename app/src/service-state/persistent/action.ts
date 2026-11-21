@@ -7,12 +7,6 @@ export type AnyVersionStreamAction = StreamActionV1 | StreamActionV2 | StreamAct
 
 export type StreamAction = StreamActionV3;
 
-export type WrappedStreamAction = {
-  actionUUID: string;
-  streamName: string;
-  streamNumber: number;
-  inner: StreamActionV3;
-};
 export type Image = ImageV1;
 export const allStatuses = allStatusesV2;
 export type Status = (typeof allStatuses)[number];
