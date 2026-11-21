@@ -30,9 +30,10 @@ export class Store {
 
   constructor(client: ApiClient, onAsyncError: (e: unknown) => void) {
     this.client = client;
+    this.onAsyncError = onAsyncError;
+
     this.masterKeys = [];
     this.loginState = { type: "not logged in" };
-    this.onAsyncError = onAsyncError;
     this.state = initialState;
     this.streams = new Map();
     this.subscribers = new Set();

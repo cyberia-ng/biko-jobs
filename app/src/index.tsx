@@ -1,14 +1,6 @@
 import "./styles.scss";
 import "temporal-polyfill/global";
-import {
-  StrictMode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { StrictMode, useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Kanban } from "./screens/kanban.tsx";
 import { Nav } from "./components/nav.tsx";
@@ -20,16 +12,16 @@ import {
 import { EditJob } from "./screens/edit-job.tsx";
 import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
-import { Store as ServiceStore } from "./service-state/store.ts";
-import { enableMapSet, produce } from "immer";
+import { Store as ServiceStore2 } from "./service-state/store-2.ts";
+import { enableMapSet } from "immer";
 import { assertNever } from "./assert-never.ts";
 import { Export } from "./screens/export.tsx";
 import { useHashLocation } from "./use-hash-location.ts";
 import type { State as NavigationState } from "./navigation-state.ts";
-import { ApiClient, MasterKeyPassword } from "@biko-jobs/api-client";
-import { initialState as initialLoginState, reducer as loginReducer } from "./login-state.ts";
+import { ApiClient } from "@biko-jobs/api-client";
 import { Login } from "./screens/login.tsx";
 import { Archive } from "./screens/archive.tsx";
+import { makeEffector } from "./service-state/async-reducer.ts";
 
 enableMapSet();
 
@@ -56,100 +48,51 @@ function App({ apiClient }: { apiClient: ApiClient }) {
     (state: NavigationState) => navigateHash(serialize(state)),
     [navigateHash],
   );
-  const [loginState, dispatchLoginState] = useReducer(loginReducer, initialLoginState);
-
-  const [loadingIds, dispatchLoading] = useReducer(
-    (state: Set<string>, [add, id]: [boolean, string]) =>
-      produce(state, (state) => {
-        if (add) state.add(id);
-        else state.delete(id);
-      }),
-    new Set(),
-  );
-  const withLoading = useCallback(
-    async <T,>(description: string, p: Promise<T>): Promise<T | undefined> => {
-      if (p === undefined) return;
-      const id = crypto.randomUUID();
-      dispatchLoading([true, id]);
-      try {
-        return await p;
-      } catch (e) {
-        console.error("loading promise rejection", description, e); // TODO error surfacing
-      } finally {
-        dispatchLoading([false, id]);
-      }
-    },
-    [dispatchLoading],
-  );
 
   const serviceStore = useMemo(() => {
-    return new ServiceStore(apiClient, console.error.bind(console));
+    return new ServiceStore2(makeEffector(apiClient));
   }, [apiClient]);
-  const serviceState = useSyncExternalStore(
+  const state = useSyncExternalStore(
     useCallback((cb) => serviceStore.subscribe(cb), [serviceStore]),
     useCallback(() => serviceStore.getSnapshot(), [serviceStore]),
   );
-  const refresh = useCallback(() => {
-    withLoading(
-      "refresh",
-      (async () => {
-        const mks = await apiClient.listMasterKeys();
-        dispatchLoginState({ type: "update master keys list", masterKeys: mks });
-      })(),
-    ).catch(console.error);
-  }, [withLoading, apiClient, dispatchLoginState]);
-  useEffect(() => {
-    withLoading("refresh store", serviceStore.refresh(loginState)).catch(console.error);
-  }, [serviceStore, loginState, withLoading]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const refresh = useCallback(() => {}, []);
+  const { inner: serviceState, loginState } = state;
+  console.log('state', state)
 
   if (import.meta.env.DEV) {
-    useEffect(() => {
-      if (loginState.login !== undefined) return;
-      if (navigationState.screen === "login" && navigationState.pairingRequestId !== undefined) {
-        return;
-      }
-      const masterKey = loginState.masterKeys?.find((mk) => mk.name === "some name");
-      if (masterKey === undefined) return;
-      withLoading(
-        "dev autologin",
-        MasterKeyPassword.init(masterKey, "some password")
-          .then((mkPassword) => apiClient.getMasterKeyPair(mkPassword))
-          .then((mk) => dispatchLoginState({ type: "log in with key pair", masterKey: mk })),
-      ).catch(console.error);
-    }, [apiClient, loginState, navigationState, withLoading]);
+    // useEffect(() => {
+    //   if (loginState.login !== undefined) return;
+    //   if (navigationState.screen === "login" && navigationState.pairingRequestId !== undefined) {
+    //     return;
+    //   }
+    //   const masterKey = loginState.masterKeys?.find((mk) => mk.name === "some name");
+    //   if (masterKey === undefined) return;
+    //   withLoading(
+    //     "dev autologin",
+    //     MasterKeyPassword.init(masterKey, "some password")
+    //       .then((mkPassword) => apiClient.getMasterKeyPair(mkPassword))
+    //       .then((mk) => dispatchLoginState({ type: "log in with key pair", masterKey: mk })),
+    //   ).catch(console.error);
+    // }, [apiClient, loginState, navigationState, withLoading]);
   }
 
   const context: AppContextT = {
     loginState,
-    login: dispatchLoginState,
+    login: () => {},
     service: useMemo(
       () => ({
         state: serviceState,
-        createJob: (uuid: string) =>
-          withLoading(`creating job ${uuid}`, serviceStore.createJobStream(uuid)),
-        dispatch: (action, streamName) =>
-          withLoading(
-            `dispatching event: ${action.type === "job action" ? action.jobAction.type : action.type}`,
-            serviceStore.dispatch(action, streamName),
-          ),
-        getBlob: (blobUUID: string, jobUUID: string) =>
-          withLoading(
-            `getting blob: ${blobUUID} in job ${jobUUID}`,
-            serviceStore.getBlob(blobUUID, jobUUID),
-          ),
-        putBlob: (blobUUID, jobUUID, data) =>
-          withLoading(
-            `writing blob: ${blobUUID} in job ${jobUUID}`,
-            serviceStore.putBlob(blobUUID, jobUUID, data),
-          ),
+        createJob: async () => {},
+        dispatch: () => {},
+        getBlob: async () => {
+          throw new Error("not implemented");
+        },
+        putBlob: async () => {},
       }),
-      [serviceState, serviceStore, withLoading],
+      [serviceState],
     ),
-    loading: loadingIds.size !== 0,
+    loading: false,
     navigationState,
     navigate,
     addNavigationHook,

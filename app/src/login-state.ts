@@ -22,11 +22,7 @@ export function reducer(state: State, action: Action): State {
   return produce(state, (state) => {
     switch (action.type) {
       case "update master keys list":
-        if (state === undefined) {
-          return { masterKeys: action.masterKeys, login: undefined };
-        } else {
-          state.masterKeys = action.masterKeys;
-        }
+        state.masterKeys = action.masterKeys;
         break;
       case "log in with key pair":
         state.login = { type: "master key", masterKey: action.masterKey };
