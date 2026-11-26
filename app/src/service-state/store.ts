@@ -27,7 +27,7 @@ export class Store {
       for (const item of this.state.outbox) {
         if (this.inFlightEffects.has(item.key)) continue;
         this.inFlightEffects.add(item.key);
-        await this.effector(item.effect, this.dispatch.bind(this));
+        await this.effector(item.effect, this.dispatch.bind(this), this.getSnapshot.bind(this));
         this.dispatch({ type: "outbox/effect processed", key: item.key });
         this.inFlightEffects.delete(item.key);
       }

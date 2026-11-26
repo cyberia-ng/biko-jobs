@@ -104,7 +104,7 @@ async function apiFetch(
   return { ...pick(res, ["ok", "status"]), body };
 }
 
-type WebSocketSubscriber = {
+export type WebSocketSubscriber = {
   getStream: (name: string) => Stream | undefined;
   getMasterKey: (uuid: string) => MasterKeyPair | undefined;
   onConnect: () => void;

@@ -6,10 +6,11 @@ import {
   type ApiClient,
   type StreamBlob,
   type StreamEvent,
+  type WebSocketSubscriber,
 } from "@biko-jobs/api-client";
 import type { Action } from "./reducer.ts";
 import { assertNever } from "../utilities/assert-never.ts";
-import type { BlobUUID, StreamName } from "./state.ts";
+import type { BlobUUID, State, StreamName } from "./state.ts";
 import { makeThumbnail } from "../utilities/make-thumbnail.ts";
 
 const AUTH_TOKEN_LIFETIME = Temporal.Duration.from({ minutes: 5 });
@@ -21,6 +22,7 @@ export type Effect =
   | { type: "login/clear ephemeral auth token" }
   | { type: "login/perform password login"; masterKey: MasterKeyPublic; password: string }
   | { type: "login/refresh auth token"; masterKey: MasterKeyPair }
+  | { type: "login/subscribe to events"; existingUnsubscribe: (() => void) | undefined }
   | {
       type: "persistent/fetch events by master key";
       masterKey: MasterKeyPair;
@@ -37,9 +39,13 @@ export type Effect =
       blob: Blob;
     };
 
-export type Effector = (effect: Effect, dispatch: (action: Action) => void) => Promise<void>;
+export type Effector = (
+  effect: Effect,
+  dispatch: (action: Action) => void,
+  getSnapshot: () => State,
+) => Promise<void>;
 export function makeEffector(client: ApiClient): Effector {
-  const effector: Effector = async (effect, dispatch) => {
+  const effector: Effector = async (effect, dispatch, getSnapshot) => {
     switch (effect.type) {
       case "login/fetch master public keys": {
         const masterKeys = await client.listMasterKeys();
@@ -90,6 +96,60 @@ export function makeEffector(client: ApiClient): Effector {
         dispatch({ type: "login/receive refreshed auth token", authToken });
         const intervalMs = multiplyDuration(AUTH_TOKEN_LIFETIME, 0.9).total("milliseconds");
         setTimeout(() => dispatch({ type: "login/refresh auth token" }), intervalMs);
+        break;
+      }
+      case "login/subscribe to events": {
+        effect.existingUnsubscribe?.();
+        await new Promise<void>((res, rej) => {
+          let isConnected = false;
+          const subscriber: WebSocketSubscriber = {
+            getStream: (name) => getSnapshot().streams.get(name),
+            getMasterKey: (uuid) => {
+              const state = getSnapshot();
+              if (
+                state.loginState.login.type === "master key" &&
+                state.loginState.login.masterKey.uuid === uuid
+              ) {
+                return state.loginState.login.masterKey;
+              } else return undefined;
+            },
+            onConnect: () => {
+              isConnected = true;
+              res();
+            },
+            onEvent: (event) => {
+              switch (event.type) {
+                case "new stream": {
+                  dispatch({
+                    type: "persistent/merge streams",
+                    streams: new Map([[event.stream.name, event.stream]]),
+                  });
+                  break;
+                }
+                case "stream event": {
+                  dispatch({ type: "persistent/reduce incoming stream event", event: event.event });
+                  break;
+                }
+                default:
+                  assertNever(event);
+              }
+            },
+            onError: (error) => {
+              if (!isConnected) return rej(error);
+              else {
+                // Reconnect?
+                dispatch({
+                  type: "error/handle event stream error",
+                  key: crypto.randomUUID(),
+                  timestamp: Temporal.Now.instant(),
+                  error,
+                });
+              }
+            },
+          };
+          const unsubscribe = client.subscribeEvents(subscriber);
+          dispatch({ type: "login/save event stream unsubscribe hook", unsubscribe });
+        });
         break;
       }
       case "persistent/fetch events by master key": {
@@ -146,8 +206,8 @@ export function makeEffector(client: ApiClient): Effector {
         assertNever(effect);
     }
   };
-  return (effect, dispatch) =>
-    effector(effect, dispatch).catch((error) =>
+  return (effect, dispatch, getSnapshot) =>
+    effector(effect, dispatch, getSnapshot).catch((error) =>
       dispatch({
         type: "error/handle effect error",
         key: crypto.randomUUID(),

@@ -40,7 +40,8 @@ type LoginAction =
   | { type: "login/log in with key pair"; masterKey: MasterKeyPair }
   | { type: "login/refresh auth token" }
   | { type: "login/receive refreshed auth token"; authToken: AuthToken }
-  | { type: "login/log in to ephemeral session"; authToken: AuthToken };
+  | { type: "login/log in to ephemeral session"; authToken: AuthToken }
+  | { type: "login/save event stream unsubscribe hook"; unsubscribe: () => void };
 type RefreshAction = { type: "refresh" };
 export type WrappedStreamAction = {
   action: StreamAction;
@@ -48,7 +49,6 @@ export type WrappedStreamAction = {
   eventUUID: EventUUID;
 };
 type PersistentAction =
-  // | { type: "persistent/fetch events by master key" }
   | { type: "persistent/merge streams"; streams: Map<StreamName, Stream> }
   | { type: "persistent/reduce incoming stream event"; event: StreamEvent }
   | { type: "persistent/create stream"; name: string }
@@ -84,6 +84,12 @@ type ErrorAction =
       key: string;
       timestamp: Temporal.Instant;
       effect: Effect;
+      error: unknown;
+    }
+  | {
+      type: "error/handle event stream error";
+      key: string;
+      timestamp: Temporal.Instant;
       error: unknown;
     }
   | { type: "error/dismiss error"; key: string };
@@ -128,11 +134,23 @@ export function reducer(outerState: State, action: Action): State {
           masterKey: action.masterKey,
         };
         state.outbox.push(effect({ type: "login/clear ephemeral auth token" }));
+        state.outbox.push(
+          effect({
+            type: "login/subscribe to events",
+            existingUnsubscribe: state.loginState.eventStreamUnsubscribe,
+          }),
+        );
         break;
       case "login/log in to ephemeral session":
         state.loginState.login = { type: "ephemeral", authToken: action.authToken };
         state.outbox.push(
           effect({ type: "login/persist ephemeral auth token", authToken: action.authToken }),
+        );
+        state.outbox.push(
+          effect({
+            type: "login/subscribe to events",
+            existingUnsubscribe: state.loginState.eventStreamUnsubscribe,
+          }),
         );
         break;
       case "login/refresh auth token":
@@ -161,6 +179,9 @@ export function reducer(outerState: State, action: Action): State {
           );
         }
         state.loginState.login.cachedAuthToken = action.authToken;
+        break;
+      case "login/save event stream unsubscribe hook":
+        state.loginState.eventStreamUnsubscribe = action.unsubscribe;
         break;
       case "persistent/merge streams": {
         for (const [key, value] of action.streams.entries()) {
@@ -285,6 +306,14 @@ export function reducer(outerState: State, action: Action): State {
           key: action.key,
           timestamp: action.timestamp,
           effect: action.effect,
+          error: action.error,
+        });
+        break;
+      case "error/handle event stream error":
+        state.errors.push({
+          type: "event stream error",
+          key: action.key,
+          timestamp: action.timestamp,
           error: action.error,
         });
         break;

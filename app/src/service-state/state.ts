@@ -33,6 +33,7 @@ export type State = {
         }
       | { type: "ephemeral"; authToken: AuthToken }
       | { type: "not logged in" };
+    eventStreamUnsubscribe?: () => void;
   };
   streams: Map<StreamName, Stream>;
   persistent: PersistentState;
@@ -46,7 +47,8 @@ export type State = {
 
 export type Error =
   | { type: "effect error"; effect: Effect; error: unknown }
-  | { type: "token refresh error"; error: unknown };
+  | { type: "token refresh error"; error: unknown }
+  | { type: "event stream error"; error: unknown };
 
 export const initialState: State = {
   loginState: {
