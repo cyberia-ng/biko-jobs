@@ -29,7 +29,7 @@ export type State = {
       | {
           type: "master key";
           masterKey: MasterKeyPair;
-          cachedAuthToken: AuthToken;
+          cachedAuthToken?: AuthToken;
         }
       | { type: "ephemeral"; authToken: AuthToken }
       | { type: "not logged in" };
@@ -41,7 +41,12 @@ export type State = {
     | { type: "blob upload"; streamName: StreamName; uuid: BlobUUID; data: Bytes }
   >;
   outbox: Array<{ key: string; effect: Effect }>;
+  errors: Array<{ key: string; timestamp: Temporal.Instant } & Error>;
 };
+
+export type Error =
+  | { type: "effect error"; effect: Effect; error: unknown }
+  | { type: "token refresh error"; error: unknown };
 
 export const initialState: State = {
   loginState: {
@@ -55,6 +60,7 @@ export const initialState: State = {
     { key: crypto.randomUUID(), effect: { type: "login/load ephemeral auth token" } },
     { key: crypto.randomUUID(), effect: { type: "login/fetch master public keys" } },
   ],
+  errors: [],
 };
 
 export function getAuthToken(state: State | WritableDraft<State>): AuthToken | undefined {

@@ -20,6 +20,7 @@ export type Effect =
   | { type: "login/persist ephemeral auth token"; authToken: AuthToken }
   | { type: "login/clear ephemeral auth token" }
   | { type: "login/perform password login"; masterKey: MasterKeyPublic; password: string }
+  | { type: "login/refresh auth token"; masterKey: MasterKeyPair }
   | {
       type: "persistent/fetch events by master key";
       masterKey: MasterKeyPair;
@@ -38,7 +39,7 @@ export type Effect =
 
 export type Effector = (effect: Effect, dispatch: (action: Action) => void) => Promise<void>;
 export function makeEffector(client: ApiClient): Effector {
-  return async (effect, dispatch) => {
+  const effector: Effector = async (effect, dispatch) => {
     switch (effect.type) {
       case "login/fetch master public keys": {
         const masterKeys = await client.listMasterKeys();
@@ -71,8 +72,13 @@ export function makeEffector(client: ApiClient): Effector {
         const mkPassword = await MasterKeyPassword.init(effect.masterKey, effect.password);
         const masterKey = await client.getMasterKeyPair(mkPassword);
         window.localStorage.setItem(`saved password/${masterKey.uuid}`, effect.password);
+        dispatch({ type: "login/log in with key pair", masterKey });
+        dispatch({ type: "login/refresh auth token" });
+        break;
+      }
+      case "login/refresh auth token": {
         const authToken = await AuthToken.init({
-          masterKey,
+          masterKey: effect.masterKey,
           expiry: Temporal.Now.instant().add(AUTH_TOKEN_LIFETIME),
           permissions: new Set([
             "list streams",
@@ -81,9 +87,9 @@ export function makeEffector(client: ApiClient): Effector {
             "write stream data",
           ]),
         });
-        // TODO: refresh auth token
-        dispatch({ type: "login/log in with key pair", masterKey, authToken });
-        dispatch({ type: "persistent/fetch events by master key" });
+        dispatch({ type: "login/receive refreshed auth token", authToken });
+        const intervalMs = multiplyDuration(AUTH_TOKEN_LIFETIME, 0.9).total("milliseconds");
+        setTimeout(() => dispatch({ type: "login/refresh auth token" }), intervalMs);
         break;
       }
       case "persistent/fetch events by master key": {
@@ -140,4 +146,18 @@ export function makeEffector(client: ApiClient): Effector {
         assertNever(effect);
     }
   };
+  return (effect, dispatch) =>
+    effector(effect, dispatch).catch((error) =>
+      dispatch({
+        type: "error/handle effect error",
+        key: crypto.randomUUID(),
+        timestamp: Temporal.Now.instant(),
+        effect,
+        error,
+      }),
+    );
+}
+
+function multiplyDuration(duration: Temporal.Duration, multiplier: number) {
+  return Temporal.Duration.from({ microseconds: duration.total("microseconds") * multiplier });
 }

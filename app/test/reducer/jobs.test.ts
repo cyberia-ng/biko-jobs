@@ -82,6 +82,7 @@ const loggedInState: State = {
   streams: new Map(),
   pendingTasks: [],
   outbox: [],
+  errors: [],
 };
 
 function outboxEmpty(store: Store): Promise<void> {

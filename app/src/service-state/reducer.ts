@@ -23,7 +23,13 @@ import type { AnyVersionStreamAction, StreamAction } from "./persistent/action.t
 import { migrateAction } from "./persistent/stream-actions/migrate.ts";
 import partition from "lodash/partition.js";
 
-export type Action = OutboxProcessed | LoginAction | RefreshAction | PersistentAction | PhotoAction;
+export type Action =
+  | OutboxProcessed
+  | LoginAction
+  | RefreshAction
+  | PersistentAction
+  | PhotoAction
+  | ErrorAction;
 type OutboxProcessed = { type: "outbox/effect processed"; key: string };
 type LoginAction =
   | {
@@ -31,7 +37,9 @@ type LoginAction =
       masterKeys: Array<{ key: MasterKeyPublic; savedPassword: string | undefined }>;
     }
   | { type: "login/begin password login flow"; masterKey: MasterKeyPublic; password: string }
-  | { type: "login/log in with key pair"; masterKey: MasterKeyPair; authToken: AuthToken }
+  | { type: "login/log in with key pair"; masterKey: MasterKeyPair }
+  | { type: "login/refresh auth token" }
+  | { type: "login/receive refreshed auth token"; authToken: AuthToken }
   | { type: "login/log in to ephemeral session"; authToken: AuthToken };
 type RefreshAction = { type: "refresh" };
 export type WrappedStreamAction = {
@@ -40,7 +48,7 @@ export type WrappedStreamAction = {
   eventUUID: EventUUID;
 };
 type PersistentAction =
-  | { type: "persistent/fetch events by master key" }
+  // | { type: "persistent/fetch events by master key" }
   | { type: "persistent/merge streams"; streams: Map<StreamName, Stream> }
   | { type: "persistent/reduce incoming stream event"; event: StreamEvent }
   | { type: "persistent/create stream"; name: string }
@@ -70,6 +78,15 @@ type PhotoAction =
         data: Bytes;
       };
     };
+type ErrorAction =
+  | {
+      type: "error/handle effect error";
+      key: string;
+      timestamp: Temporal.Instant;
+      effect: Effect;
+      error: unknown;
+    }
+  | { type: "error/dismiss error"; key: string };
 
 function effect(effect: Effect): State["outbox"][number] {
   return { key: crypto.randomUUID(), effect };
@@ -109,7 +126,6 @@ export function reducer(outerState: State, action: Action): State {
         state.loginState.login = {
           type: "master key",
           masterKey: action.masterKey,
-          cachedAuthToken: action.authToken,
         };
         state.outbox.push(effect({ type: "login/clear ephemeral auth token" }));
         break;
@@ -119,15 +135,32 @@ export function reducer(outerState: State, action: Action): State {
           effect({ type: "login/persist ephemeral auth token", authToken: action.authToken }),
         );
         break;
-      case "persistent/fetch events by master key":
-        if (outerState.loginState.login.type !== "master key") return state;
+      case "login/refresh auth token":
+        if (outerState.loginState.login.type !== "master key") break;
         state.outbox.push(
           effect({
-            type: "persistent/fetch events by master key",
+            type: "login/refresh auth token",
             masterKey: outerState.loginState.login.masterKey,
-            authToken: outerState.loginState.login.cachedAuthToken,
           }),
         );
+        break;
+      case "login/receive refreshed auth token":
+        if (
+          state.loginState.login.type !== "master key" ||
+          outerState.loginState.login.type !== "master key"
+        ) {
+          break;
+        }
+        if (state.loginState.login.cachedAuthToken === undefined) {
+          state.outbox.push(
+            effect({
+              type: "persistent/fetch events by master key",
+              masterKey: outerState.loginState.login.masterKey,
+              authToken: action.authToken,
+            }),
+          );
+        }
+        state.loginState.login.cachedAuthToken = action.authToken;
         break;
       case "persistent/merge streams": {
         for (const [key, value] of action.streams.entries()) {
@@ -246,6 +279,18 @@ export function reducer(outerState: State, action: Action): State {
         doUploadBlob(state, action.streamName, action.thumbnail.uuid, action.thumbnail.data);
         break;
       }
+      case "error/handle effect error":
+        state.errors.push({
+          type: "effect error",
+          key: action.key,
+          timestamp: action.timestamp,
+          effect: action.effect,
+          error: action.error,
+        });
+        break;
+      case "error/dismiss error":
+        state.errors = state.errors.filter((e) => e.key !== action.key);
+        break;
       default:
         assertNever(action);
     }
