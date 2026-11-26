@@ -1,7 +1,7 @@
-import { useContext, useReducer, useState, type ReactNode } from "react";
+import { useContext, useEffect, useReducer, useState, type ReactNode } from "react";
 import { ImageBlob } from "../components/blob-loader.tsx";
 import { AppContext } from "../context.ts";
-import { type StreamAction, upsertJob, type Image } from "../service-state/persistent/action.ts";
+import { upsertJob, type Image, type UpsertJob } from "../service-state/persistent/action.ts";
 import type { Job } from "../service-state/persistent/state.ts";
 import omit from "lodash/omit.js";
 import { jobDetail } from "../navigation/state.ts";
@@ -17,22 +17,13 @@ import {
   ModalHeader,
   ModalTitle,
 } from "../components/modal.tsx";
-import { makeThumbnail } from "../utilities/make-thumbnail.ts";
-import type { BlobUUID } from "../service-state/state.ts";
-import type { Bytes } from "@biko-jobs/api-client";
+import { assertNever } from "../utilities/assert-never.ts";
 import { streamAction } from "../service-state/reducer.ts";
-
-type EditJobAction = Omit<
-  Extract<Extract<StreamAction, { type: "job action" }>["jobAction"], { type: "upsert job" }>,
-  "type" | "images"
-> & {
-  images: PhotosT;
-};
+import type { BlobUUID } from "../service-state/state.ts";
 
 export function EditJob(props: { new_?: boolean }) {
   const isNew = props.new_ ?? false;
   const { state, dispatch, navigate, navigationState, addNavigationHook } = useContext(AppContext);
-  const loading = state.outbox.length !== 0;
   const [reloadForm, triggerReloadForm] = useReducer((prev) => !prev, false);
   const [unsaved, setUnsaved] = useState<
     | { type: "clean" }
@@ -54,31 +45,21 @@ export function EditJob(props: { new_?: boolean }) {
     });
     setUnsaved({ type: "dirty", unhook });
   }
-  function submit(jobAction: EditJobAction, jobUUID: string) {
-    if (isNew) {
-      dispatch({ type: "persistent/create stream", name: jobUUID });
+  function submit(job: UpsertJob, jobUUID: string, newPhotos: NewPhotos) {
+    if (isNew) dispatch({ type: "persistent/create stream", name: jobUUID });
+    dispatch(streamAction(jobUUID, upsertJob(job)));
+    for (const photo of newPhotos) {
+      dispatch({
+        type: "photo/process photo",
+        streamName: jobUUID,
+        fullSizeUUID: photo.fullSizeUUID,
+        thumbnailUUID: photo.thumbnailUUID,
+        blob: photo.blob,
+      });
     }
-    const images: Image[] = [];
-    const newImageBlobs: Map<BlobUUID, Bytes> = new Map();
-    let shouldReload = isNew;
-    for (const photo of jobAction.images) {
-      switch (photo.type) {
-        case "new":
-          newImageBlobs.set(photo.main.blobUUID, photo.main.data);
-          newImageBlobs.set(photo.thumbnail.blobUUID, photo.thumbnail.data);
-          shouldReload = true;
-          URL.revokeObjectURL(photo.url);
-          break;
-        case "existing":
-          images.push(photo.image);
-          break;
-      }
-    }
-    const action: StreamAction = upsertJob({ ...omit(jobAction, "images"), images });
-    dispatch(streamAction(jobUUID, action, newImageBlobs));
-    if (shouldReload) triggerReloadForm();
     if (unsaved.type === "dirty") unsaved.unhook();
     setUnsaved({ type: "clean" });
+    if (isNew) triggerReloadForm();
   }
   let content: ReactNode;
   let job: Job | undefined = undefined;
@@ -87,7 +68,6 @@ export function EditJob(props: { new_?: boolean }) {
       <EditJobForm
         key={reloadForm ? "" : " "}
         onSubmit={submit}
-        disabled={loading}
         onReset={() => triggerReloadForm()}
         onUnsaved={handleUnsaved}
       />
@@ -105,7 +85,6 @@ export function EditJob(props: { new_?: boolean }) {
           key={reloadForm ? "" : " "}
           job={job}
           onSubmit={submit}
-          disabled={loading}
           onUnsaved={handleUnsaved}
         />
       );
@@ -146,17 +125,16 @@ function formReducer(state: FormData, action: FormAction): FormData {
   });
 }
 
+type NewPhotos = Array<{ fullSizeUUID: BlobUUID; thumbnailUUID: BlobUUID; blob: Blob }>;
 function EditJobForm({
   job,
   onSubmit,
   onReset,
-  disabled,
   onUnsaved,
 }: {
   job?: Job;
-  onSubmit: (job: EditJobAction, jobUUID: string) => void;
+  onSubmit: (jobAction: UpsertJob, jobUUID: string, newPhotos: NewPhotos) => void;
   onReset?: () => void;
-  disabled: boolean;
   onUnsaved: () => void;
 }) {
   const [formData, dispatchFormData_] = useReducer(formReducer, {
@@ -170,13 +148,38 @@ function EditJobForm({
     dispatchFormData_(action);
   }
   function submit() {
-    const jobAction: EditJobAction = {
+    const newPhotos: NewPhotos = [];
+    const images: UpsertJob["images"] = [];
+    for (const photo of formData.photos) {
+      switch (photo.type) {
+        case "existing":
+          images.push(photo.image);
+          break;
+        case "new": {
+          const fullSizeUUID = crypto.randomUUID();
+          const thumbnailUUID = crypto.randomUUID();
+          images.push({
+            type: "image/jpeg",
+            blobId: fullSizeUUID,
+            thumbnail: {
+              type: "image/jpeg",
+              blobId: thumbnailUUID,
+            },
+          });
+          newPhotos.push({ fullSizeUUID, thumbnailUUID, blob: photo.blob });
+          break;
+        }
+        default:
+          assertNever(photo);
+      }
+    }
+    const jobAction: UpsertJob = {
       customerName: formData.name,
       customerPhoneNumber: formData.phoneNumber,
       description: formData.description,
-      images: formData.photos,
+      images,
     };
-    onSubmit(jobAction, job?.uuid ?? crypto.randomUUID());
+    onSubmit(jobAction, job?.uuid ?? crypto.randomUUID(), newPhotos);
   }
   return (
     <div>
@@ -190,7 +193,6 @@ function EditJobForm({
             className="form-control"
             id="customerName"
             value={formData.name}
-            disabled={disabled}
             onChange={(e) => dispatchFormData({ type: "partial", name: e.target.value })}
           />
         </div>
@@ -203,7 +205,6 @@ function EditJobForm({
             className="form-control"
             id="customerPhoneNumber"
             value={formData.phoneNumber}
-            disabled={disabled}
             onChange={(e) => dispatchFormData({ type: "partial", phoneNumber: e.target.value })}
           />
         </div>
@@ -216,31 +217,19 @@ function EditJobForm({
             className="form-control"
             rows={5}
             value={formData.description}
-            disabled={disabled}
             onChange={(e) => dispatchFormData({ type: "partial", description: e.target.value })}
           />
         </div>
         <Photos
           photos={formData.photos}
           onChange={(photos) => dispatchFormData({ type: "partial", photos })}
-          disabled={disabled}
         />
         <div className="mb-3">
-          <button
-            type="submit"
-            className="btn btn-primary me-3"
-            onClick={() => submit()}
-            disabled={disabled}
-          >
+          <button type="submit" className="btn btn-primary me-3" onClick={() => submit()}>
             {job === undefined ? "Submit" : "Save"}
           </button>
           {job === undefined && (
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={() => onReset?.()}
-              disabled={disabled}
-            >
+            <button type="button" className="btn btn-danger" onClick={() => onReset?.()}>
               Reset
             </button>
           )}
@@ -252,47 +241,15 @@ function EditJobForm({
 
 type Photo =
   | { type: "existing"; image: Image; job: string }
-  | {
-      type: "new";
-      key: string;
-      main: { blobUUID: BlobUUID; data: Bytes; type: string };
-      thumbnail: { blobUUID: BlobUUID; data: Bytes; type: string };
-      url: string;
-    };
+  | { type: "new"; key: string; blob: Blob };
 type PhotosT = Array<Photo>;
-function Photos({
-  photos,
-  onChange,
-  disabled,
-}: {
-  photos: PhotosT;
-  onChange: (photos: PhotosT) => void;
-  disabled: boolean;
-}) {
-  function deletePhoto(id: string) {
-    const photo = photos.find((photo) => photoId(photo) === id);
-    if (photo !== undefined) {
-      if (photo.type === "new") {
-        URL.revokeObjectURL(photo.url);
-      }
-      onChange(photos.filter((p) => p !== photo));
-    }
+function Photos({ photos, onChange }: { photos: PhotosT; onChange: (photos: PhotosT) => void }) {
+  function deletePhoto(key: string) {
+    onChange(photos.filter((p) => photoId(p) !== key));
   }
-  async function addPhoto(blob: Blob) {
-    const uuid = crypto.randomUUID();
-    const url = URL.createObjectURL(blob);
-    const { data: thumbnailData, type: thumbnailType } = await makeThumbnail(url);
-    const mainData = await blob.bytes();
-    onChange([
-      ...photos,
-      {
-        type: "new",
-        key: uuid,
-        main: { blobUUID: crypto.randomUUID(), data: mainData, type: blob.type },
-        thumbnail: { blobUUID: crypto.randomUUID(), data: thumbnailData, type: thumbnailType },
-        url,
-      },
-    ]);
+  function addPhoto(blob: Blob) {
+    const key = crypto.randomUUID();
+    onChange([...photos, { type: "new", key, blob }]);
   }
   function photoId(photo: Photo) {
     switch (photo.type) {
@@ -309,11 +266,8 @@ function Photos({
           <div className="row mb-3" key={photoId(photo)}>
             <div className="col-8">
               <div className="position-relative">
-                {disabled && (
-                  <div className="position-absolute h-100 w-100 top-0 left-0 bg-secondary-subtle opacity-75"></div>
-                )}
                 {photo.type === "new" ? (
-                  <img src={photo.url} className="img-fluid h-100 w-100 object-fit-cover" />
+                  <LocalImageBlob blob={photo.blob} />
                 ) : (
                   <ImageBlob jobUUID={photo.job} blobUUID={photo.image.blobId} type="image/jpeg" />
                 )}
@@ -324,7 +278,6 @@ function Photos({
                 type="button"
                 className="btn btn-danger align-self-center"
                 onClick={() => deletePhoto(photoId(photo))}
-                disabled={disabled}
               >
                 <i className="bi bi-trash" />
               </button>
@@ -346,10 +299,9 @@ function Photos({
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file !== undefined) {
-              addPhoto(file).catch(console.error);
+              addPhoto(file);
             }
           }}
-          disabled={disabled}
         />
       </div>
     </>
@@ -370,4 +322,10 @@ function Unsaved({ onOverride, onCancel }: { onOverride: () => void; onCancel: (
       </ModalFooter>
     </Modal>
   );
+}
+
+function LocalImageBlob({ blob }: { blob: Blob }) {
+  const url = URL.createObjectURL(blob);
+  useEffect(() => () => URL.revokeObjectURL(url));
+  return <img src={url} className="img-fluid h-100 w-100 object-fit-cover" />;
 }

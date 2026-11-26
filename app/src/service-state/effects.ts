@@ -9,6 +9,8 @@ import {
 } from "@biko-jobs/api-client";
 import type { Action } from "./reducer.ts";
 import { assertNever } from "../utilities/assert-never.ts";
+import type { BlobUUID, StreamName } from "./state.ts";
+import { makeThumbnail } from "../utilities/make-thumbnail.ts";
 
 const AUTH_TOKEN_LIFETIME = Temporal.Duration.from({ minutes: 5 });
 
@@ -25,7 +27,14 @@ export type Effect =
     }
   | { type: "persistent/post stream event"; event: StreamEvent; authToken: AuthToken }
   | { type: "blob/put blob"; blob: StreamBlob; authToken: AuthToken }
-  | { type: "stream/create"; name: string; access: MasterKeyPublic[]; authToken: AuthToken };
+  | { type: "stream/create"; name: string; access: MasterKeyPublic[]; authToken: AuthToken }
+  | {
+      type: "photos/process photo";
+      streamName: StreamName;
+      fullSizeUUID: BlobUUID;
+      thumbnailUUID: BlobUUID;
+      blob: Blob;
+    };
 
 export type Effector = (effect: Effect, dispatch: (action: Action) => void) => Promise<void>;
 export function makeEffector(client: ApiClient): Effector {
@@ -108,6 +117,23 @@ export function makeEffector(client: ApiClient): Effector {
           effect.authToken,
         );
         dispatch({ type: "persistent/merge streams", streams: new Map([[stream.name, stream]]) });
+        break;
+      }
+      case "photos/process photo": {
+        const thumbnail = await makeThumbnail(effect.blob);
+        const fullSize = await effect.blob.bytes();
+        dispatch({
+          type: "photo/receive processed photo",
+          streamName: effect.streamName,
+          fullSize: {
+            uuid: effect.fullSizeUUID,
+            data: fullSize,
+          },
+          thumbnail: {
+            uuid: effect.thumbnailUUID,
+            data: thumbnail.data,
+          },
+        });
         break;
       }
       default:

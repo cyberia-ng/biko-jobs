@@ -48,6 +48,21 @@ class MockEffector implements IMockEffector {
         this.blobs.set(effect.blob.uuid, effect.blob.data);
         break;
       }
+      case "photos/process photo": {
+        dispatch({
+          type: "photo/receive processed photo",
+          streamName: effect.streamName,
+          fullSize: {
+            uuid: effect.fullSizeUUID,
+            data: await effect.blob.bytes(),
+          },
+          thumbnail: {
+            uuid: effect.thumbnailUUID,
+            data: Buffer.from("fake thumbnail", "utf-8"),
+          },
+        });
+        break;
+      }
     }
   }
 }
@@ -65,7 +80,7 @@ const loggedInState: State = {
   },
   persistent: initialPersistentState,
   streams: new Map(),
-  pendingStreamActions: [],
+  pendingTasks: [],
   outbox: [],
 };
 
@@ -117,9 +132,8 @@ describe("job creation", () => {
     store.dispatch({
       type: "persistent/dispatch stream action",
       streamName: "some job",
-      actionUUID,
+      eventUUID: actionUUID,
       action: upsertAction,
-      associatedBlobs: new Map(),
     });
     await outboxEmpty(store);
     const job = store.getSnapshot().persistent.jobs.get("some job");
@@ -133,19 +147,43 @@ describe("job creation", () => {
 });
 
 describe("job edit", () => {
-  test("blob submission works", async () => {
+  test("photo submission works with existing stream", async () => {
     const { store, mockEffector } = makeStore();
     store.dispatch({ type: "persistent/create stream", name: "some job" });
-    const blobUUID = crypto.randomUUID();
-    const blobData = crypto.getRandomValues(new Uint8Array(16));
+    await outboxEmpty(store);
+    const fakePhoto = Buffer.from([1, 2, 3]);
+    const fakePhotoBlob = new Blob([fakePhoto]);
+    const fullSizeUUID = crypto.randomUUID();
+    const thumbnailUUID = crypto.randomUUID();
     store.dispatch({
-      type: "persistent/dispatch stream action",
+      type: "photo/process photo",
       streamName: "some job",
-      actionUUID: crypto.randomUUID(),
-      action: "fake action" as any as StreamAction,
-      associatedBlobs: new Map([[blobUUID, blobData]]),
+      fullSizeUUID,
+      thumbnailUUID,
+      blob: fakePhotoBlob,
     });
     await outboxEmpty(store);
-    expect(mockEffector.blobs.get(blobUUID)).toStrictEqual(blobData);
+    expect(mockEffector.blobs.get(fullSizeUUID)).toStrictEqual(new Uint8Array(fakePhoto));
+    expect(mockEffector.blobs.get(thumbnailUUID)).toBeDefined();
+  });
+
+  test("photo submission works with new stream", async () => {
+    const { store, mockEffector } = makeStore();
+    const fakePhoto = Buffer.from([1, 2, 3]);
+    const fakePhotoBlob = new Blob([fakePhoto]);
+    const fullSizeUUID = crypto.randomUUID();
+    const thumbnailUUID = crypto.randomUUID();
+    store.dispatch({
+      type: "photo/process photo",
+      streamName: "some job",
+      fullSizeUUID,
+      thumbnailUUID,
+      blob: fakePhotoBlob,
+    });
+    await outboxEmpty(store);
+    store.dispatch({ type: "persistent/create stream", name: "some job" });
+    await outboxEmpty(store);
+    expect(mockEffector.blobs.get(fullSizeUUID)).toStrictEqual(new Uint8Array(fakePhoto));
+    expect(mockEffector.blobs.get(thumbnailUUID)).toBeDefined();
   });
 });

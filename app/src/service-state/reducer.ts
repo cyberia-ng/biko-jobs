@@ -7,17 +7,23 @@ import {
   type StreamBlob,
   type StreamEvent,
 } from "@biko-jobs/api-client";
-import { produce } from "immer";
-import { getAuthToken, initialState, type BlobUUID, type State, type StreamName } from "./state.ts";
+import { produce, type WritableDraft } from "immer";
+import {
+  getAuthToken,
+  initialState,
+  type BlobUUID,
+  type EventUUID,
+  type State,
+  type StreamName,
+} from "./state.ts";
 import type { Effect } from "./effects.ts";
 import { assertNever } from "../utilities/assert-never.ts";
 import { reducer as persistentReducer } from "./persistent/reducer.ts";
 import type { AnyVersionStreamAction, StreamAction } from "./persistent/action.ts";
 import { migrateAction } from "./persistent/stream-actions/migrate.ts";
 import partition from "lodash/partition.js";
-import { type State as PersistentState } from "./persistent/state.ts";
 
-export type Action = OutboxProcessed | LoginAction | RefreshAction | PersistentAction;
+export type Action = OutboxProcessed | LoginAction | RefreshAction | PersistentAction | PhotoAction;
 type OutboxProcessed = { type: "outbox/effect processed"; key: string };
 type LoginAction =
   | {
@@ -31,33 +37,50 @@ type RefreshAction = { type: "refresh" };
 export type WrappedStreamAction = {
   action: StreamAction;
   streamName: StreamName;
-  actionUUID: string;
-  associatedBlobs: Map<BlobUUID, Bytes>;
+  eventUUID: EventUUID;
 };
 type PersistentAction =
   | { type: "persistent/fetch events by master key" }
   | { type: "persistent/merge streams"; streams: Map<StreamName, Stream> }
   | { type: "persistent/reduce incoming stream event"; event: StreamEvent }
-  | ({
+  | { type: "persistent/create stream"; name: string }
+  | {
       type: "persistent/dispatch stream action";
-    } & WrappedStreamAction)
-  | { type: "persistent/create stream"; name: string };
+      streamName: StreamName;
+      eventUUID: EventUUID;
+      action: StreamAction;
+    };
+type PhotoAction =
+  | {
+      type: "photo/process photo";
+      streamName: StreamName;
+      fullSizeUUID: BlobUUID;
+      thumbnailUUID: BlobUUID;
+      blob: Blob;
+    }
+  | {
+      type: "photo/receive processed photo";
+      streamName: StreamName;
+      fullSize: {
+        uuid: BlobUUID;
+        data: Bytes;
+      };
+      thumbnail: {
+        uuid: BlobUUID;
+        data: Bytes;
+      };
+    };
 
 function effect(effect: Effect): State["outbox"][number] {
   return { key: crypto.randomUUID(), effect };
 }
 
-export function streamAction(
-  streamName: StreamName,
-  action: StreamAction,
-  associatedBlobs?: Map<BlobUUID, Bytes>,
-): PersistentAction {
+export function streamAction(streamName: StreamName, action: StreamAction): PersistentAction {
   return {
     type: "persistent/dispatch stream action",
     streamName,
-    actionUUID: crypto.randomUUID(),
+    eventUUID: crypto.randomUUID(),
     action,
-    associatedBlobs: associatedBlobs ?? new Map(),
   };
 }
 
@@ -110,24 +133,45 @@ export function reducer(outerState: State, action: Action): State {
         for (const [key, value] of action.streams.entries()) {
           state.streams.set(key, value);
         }
-        const [availableActions, remainingActions] = partition(
-          outerState.pendingStreamActions,
-          (a) => state.streams.has(a.streamName),
+        const [availableTasks, remainingPendingTasks] = partition(outerState.pendingTasks, (e) =>
+          state.streams.has(e.streamName),
         );
-        state.pendingStreamActions = remainingActions;
+        state.pendingTasks = remainingPendingTasks;
         let persistentState = outerState.persistent;
         const authToken = getAuthToken(outerState);
         if (authToken === undefined) break;
-        for (const action of availableActions) {
-          const stream = state.streams.get(action.streamName)!;
-          const { newState, effects } = handleStreamAction(
-            persistentState,
-            action,
-            stream,
-            authToken,
-          );
-          persistentState = newState;
-          state.outbox.push(...effects.map((e) => effect(e)));
+        for (const task of availableTasks) {
+          const stream = state.streams.get(task.streamName)!;
+          switch (task.type) {
+            case "stream action": {
+              const event: StreamEvent<StreamAction> = {
+                uuid: task.uuid,
+                stream,
+                data: task.data,
+              };
+              persistentState = persistentReducer(persistentState, event);
+              state.outbox.push(
+                effect({
+                  type: "persistent/post stream event",
+                  event,
+                  authToken,
+                }),
+              );
+              break;
+            }
+            case "blob upload": {
+              state.outbox.push(
+                effect({
+                  type: "blob/put blob",
+                  blob: { uuid: task.uuid, stream, data: task.data },
+                  authToken,
+                }),
+              );
+              break;
+            }
+            default:
+              assertNever(task);
+          }
         }
         state.persistent = persistentState;
         break;
@@ -147,23 +191,28 @@ export function reducer(outerState: State, action: Action): State {
       case "persistent/dispatch stream action":
         const stream = outerState.streams.get(action.streamName);
         if (stream === undefined) {
-          state.pendingStreamActions.push({
+          state.pendingTasks.push({
+            type: "stream action",
             streamName: action.streamName,
-            actionUUID: action.actionUUID,
-            action: action.action,
-            associatedBlobs: action.associatedBlobs,
+            uuid: action.eventUUID,
+            data: action.action,
           });
         } else {
           const authToken = getAuthToken(outerState);
           if (authToken === undefined) break;
-          const { newState, effects } = handleStreamAction(
-            outerState.persistent,
-            action,
+          const event: StreamEvent<StreamAction> = {
+            uuid: action.eventUUID,
             stream,
-            authToken,
+            data: action.action,
+          };
+          state.persistent = persistentReducer(state.persistent, event);
+          state.outbox.push(
+            effect({
+              type: "persistent/post stream event",
+              event,
+              authToken,
+            }),
           );
-          state.persistent = newState;
-          state.outbox.push(...effects.map((e) => effect(e)));
         }
         break;
       case "persistent/create stream": {
@@ -180,41 +229,47 @@ export function reducer(outerState: State, action: Action): State {
         );
         break;
       }
+      case "photo/process photo": {
+        state.outbox.push(
+          effect({
+            type: "photos/process photo",
+            streamName: action.streamName,
+            fullSizeUUID: action.fullSizeUUID,
+            thumbnailUUID: action.thumbnailUUID,
+            blob: action.blob,
+          }),
+        );
+        break;
+      }
+      case "photo/receive processed photo": {
+        doUploadBlob(state, action.streamName, action.fullSize.uuid, action.fullSize.data);
+        doUploadBlob(state, action.streamName, action.thumbnail.uuid, action.thumbnail.data);
+        break;
+      }
       default:
         assertNever(action);
     }
   });
 }
 
-function handleStreamAction(
-  persistentState: PersistentState,
-  action: WrappedStreamAction,
-  stream: Stream,
-  authToken: AuthToken,
-): { newState: PersistentState; effects: Effect[] } {
-  const effects: Effect[] = [];
-  const event: StreamEvent<StreamAction> = {
-    uuid: action.actionUUID,
-    stream,
-    data: action.action,
-  };
-  const newState = persistentReducer(persistentState, event);
-  effects.push({
-    type: "persistent/post stream event",
-    event,
-    authToken,
-  });
-  for (const [blobUUID, data] of action.associatedBlobs.entries()) {
-    const blob: StreamBlob = {
+function doUploadBlob(
+  state: WritableDraft<State>,
+  streamName: StreamName,
+  blobUUID: BlobUUID,
+  data: Bytes,
+) {
+  const authToken = getAuthToken(state);
+  if (authToken === undefined) return;
+  const stream = state.streams.get(streamName);
+  if (stream === undefined) {
+    state.pendingTasks.push({
+      type: "blob upload",
+      streamName: streamName,
       uuid: blobUUID,
       data,
-      stream,
-    };
-    effects.push({
-      type: "blob/put blob",
-      blob,
-      authToken,
     });
+  } else {
+    const blob: StreamBlob = { stream, uuid: blobUUID, data };
+    state.outbox.push(effect({ type: "blob/put blob", blob, authToken }));
   }
-  return { newState, effects };
 }

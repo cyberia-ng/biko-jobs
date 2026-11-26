@@ -21,6 +21,7 @@ const jobNow = (event: JobAction): StreamAction => ({
 
 type JobActionOf<T extends string> = Omit<Extract<JobAction, { type: T }>, "type">;
 
+export type UpsertJob = JobActionOf<"upsert job">;
 export const upsertJob = (f: JobActionOf<"upsert job">) => jobNow({ type: "upsert job", ...f });
 
 export const changeJobStatus = (status: (typeof allStatuses)[number]) =>

@@ -95,15 +95,10 @@ function randomJobData(jobStream: Stream, allImages: Image[]) {
         images: images.map(({ imageBlob, thumbnailBlob }) => ({
           type: "image/jpeg",
           blobId: imageBlob.uuid,
-          ...faker.helpers.maybe(
-            () => ({
-              thumbnail: {
-                type: "image/jpeg",
-                blobId: thumbnailBlob.uuid,
-              },
-            }),
-            { probability: 0.8 },
-          ),
+          thumbnail: {
+            type: "image/jpeg",
+            blobId: thumbnailBlob.uuid,
+          },
         })),
       },
       Temporal.Instant.from(faker.date.recent({ days: { min: 0, max: 7 } }).toISOString()),

@@ -1,13 +1,21 @@
-import type { AuthToken, MasterKeyPair, MasterKeyPublic, Stream } from "@biko-jobs/api-client";
+import type {
+  AuthToken,
+  Bytes,
+  MasterKeyPair,
+  MasterKeyPublic,
+  Stream,
+} from "@biko-jobs/api-client";
 import type { Effect } from "./effects.ts";
 import {
   type State as PersistentState,
   initialState as initialPersistentState,
 } from "./persistent/state.ts";
-import type { WrappedStreamAction } from "./reducer.ts";
+import type { StreamAction } from "./persistent/action.ts";
+import type { WritableDraft } from "immer";
 
 export type StreamName = string;
 export type BlobUUID = string;
+export type EventUUID = string;
 export type State = {
   loginState: {
     masterKeys:
@@ -28,7 +36,10 @@ export type State = {
   };
   streams: Map<StreamName, Stream>;
   persistent: PersistentState;
-  pendingStreamActions: Array<WrappedStreamAction>;
+  pendingTasks: Array<
+    | { type: "stream action"; streamName: StreamName; uuid: EventUUID; data: StreamAction }
+    | { type: "blob upload"; streamName: StreamName; uuid: BlobUUID; data: Bytes }
+  >;
   outbox: Array<{ key: string; effect: Effect }>;
 };
 
@@ -39,14 +50,14 @@ export const initialState: State = {
   },
   streams: new Map(),
   persistent: initialPersistentState,
-  pendingStreamActions: [],
+  pendingTasks: [],
   outbox: [
     { key: crypto.randomUUID(), effect: { type: "login/load ephemeral auth token" } },
     { key: crypto.randomUUID(), effect: { type: "login/fetch master public keys" } },
   ],
 };
 
-export function getAuthToken(state: State): AuthToken | undefined {
+export function getAuthToken(state: State | WritableDraft<State>): AuthToken | undefined {
   switch (state.loginState.login.type) {
     case "not logged in":
     case "loading":
