@@ -17,7 +17,6 @@ import {
   ModalHeader,
   ModalTitle,
 } from "../components/modal.tsx";
-import { assertNever } from "../utilities/assert-never.ts";
 import { streamAction } from "../service-state/reducer.ts";
 import type { BlobUUID } from "../service-state/state.ts";
 
@@ -170,7 +169,7 @@ function EditJobForm({
           break;
         }
         default:
-          assertNever(photo);
+          photo satisfies never;
       }
     }
     const jobAction: UpsertJob = {

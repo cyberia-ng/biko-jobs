@@ -1,10 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AppContext } from "../context.ts";
-import {
-  AuthToken,
-  MasterKeyPair,
-  MasterKeyPublic,
-} from "@biko-jobs/api-client";
+import { AuthToken, MasterKeyPair, MasterKeyPublic } from "@biko-jobs/api-client";
 import { Page } from "../components/page.tsx";
 import { Spinner } from "../components/blob-loader.tsx";
 import {
@@ -24,7 +20,6 @@ import {
   ModalTitle,
 } from "../components/modal.tsx";
 import { updateCanvas } from "jdenticon";
-import { assertNever } from "../utilities/assert-never.ts";
 
 export function Login() {
   const { state, dispatch, navigationState, navigate } = useContext(AppContext);
@@ -384,7 +379,7 @@ function PairingServerDisplay({
         </Modal>
       );
     default:
-      assertNever(pairingState);
+      pairingState satisfies never;
   }
 }
 

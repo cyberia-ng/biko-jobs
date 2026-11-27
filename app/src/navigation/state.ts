@@ -1,5 +1,3 @@
-import { assertNever } from "../utilities/assert-never.ts";
-
 export type State =
   | {
       screen: "kanban" | "new job" | "archive" | "bulk actions";
@@ -84,7 +82,7 @@ export function serialize(state: State): string {
       components.push("bulk-actions");
       break;
     default:
-      assertNever(state);
+      state satisfies never;
   }
   return components.map(encodeURIComponent).join("/");
 }

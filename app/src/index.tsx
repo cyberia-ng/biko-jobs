@@ -16,7 +16,6 @@ import { JobDetail } from "./screens/job-detail.tsx";
 import { AppContext, type AppContextT } from "./context.ts";
 import { Store as ServiceStore } from "./service-state/store.ts";
 import { enableMapSet } from "immer";
-import { assertNever } from "./utilities/assert-never.ts";
 import { ApiClient } from "@biko-jobs/api-client";
 import { Login } from "./screens/login.tsx";
 import { Archive } from "./screens/archive.tsx";
@@ -108,7 +107,7 @@ function App({ apiClient }: { apiClient: ApiClient }) {
       screen = <BulkActions />;
       break;
     default:
-      assertNever(navigationState);
+      navigationState satisfies never;
   }
   return (
     <AppContext value={context}>

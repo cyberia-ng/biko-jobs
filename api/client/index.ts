@@ -1,4 +1,3 @@
-import { assertNever } from "@biko-jobs/api-client/assert-never.ts";
 import {
   AESKey,
   Ed25519PrivateKey,
@@ -52,7 +51,7 @@ export class ClientError extends Error {
         message += `${info.uuid} (${info.name})`;
         break;
       default:
-        assertNever(info);
+        info satisfies never;
     }
     super(message);
     this.info = info;
@@ -327,7 +326,7 @@ export class ApiClient {
           }
           break;
         default:
-          assertNever(socketEvent);
+          socketEvent satisfies never;
       }
     }
   }

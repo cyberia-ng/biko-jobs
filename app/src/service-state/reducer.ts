@@ -17,7 +17,6 @@ import {
   type StreamName,
 } from "./state.ts";
 import type { Effect } from "./effects.ts";
-import { assertNever } from "../utilities/assert-never.ts";
 import { reducer as persistentReducer } from "./persistent/reducer.ts";
 import type { AnyVersionStreamAction, StreamAction } from "./persistent/action.ts";
 import { migrateAction } from "./persistent/stream-actions/migrate.ts";
@@ -238,7 +237,7 @@ export function reducer(state: State, action: Action): State {
               break;
             }
             default:
-              assertNever(task);
+              task satisfies never;
           }
         }
         draft.persistent = persistentState;
@@ -339,7 +338,7 @@ export function reducer(state: State, action: Action): State {
         draft.errors = draft.errors.filter((e) => e.key !== action.key);
         break;
       default:
-        assertNever(action);
+        action satisfies never;
     }
   });
 }
@@ -389,8 +388,6 @@ function subscribeToEvents(existingUnsubscribe?: () => void): Effect {
             },
           ];
         }
-        default:
-          assertNever(event);
       }
     },
     onError: ({ key, timestamp, error }) => [

@@ -1,7 +1,6 @@
 import { produce } from "immer";
 import type { State } from "./state.ts";
 import pick from "lodash/pick.js";
-import { assertNever } from "../../utilities/assert-never.ts";
 import type { StreamAction } from "./action.ts";
 import type { StreamEvent } from "@biko-jobs/api-client";
 
@@ -71,7 +70,7 @@ export function reducer(state: State, event: StreamEvent<StreamAction>): State {
         }
         break;
       default:
-        assertNever(jobAction);
+        jobAction satisfies never;
     }
   });
 }
