@@ -29,7 +29,7 @@ export type State = {
       | {
           type: "master key";
           masterKey: MasterKeyPair;
-          cachedAuthToken?: AuthToken;
+          cachedAuthToken: AuthToken;
         }
       | { type: "ephemeral"; authToken: AuthToken }
       | { type: "not logged in" };

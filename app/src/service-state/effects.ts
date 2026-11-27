@@ -34,7 +34,11 @@ export type Effect =
       type: "login/perform password login";
       masterKey: MasterKeyPublic;
       password: string;
-      after: ActionCreator<MasterKeyPair>;
+      after: ActionCreator<{
+        masterKey: MasterKeyPair;
+        authToken: AuthToken;
+      }>;
+      onTokenExpire: ActionCreator<void>;
     }
   | {
       type: "login/refresh auth token";
@@ -115,26 +119,18 @@ export function makeEffector(client: ApiClient): Effector {
         await new Promise((res) => setTimeout(res, 0));
         const mkPassword = await MasterKeyPassword.init(effect.masterKey, effect.password);
         const masterKey = await client.getMasterKeyPair(mkPassword);
+        const authToken = await generateAuthToken(masterKey);
         window.localStorage.setItem(`saved password/${masterKey.uuid}`, effect.password);
-        effect.after(masterKey).forEach(dispatch);
+        setInterval(
+          () => effect.onTokenExpire().forEach(dispatch),
+          AUTH_TOKEN_REFRESH_INTERVAL.total("milliseconds"),
+        );
+        effect.after({ masterKey, authToken }).forEach(dispatch);
         break;
       }
       case "login/refresh auth token": {
-        const authToken = await AuthToken.init({
-          masterKey: effect.masterKey,
-          expiry: Temporal.Now.instant().add(AUTH_TOKEN_LIFETIME),
-          permissions: new Set([
-            "list streams",
-            "create streams",
-            "read stream data",
-            "write stream data",
-          ]),
-        });
+        const authToken = await generateAuthToken(effect.masterKey);
         effect.after(authToken).forEach(dispatch);
-        setTimeout(
-          () => effect.onExpire().forEach(dispatch),
-          AUTH_TOKEN_REFRESH_INTERVAL.total("milliseconds"),
-        );
         break;
       }
       case "login/subscribe to events": {
@@ -225,4 +221,17 @@ export function makeEffector(client: ApiClient): Effector {
         error,
       }),
     );
+}
+
+function generateAuthToken(masterKey: MasterKeyPair) {
+  return AuthToken.init({
+    masterKey: masterKey,
+    expiry: Temporal.Now.instant().add(AUTH_TOKEN_LIFETIME),
+    permissions: new Set([
+      "list streams",
+      "create streams",
+      "read stream data",
+      "write stream data",
+    ]),
+  });
 }
