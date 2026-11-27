@@ -220,10 +220,7 @@ export class ApiClient {
     return Promise.all(streamsP);
   }
 
-  async getEventsByStreams(
-    streams: Stream[],
-    authToken: AuthToken,
-  ): Promise<Map<string, StreamEvent[]>> {
+  async getEventsByStreams(streams: Stream[], authToken: AuthToken): Promise<StreamEvent[]> {
     const res = await apiFetch(this.baseUrl, ["events"], {
       method: "GET",
       auth: authToken,
@@ -240,20 +237,7 @@ export class ApiClient {
       const decoded = mpDecoder.decode(decrypted.data);
       return { uuid: event.uuid, data: decoded, stream } satisfies StreamEvent;
     });
-    const events = await Promise.all(eventPs);
-    const out: Map<string, StreamEvent[]> = new Map();
-    for (const event of events) {
-      let streamEvents: StreamEvent[] | undefined = out.get(event.stream.name);
-      if (streamEvents === undefined) {
-        streamEvents = [];
-        out.set(event.stream.name, streamEvents);
-      }
-      streamEvents.push(event);
-    }
-    for (const emptyStream of responseBody.emptyStreams) {
-      out.set(emptyStream, []);
-    }
-    return out;
+    return Promise.all(eventPs);
   }
 
   async addEvent(event: StreamEvent, auth: AuthToken) {

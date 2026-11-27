@@ -31,10 +31,7 @@ class MockEffector implements IMockEffector {
     switch (effect.type) {
       case "stream/create": {
         this.streams.set(effect.name, []);
-        dispatch({
-          type: "persistent/merge streams",
-          streams: new Map(this.streams.keys().map((s) => [s, { name: s } as Stream] as const)),
-        });
+        effect.after({ name: effect.name } as Stream).forEach(dispatch);
         break;
       }
       case "persistent/post stream event": {

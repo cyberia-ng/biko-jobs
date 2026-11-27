@@ -3,40 +3,78 @@ import {
   MasterKeyPair,
   MasterKeyPassword,
   MasterKeyPublic,
+  Stream,
   type ApiClient,
+  type Bytes,
   type StreamBlob,
   type StreamEvent,
+  type SubscriptionEvent,
   type WebSocketSubscriber,
 } from "@biko-jobs/api-client";
 import type { Action } from "./reducer.ts";
-import { assertNever } from "../utilities/assert-never.ts";
 import type { BlobUUID, State, StreamName } from "./state.ts";
 import { makeThumbnail } from "../utilities/make-thumbnail.ts";
 
 const AUTH_TOKEN_LIFETIME = Temporal.Duration.from({ minutes: 5 });
+const AUTH_TOKEN_REFRESH_INTERVAL = Temporal.Duration.from({
+  microseconds: AUTH_TOKEN_LIFETIME.total("microseconds") * 0.9,
+});
+
+export type ActionCreator<T> = (arg: T) => Action[];
 
 export type Effect =
-  | { type: "login/fetch master public keys" }
-  | { type: "login/load ephemeral auth token" }
+  | {
+      type: "login/fetch master public keys";
+      after: ActionCreator<Exclude<State["loginState"]["masterKeys"], "not loaded">>;
+    }
+  | { type: "login/load ephemeral auth token"; after: ActionCreator<AuthToken> }
   | { type: "login/persist ephemeral auth token"; authToken: AuthToken }
   | { type: "login/clear ephemeral auth token" }
-  | { type: "login/perform password login"; masterKey: MasterKeyPublic; password: string }
-  | { type: "login/refresh auth token"; masterKey: MasterKeyPair }
-  | { type: "login/subscribe to events"; existingUnsubscribe: (() => void) | undefined }
+  | {
+      type: "login/perform password login";
+      masterKey: MasterKeyPublic;
+      password: string;
+      after: ActionCreator<MasterKeyPair>;
+    }
+  | {
+      type: "login/refresh auth token";
+      masterKey: MasterKeyPair;
+      after: ActionCreator<AuthToken>;
+      onExpire: ActionCreator<void>;
+    }
+  | {
+      type: "login/subscribe to events";
+      existingUnsubscribe: (() => void) | undefined;
+      after: ActionCreator<{ unsubscribe: () => void }>;
+      onEvent: ActionCreator<SubscriptionEvent>;
+      onError: ActionCreator<{ key: string; timestamp: Temporal.Instant; error: unknown }>;
+    }
   | {
       type: "persistent/fetch events by master key";
       masterKey: MasterKeyPair;
       authToken: AuthToken;
+      after: ActionCreator<{ streams: Stream[]; events: StreamEvent[] }>;
     }
   | { type: "persistent/post stream event"; event: StreamEvent; authToken: AuthToken }
   | { type: "blob/put blob"; blob: StreamBlob; authToken: AuthToken }
-  | { type: "stream/create"; name: string; access: MasterKeyPublic[]; authToken: AuthToken }
+  | {
+      type: "stream/create";
+      name: string;
+      access: MasterKeyPublic[];
+      authToken: AuthToken;
+      after: ActionCreator<Stream>;
+    }
   | {
       type: "photos/process photo";
       streamName: StreamName;
       fullSizeUUID: BlobUUID;
       thumbnailUUID: BlobUUID;
       blob: Blob;
+      after: ActionCreator<{
+        streamName: StreamName;
+        fullSize: { uuid: BlobUUID; data: Bytes };
+        thumbnail: { uuid: BlobUUID; data: Bytes };
+      }>;
     };
 
 export type Effector = (
@@ -53,14 +91,14 @@ export function makeEffector(client: ApiClient): Effector {
           key: mk,
           savedPassword: window.localStorage.getItem(`saved password/${mk.uuid}`) ?? undefined,
         }));
-        dispatch({ type: "login/update master keys list", masterKeys: mks });
+        effect.after(mks).forEach(dispatch);
         break;
       }
       case "login/load ephemeral auth token": {
         const authTokenStr = window.sessionStorage.getItem("ephemeral auth token");
         if (authTokenStr === null) break;
         const authToken = AuthToken.fromStr(authTokenStr);
-        dispatch({ type: "login/log in to ephemeral session", authToken });
+        effect.after(authToken).forEach(dispatch);
         break;
       }
       case "login/persist ephemeral auth token": {
@@ -78,8 +116,7 @@ export function makeEffector(client: ApiClient): Effector {
         const mkPassword = await MasterKeyPassword.init(effect.masterKey, effect.password);
         const masterKey = await client.getMasterKeyPair(mkPassword);
         window.localStorage.setItem(`saved password/${masterKey.uuid}`, effect.password);
-        dispatch({ type: "login/log in with key pair", masterKey });
-        dispatch({ type: "login/refresh auth token" });
+        effect.after(masterKey).forEach(dispatch);
         break;
       }
       case "login/refresh auth token": {
@@ -93,9 +130,11 @@ export function makeEffector(client: ApiClient): Effector {
             "write stream data",
           ]),
         });
-        dispatch({ type: "login/receive refreshed auth token", authToken });
-        const intervalMs = multiplyDuration(AUTH_TOKEN_LIFETIME, 0.9).total("milliseconds");
-        setTimeout(() => dispatch({ type: "login/refresh auth token" }), intervalMs);
+        effect.after(authToken).forEach(dispatch);
+        setTimeout(
+          () => effect.onExpire().forEach(dispatch),
+          AUTH_TOKEN_REFRESH_INTERVAL.total("milliseconds"),
+        );
         break;
       }
       case "login/subscribe to events": {
@@ -118,32 +157,14 @@ export function makeEffector(client: ApiClient): Effector {
               res();
             },
             onEvent: (event) => {
-              switch (event.type) {
-                case "new stream": {
-                  dispatch({
-                    type: "persistent/merge streams",
-                    streams: new Map([[event.stream.name, event.stream]]),
-                  });
-                  break;
-                }
-                case "stream event": {
-                  dispatch({ type: "persistent/reduce incoming stream event", event: event.event });
-                  break;
-                }
-                default:
-                  assertNever(event);
-              }
+              effect.onEvent(event).forEach(dispatch);
             },
             onError: (error) => {
               if (!isConnected) return rej(error);
               else {
-                // Reconnect?
-                dispatch({
-                  type: "error/handle event stream error",
-                  key: crypto.randomUUID(),
-                  timestamp: Temporal.Now.instant(),
-                  error,
-                });
+                effect
+                  .onError({ key: crypto.randomUUID(), timestamp: Temporal.Now.instant(), error })
+                  .forEach(dispatch);
               }
             },
           };
@@ -155,18 +176,7 @@ export function makeEffector(client: ApiClient): Effector {
       case "persistent/fetch events by master key": {
         const streams = await client.listStreams(effect.masterKey, effect.authToken);
         const events = await client.getEventsByStreams(streams, effect.authToken);
-        dispatch({
-          type: "persistent/merge streams",
-          streams: new Map(streams.map((stream) => [stream.name, stream] as const)),
-        });
-        for (const streamEvents of events.values()) {
-          for (const event of streamEvents) {
-            dispatch({
-              type: "persistent/reduce incoming stream event",
-              event,
-            });
-          }
-        }
+        effect.after({ streams, events }).forEach(dispatch);
         break;
       }
       case "persistent/post stream event": {
@@ -182,28 +192,27 @@ export function makeEffector(client: ApiClient): Effector {
           { name: effect.name, access: effect.access },
           effect.authToken,
         );
-        dispatch({ type: "persistent/merge streams", streams: new Map([[stream.name, stream]]) });
+        effect.after(stream).forEach(dispatch);
         break;
       }
       case "photos/process photo": {
         const thumbnail = await makeThumbnail(effect.blob);
         const fullSize = await effect.blob.bytes();
-        dispatch({
-          type: "photo/receive processed photo",
-          streamName: effect.streamName,
-          fullSize: {
-            uuid: effect.fullSizeUUID,
-            data: fullSize,
-          },
-          thumbnail: {
-            uuid: effect.thumbnailUUID,
-            data: thumbnail.data,
-          },
-        });
+        effect
+          .after({
+            streamName: effect.streamName,
+            fullSize: {
+              uuid: effect.fullSizeUUID,
+              data: fullSize,
+            },
+            thumbnail: {
+              uuid: effect.thumbnailUUID,
+              data: thumbnail.data,
+            },
+          })
+          .forEach(dispatch);
         break;
       }
-      default:
-        assertNever(effect);
     }
   };
   return (effect, dispatch, getSnapshot) =>
@@ -216,8 +225,4 @@ export function makeEffector(client: ApiClient): Effector {
         error,
       }),
     );
-}
-
-function multiplyDuration(duration: Temporal.Duration, multiplier: number) {
-  return Temporal.Duration.from({ microseconds: duration.total("microseconds") * multiplier });
 }

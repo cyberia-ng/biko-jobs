@@ -216,18 +216,7 @@ describe("api client", () => {
       await client.addEvent(event1, authToken);
       await client.addEvent(event2, authToken);
       const events = await client.getEventsByStreams([stream1], authToken);
-      expect(events.size).toBe(1);
-      expect(events.get(stream1.name)).toStrictEqual([event1]);
-    });
-
-    test("get events for empty stream", async () => {
-      const stream = await client.addStream(
-        { name: crypto.randomUUID(), access: [masterKey.publicKey] },
-        authToken,
-      );
-      const events = await client.getEventsByStreams([stream], authToken);
-      expect(events.size).toBe(1);
-      expect(events.get(stream.name)).toStrictEqual([]);
+      expect(events).toStrictEqual([event1]);
     });
   });
 

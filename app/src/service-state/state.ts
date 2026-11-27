@@ -59,8 +59,20 @@ export const initialState: State = {
   persistent: initialPersistentState,
   pendingTasks: [],
   outbox: [
-    { key: crypto.randomUUID(), effect: { type: "login/load ephemeral auth token" } },
-    { key: crypto.randomUUID(), effect: { type: "login/fetch master public keys" } },
+    {
+      key: crypto.randomUUID(),
+      effect: {
+        type: "login/load ephemeral auth token",
+        after: (authToken) => [{ type: "login/log in to ephemeral session", authToken }],
+      },
+    },
+    {
+      key: crypto.randomUUID(),
+      effect: {
+        type: "login/fetch master public keys",
+        after: (masterKeys) => [{ type: "login/update master keys list", masterKeys }],
+      },
+    },
   ],
   errors: [],
 };

@@ -49,7 +49,7 @@ export type WrappedStreamAction = {
   eventUUID: EventUUID;
 };
 type PersistentAction =
-  | { type: "persistent/merge streams"; streams: Map<StreamName, Stream> }
+  | { type: "persistent/add stream"; stream: Stream }
   | { type: "persistent/reduce incoming stream event"; event: StreamEvent }
   | { type: "persistent/create stream"; name: string }
   | {
@@ -118,21 +118,11 @@ export function reducer(state: State, action: Action): State {
           state.loginState.login.type === "master key"
         ) {
           delete draft.loginState.login.cachedAuthToken;
-          draft.outbox.push(
-            effect({
-              type: "login/refresh auth token",
-              masterKey: state.loginState.login.masterKey,
-            }),
-          );
+          draft.outbox.push(effect(refreshAuthToken(state.loginState.login.masterKey)));
         } else if (draft.loginState.login.type === "ephemeral") {
           // TODO
         }
-        draft.outbox.push(
-          effect({
-            type: "login/subscribe to events",
-            existingUnsubscribe: state.loginState.eventStreamUnsubscribe,
-          }),
-        );
+        draft.outbox.push(effect(subscribeToEvents(draft.loginState.eventStreamUnsubscribe)));
         break;
       case "outbox/effect processed":
         draft.outbox = draft.outbox.filter(({ key }) => key !== action.key);
@@ -147,6 +137,10 @@ export function reducer(state: State, action: Action): State {
             type: "login/perform password login",
             masterKey: action.masterKey,
             password: action.password,
+            after: (masterKey) => [
+              { type: "login/log in with key pair", masterKey },
+              { type: "login/refresh auth token" },
+            ],
           }),
         );
         break;
@@ -156,33 +150,18 @@ export function reducer(state: State, action: Action): State {
           masterKey: action.masterKey,
         };
         draft.outbox.push(effect({ type: "login/clear ephemeral auth token" }));
-        draft.outbox.push(
-          effect({
-            type: "login/subscribe to events",
-            existingUnsubscribe: draft.loginState.eventStreamUnsubscribe,
-          }),
-        );
+        draft.outbox.push(effect(subscribeToEvents(draft.loginState.eventStreamUnsubscribe)));
         break;
       case "login/log in to ephemeral session":
         draft.loginState.login = { type: "ephemeral", authToken: action.authToken };
         draft.outbox.push(
           effect({ type: "login/persist ephemeral auth token", authToken: action.authToken }),
         );
-        draft.outbox.push(
-          effect({
-            type: "login/subscribe to events",
-            existingUnsubscribe: draft.loginState.eventStreamUnsubscribe,
-          }),
-        );
+        draft.outbox.push(effect(subscribeToEvents(draft.loginState.eventStreamUnsubscribe)));
         break;
       case "login/refresh auth token":
         if (state.loginState.login.type !== "master key") break;
-        draft.outbox.push(
-          effect({
-            type: "login/refresh auth token",
-            masterKey: state.loginState.login.masterKey,
-          }),
-        );
+        draft.outbox.push(effect(refreshAuthToken(state.loginState.login.masterKey)));
         break;
       case "login/receive refreshed auth token":
         if (
@@ -197,6 +176,13 @@ export function reducer(state: State, action: Action): State {
               type: "persistent/fetch events by master key",
               masterKey: state.loginState.login.masterKey,
               authToken: action.authToken,
+              after: ({ streams, events }) => [
+                ...streams.map((stream): Action => ({ type: "persistent/add stream", stream })),
+                ...events.map((event): Action => ({
+                  type: "persistent/reduce incoming stream event",
+                  event,
+                })),
+              ],
             }),
           );
         }
@@ -205,10 +191,8 @@ export function reducer(state: State, action: Action): State {
       case "login/save event stream unsubscribe hook":
         draft.loginState.eventStreamUnsubscribe = action.unsubscribe;
         break;
-      case "persistent/merge streams": {
-        for (const [key, value] of action.streams.entries()) {
-          draft.streams.set(key, value);
-        }
+      case "persistent/add stream": {
+        draft.streams.set(action.stream.name, action.stream);
         const [availableTasks, remainingPendingTasks] = partition(state.pendingTasks, (e) =>
           draft.streams.has(e.streamName),
         );
@@ -301,6 +285,7 @@ export function reducer(state: State, action: Action): State {
             name: action.name,
             access: state.loginState.masterKeys.map((mk) => mk.key),
             authToken,
+            after: (stream) => [{ type: "persistent/add stream", stream }],
           }),
         );
         break;
@@ -313,6 +298,9 @@ export function reducer(state: State, action: Action): State {
             fullSizeUUID: action.fullSizeUUID,
             thumbnailUUID: action.thumbnailUUID,
             blob: action.blob,
+            after: ({ streamName, fullSize, thumbnail }) => [
+              { type: "photo/receive processed photo", streamName, fullSize, thumbnail },
+            ],
           }),
         );
         break;
@@ -368,4 +356,51 @@ function doUploadBlob(
     const blob: StreamBlob = { stream, uuid: blobUUID, data };
     state.outbox.push(effect({ type: "blob/put blob", blob, authToken }));
   }
+}
+
+function subscribeToEvents(existingUnsubscribe?: () => void): Effect {
+  return {
+    type: "login/subscribe to events",
+    existingUnsubscribe,
+    after: ({ unsubscribe }) => [{ type: "login/save event stream unsubscribe hook", unsubscribe }],
+    onEvent: (event) => {
+      switch (event.type) {
+        case "new stream": {
+          return [
+            {
+              type: "persistent/add stream",
+              stream: event.stream,
+            },
+          ];
+        }
+        case "stream event": {
+          return [
+            {
+              type: "persistent/reduce incoming stream event",
+              event: event.event,
+            },
+          ];
+        }
+        default:
+          assertNever(event);
+      }
+    },
+    onError: ({ key, timestamp, error }) => [
+      {
+        type: "error/handle event stream error",
+        key,
+        timestamp,
+        error,
+      },
+    ],
+  };
+}
+
+function refreshAuthToken(masterKey: MasterKeyPair): Effect {
+  return {
+    type: "login/refresh auth token",
+    masterKey,
+    after: (authToken) => [{ type: "login/receive refreshed auth token", authToken }],
+    onExpire: () => [{ type: "login/refresh auth token" }],
+  };
 }
