@@ -107,20 +107,42 @@ export function streamAction(streamName: StreamName, action: StreamAction): Pers
   };
 }
 
-export function reducer(outerState: State, action: Action): State {
-  return produce(outerState, (state) => {
+export function reducer(state: State, action: Action): State {
+  return produce(state, (draft) => {
     switch (action.type) {
       case "refresh":
-        return initialState;
+        draft.persistent = initialState.persistent;
+        draft.streams = initialState.streams;
+        if (
+          draft.loginState.login.type === "master key" &&
+          state.loginState.login.type === "master key"
+        ) {
+          delete draft.loginState.login.cachedAuthToken;
+          draft.outbox.push(
+            effect({
+              type: "login/refresh auth token",
+              masterKey: state.loginState.login.masterKey,
+            }),
+          );
+        } else if (draft.loginState.login.type === "ephemeral") {
+          // TODO
+        }
+        draft.outbox.push(
+          effect({
+            type: "login/subscribe to events",
+            existingUnsubscribe: state.loginState.eventStreamUnsubscribe,
+          }),
+        );
+        break;
       case "outbox/effect processed":
-        state.outbox = state.outbox.filter(({ key }) => key !== action.key);
+        draft.outbox = draft.outbox.filter(({ key }) => key !== action.key);
         break;
       case "login/update master keys list":
-        state.loginState.masterKeys = action.masterKeys;
+        draft.loginState.masterKeys = action.masterKeys;
         break;
       case "login/begin password login flow":
-        state.loginState.login = { type: "loading" };
-        state.outbox.push(
+        draft.loginState.login = { type: "loading" };
+        draft.outbox.push(
           effect({
             type: "login/perform password login",
             masterKey: action.masterKey,
@@ -129,73 +151,73 @@ export function reducer(outerState: State, action: Action): State {
         );
         break;
       case "login/log in with key pair":
-        state.loginState.login = {
+        draft.loginState.login = {
           type: "master key",
           masterKey: action.masterKey,
         };
-        state.outbox.push(effect({ type: "login/clear ephemeral auth token" }));
-        state.outbox.push(
+        draft.outbox.push(effect({ type: "login/clear ephemeral auth token" }));
+        draft.outbox.push(
           effect({
             type: "login/subscribe to events",
-            existingUnsubscribe: state.loginState.eventStreamUnsubscribe,
+            existingUnsubscribe: draft.loginState.eventStreamUnsubscribe,
           }),
         );
         break;
       case "login/log in to ephemeral session":
-        state.loginState.login = { type: "ephemeral", authToken: action.authToken };
-        state.outbox.push(
+        draft.loginState.login = { type: "ephemeral", authToken: action.authToken };
+        draft.outbox.push(
           effect({ type: "login/persist ephemeral auth token", authToken: action.authToken }),
         );
-        state.outbox.push(
+        draft.outbox.push(
           effect({
             type: "login/subscribe to events",
-            existingUnsubscribe: state.loginState.eventStreamUnsubscribe,
+            existingUnsubscribe: draft.loginState.eventStreamUnsubscribe,
           }),
         );
         break;
       case "login/refresh auth token":
-        if (outerState.loginState.login.type !== "master key") break;
-        state.outbox.push(
+        if (state.loginState.login.type !== "master key") break;
+        draft.outbox.push(
           effect({
             type: "login/refresh auth token",
-            masterKey: outerState.loginState.login.masterKey,
+            masterKey: state.loginState.login.masterKey,
           }),
         );
         break;
       case "login/receive refreshed auth token":
         if (
-          state.loginState.login.type !== "master key" ||
-          outerState.loginState.login.type !== "master key"
+          draft.loginState.login.type !== "master key" ||
+          state.loginState.login.type !== "master key"
         ) {
           break;
         }
-        if (state.loginState.login.cachedAuthToken === undefined) {
-          state.outbox.push(
+        if (draft.loginState.login.cachedAuthToken === undefined) {
+          draft.outbox.push(
             effect({
               type: "persistent/fetch events by master key",
-              masterKey: outerState.loginState.login.masterKey,
+              masterKey: state.loginState.login.masterKey,
               authToken: action.authToken,
             }),
           );
         }
-        state.loginState.login.cachedAuthToken = action.authToken;
+        draft.loginState.login.cachedAuthToken = action.authToken;
         break;
       case "login/save event stream unsubscribe hook":
-        state.loginState.eventStreamUnsubscribe = action.unsubscribe;
+        draft.loginState.eventStreamUnsubscribe = action.unsubscribe;
         break;
       case "persistent/merge streams": {
         for (const [key, value] of action.streams.entries()) {
-          state.streams.set(key, value);
+          draft.streams.set(key, value);
         }
-        const [availableTasks, remainingPendingTasks] = partition(outerState.pendingTasks, (e) =>
-          state.streams.has(e.streamName),
+        const [availableTasks, remainingPendingTasks] = partition(state.pendingTasks, (e) =>
+          draft.streams.has(e.streamName),
         );
-        state.pendingTasks = remainingPendingTasks;
-        let persistentState = outerState.persistent;
-        const authToken = getAuthToken(outerState);
+        draft.pendingTasks = remainingPendingTasks;
+        let persistentState = state.persistent;
+        const authToken = getAuthToken(state);
         if (authToken === undefined) break;
         for (const task of availableTasks) {
-          const stream = state.streams.get(task.streamName)!;
+          const stream = draft.streams.get(task.streamName)!;
           switch (task.type) {
             case "stream action": {
               const event: StreamEvent<StreamAction> = {
@@ -204,7 +226,7 @@ export function reducer(outerState: State, action: Action): State {
                 data: task.data,
               };
               persistentState = persistentReducer(persistentState, event);
-              state.outbox.push(
+              draft.outbox.push(
                 effect({
                   type: "persistent/post stream event",
                   event,
@@ -214,7 +236,7 @@ export function reducer(outerState: State, action: Action): State {
               break;
             }
             case "blob upload": {
-              state.outbox.push(
+              draft.outbox.push(
                 effect({
                   type: "blob/put blob",
                   blob: { uuid: task.uuid, stream, data: task.data },
@@ -227,12 +249,12 @@ export function reducer(outerState: State, action: Action): State {
               assertNever(task);
           }
         }
-        state.persistent = persistentState;
+        draft.persistent = persistentState;
         break;
       }
       case "persistent/reduce incoming stream event":
         const migrated = migrateAction(action.event.data as AnyVersionStreamAction);
-        let persistentState = outerState.persistent;
+        let persistentState = state.persistent;
         for (const persistentAction of migrated) {
           const typedEvent: StreamEvent<StreamAction> = {
             ...action.event,
@@ -240,27 +262,27 @@ export function reducer(outerState: State, action: Action): State {
           };
           persistentState = persistentReducer(persistentState, typedEvent);
         }
-        state.persistent = persistentState;
+        draft.persistent = persistentState;
         break;
       case "persistent/dispatch stream action":
-        const stream = outerState.streams.get(action.streamName);
+        const stream = state.streams.get(action.streamName);
         if (stream === undefined) {
-          state.pendingTasks.push({
+          draft.pendingTasks.push({
             type: "stream action",
             streamName: action.streamName,
             uuid: action.eventUUID,
             data: action.action,
           });
         } else {
-          const authToken = getAuthToken(outerState);
+          const authToken = getAuthToken(state);
           if (authToken === undefined) break;
           const event: StreamEvent<StreamAction> = {
             uuid: action.eventUUID,
             stream,
             data: action.action,
           };
-          state.persistent = persistentReducer(state.persistent, event);
-          state.outbox.push(
+          draft.persistent = persistentReducer(draft.persistent, event);
+          draft.outbox.push(
             effect({
               type: "persistent/post stream event",
               event,
@@ -270,21 +292,21 @@ export function reducer(outerState: State, action: Action): State {
         }
         break;
       case "persistent/create stream": {
-        const authToken = getAuthToken(outerState);
+        const authToken = getAuthToken(state);
         if (authToken === undefined) break;
-        if (outerState.loginState.masterKeys === "not loaded") break;
-        state.outbox.push(
+        if (state.loginState.masterKeys === "not loaded") break;
+        draft.outbox.push(
           effect({
             type: "stream/create",
             name: action.name,
-            access: outerState.loginState.masterKeys.map((mk) => mk.key),
+            access: state.loginState.masterKeys.map((mk) => mk.key),
             authToken,
           }),
         );
         break;
       }
       case "photo/process photo": {
-        state.outbox.push(
+        draft.outbox.push(
           effect({
             type: "photos/process photo",
             streamName: action.streamName,
@@ -296,12 +318,12 @@ export function reducer(outerState: State, action: Action): State {
         break;
       }
       case "photo/receive processed photo": {
-        doUploadBlob(state, action.streamName, action.fullSize.uuid, action.fullSize.data);
-        doUploadBlob(state, action.streamName, action.thumbnail.uuid, action.thumbnail.data);
+        doUploadBlob(draft, action.streamName, action.fullSize.uuid, action.fullSize.data);
+        doUploadBlob(draft, action.streamName, action.thumbnail.uuid, action.thumbnail.data);
         break;
       }
       case "error/handle effect error":
-        state.errors.push({
+        draft.errors.push({
           type: "effect error",
           key: action.key,
           timestamp: action.timestamp,
@@ -310,7 +332,7 @@ export function reducer(outerState: State, action: Action): State {
         });
         break;
       case "error/handle event stream error":
-        state.errors.push({
+        draft.errors.push({
           type: "event stream error",
           key: action.key,
           timestamp: action.timestamp,
@@ -318,7 +340,7 @@ export function reducer(outerState: State, action: Action): State {
         });
         break;
       case "error/dismiss error":
-        state.errors = state.errors.filter((e) => e.key !== action.key);
+        draft.errors = draft.errors.filter((e) => e.key !== action.key);
         break;
       default:
         assertNever(action);
